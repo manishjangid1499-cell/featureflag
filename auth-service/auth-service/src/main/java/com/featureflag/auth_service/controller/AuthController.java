@@ -3,6 +3,7 @@ package com.featureflag.auth_service.controller;
 import com.featureflag.auth_service.dto.AuthResponse;
 import com.featureflag.auth_service.dto.LoginRequest;
 import com.featureflag.auth_service.dto.RegisterRequest;
+import com.featureflag.auth_service.security.JwtService;
 import com.featureflag.auth_service.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,8 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final JwtService jwtService;
+
 
     @PostMapping("/register")
     public String register(
@@ -32,5 +35,12 @@ public class AuthController {
     @GetMapping("/profile")
     public String profile() {
         return "Welcome to Protected Profile";
+    }
+
+    @GetMapping("/validate")
+    public boolean validateToken(
+            @RequestParam String token) {
+
+        return jwtService.isTokenValid(token);
     }
 }

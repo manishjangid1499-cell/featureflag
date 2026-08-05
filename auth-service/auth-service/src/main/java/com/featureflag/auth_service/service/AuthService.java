@@ -1,15 +1,14 @@
 package com.featureflag.auth_service.service;
 
+import com.featureflag.auth_service.dto.AuthResponse;
 import com.featureflag.auth_service.dto.LoginRequest;
 import com.featureflag.auth_service.dto.RegisterRequest;
 import com.featureflag.auth_service.entity.User;
 import com.featureflag.auth_service.repository.UserRepository;
+import com.featureflag.auth_service.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import com.featureflag.auth_service.security.JwtService;
-import com.featureflag.auth_service.dto.AuthResponse;
-
 
 @Service
 @RequiredArgsConstructor
@@ -17,7 +16,6 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-
     private final JwtService jwtService;
 
     public String register(RegisterRequest request) {
@@ -45,8 +43,7 @@ public class AuthService {
             throw new RuntimeException("Invalid password");
         }
 
-        String token =
-                jwtService.generateToken(user.getEmail());
+        String token = jwtService.generateToken(user.getEmail());
 
         return new AuthResponse(token);
     }
