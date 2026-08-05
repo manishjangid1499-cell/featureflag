@@ -36,4 +36,37 @@ public class FlagService {
                 .orElseThrow(() ->
                         new RuntimeException("Flag not found"));
     }
+
+
+    public FeatureFlag updateFlag(Long id, FlagRequest request) {
+
+        FeatureFlag flag = repository.findById(id)
+                .orElseThrow(() ->
+                        new RuntimeException("Flag not found"));
+
+        flag.setName(request.getName());
+        flag.setFlagKey(request.getFlagKey());
+        flag.setEnabled(request.getEnabled());
+        flag.setDescription(request.getDescription());
+
+        return repository.save(flag);
+    }
+
+    public String deleteFlag(Long id) {
+
+        repository.deleteById(id);
+
+        return "Flag Deleted Successfully";
+    }
+
+    public FeatureFlag toggleFlag(Long id) {
+
+        FeatureFlag flag = repository.findById(id)
+                .orElseThrow(() ->
+                        new RuntimeException("Flag not found"));
+
+        flag.setEnabled(!flag.getEnabled());
+
+        return repository.save(flag);
+    }
 }

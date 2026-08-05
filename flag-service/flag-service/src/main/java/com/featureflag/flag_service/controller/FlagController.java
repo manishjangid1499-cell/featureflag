@@ -34,4 +34,26 @@ public class FlagController {
 
         return flagService.getByKey(key);
     }
+
+    @PutMapping("/{id}")
+    public FeatureFlag updateFlag(
+            @PathVariable Long id,
+            @RequestBody FlagRequest request) {
+
+        return flagService.updateFlag(id, request);
+    }
+
+    @DeleteMapping("/{id}")
+    public String deleteFlag(
+            @PathVariable Long id) {
+
+        return flagService.deleteFlag(id);
+    }
+
+    @PatchMapping("/{id}/toggle")
+    public FeatureFlag toggleFlag(
+            @PathVariable Long id) {
+
+        return flagService.toggleFlag(id);
+    }
 }
