@@ -4,6 +4,7 @@ import com.featureflag.flag_service.dto.FlagRequest;
 import com.featureflag.flag_service.entity.FeatureFlag;
 import com.featureflag.flag_service.repository.FeatureFlagRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -13,6 +14,9 @@ import java.util.List;
 public class FlagService {
 
     private final FeatureFlagRepository repository;
+    private final RedisTemplate<String, Object> redisTemplate;
+
+    private static final String ALL_FLAGS_KEY = "all_flags";
 
     public FeatureFlag createFlag(FlagRequest request) {
 
@@ -23,11 +27,35 @@ public class FlagService {
                 .description(request.getDescription())
                 .build();
 
-        return repository.save(flag);
+        FeatureFlag savedFlag = repository.save(flag);
+
+        redisTemplate.delete(ALL_FLAGS_KEY);
+
+        return savedFlag;
     }
 
+    @SuppressWarnings("unchecked")
     public List<FeatureFlag> getAllFlags() {
-        return repository.findAll();
+
+        List<FeatureFlag> cachedFlags =
+                (List<FeatureFlag>) redisTemplate.opsForValue()
+                        .get(ALL_FLAGS_KEY);
+
+        if (cachedFlags != null) {
+
+            System.out.println("Fetching flags from Redis");
+
+            return cachedFlags;
+        }
+
+        System.out.println("Fetching flags from MySQL");
+
+        List<FeatureFlag> flags = repository.findAll();
+
+        redisTemplate.opsForValue()
+                .set(ALL_FLAGS_KEY, flags);
+
+        return flags;
     }
 
     public FeatureFlag getByKey(String key) {
@@ -36,7 +64,6 @@ public class FlagService {
                 .orElseThrow(() ->
                         new RuntimeException("Flag not found"));
     }
-
 
     public FeatureFlag updateFlag(Long id, FlagRequest request) {
 
@@ -49,12 +76,18 @@ public class FlagService {
         flag.setEnabled(request.getEnabled());
         flag.setDescription(request.getDescription());
 
-        return repository.save(flag);
+        FeatureFlag updatedFlag = repository.save(flag);
+
+        redisTemplate.delete(ALL_FLAGS_KEY);
+
+        return updatedFlag;
     }
 
     public String deleteFlag(Long id) {
 
         repository.deleteById(id);
+
+        redisTemplate.delete(ALL_FLAGS_KEY);
 
         return "Flag Deleted Successfully";
     }
@@ -67,6 +100,10 @@ public class FlagService {
 
         flag.setEnabled(!flag.getEnabled());
 
-        return repository.save(flag);
+        FeatureFlag updatedFlag = repository.save(flag);
+
+        redisTemplate.delete(ALL_FLAGS_KEY);
+
+        return updatedFlag;
     }
 }

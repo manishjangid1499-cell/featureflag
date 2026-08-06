@@ -5,6 +5,8 @@ import com.featureflag.auth_service.dto.LoginRequest;
 import com.featureflag.auth_service.dto.RegisterRequest;
 import com.featureflag.auth_service.security.JwtService;
 import com.featureflag.auth_service.service.AuthService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -12,12 +14,13 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
+@Tag(name = "Authentication APIs")
 public class AuthController {
 
     private final AuthService authService;
     private final JwtService jwtService;
 
-
+    @Operation(summary = "Register a new user")
     @PostMapping("/register")
     public String register(
             @Valid @RequestBody RegisterRequest request) {
@@ -25,6 +28,7 @@ public class AuthController {
         return authService.register(request);
     }
 
+    @Operation(summary = "Login and get JWT token")
     @PostMapping("/login")
     public AuthResponse login(
             @RequestBody LoginRequest request) {
@@ -32,11 +36,13 @@ public class AuthController {
         return authService.login(request);
     }
 
+    @Operation(summary = "Access protected profile")
     @GetMapping("/profile")
     public String profile() {
         return "Welcome to Protected Profile";
     }
 
+    @Operation(summary = "Validate JWT token")
     @GetMapping("/validate")
     public boolean validateToken(
             @RequestParam String token) {
