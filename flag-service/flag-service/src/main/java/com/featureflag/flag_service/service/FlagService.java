@@ -2,11 +2,14 @@ package com.featureflag.flag_service.service;
 
 import com.featureflag.flag_service.dto.FlagRequest;
 import com.featureflag.flag_service.entity.FeatureFlag;
+import com.featureflag.flag_service.event.FlagEvent;
+import com.featureflag.flag_service.kafka.FlagEventProducer;
 import com.featureflag.flag_service.repository.FeatureFlagRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -15,6 +18,7 @@ public class FlagService {
 
     private final FeatureFlagRepository repository;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final FlagEventProducer producer;
 
     private static final String ALL_FLAGS_KEY = "all_flags";
 
@@ -30,6 +34,14 @@ public class FlagService {
         FeatureFlag savedFlag = repository.save(flag);
 
         redisTemplate.delete(ALL_FLAGS_KEY);
+
+        producer.publishEvent(
+                new FlagEvent(
+                        "FLAG_CREATED",
+                        savedFlag.getFlagKey(),
+                        LocalDateTime.now().toString()
+                )
+        );
 
         return savedFlag;
     }
@@ -80,14 +92,34 @@ public class FlagService {
 
         redisTemplate.delete(ALL_FLAGS_KEY);
 
+        producer.publishEvent(
+                new FlagEvent(
+                        "FLAG_UPDATED",
+                        updatedFlag.getFlagKey(),
+                        LocalDateTime.now().toString()
+                )
+        );
+
         return updatedFlag;
     }
 
     public String deleteFlag(Long id) {
 
+        FeatureFlag flag = repository.findById(id)
+                .orElseThrow(() ->
+                        new RuntimeException("Flag not found"));
+
         repository.deleteById(id);
 
         redisTemplate.delete(ALL_FLAGS_KEY);
+
+        producer.publishEvent(
+                new FlagEvent(
+                        "FLAG_DELETED",
+                        flag.getFlagKey(),
+                        LocalDateTime.now().toString()
+                )
+        );
 
         return "Flag Deleted Successfully";
     }
@@ -103,6 +135,14 @@ public class FlagService {
         FeatureFlag updatedFlag = repository.save(flag);
 
         redisTemplate.delete(ALL_FLAGS_KEY);
+
+        producer.publishEvent(
+                new FlagEvent(
+                        "FLAG_TOGGLED",
+                        updatedFlag.getFlagKey(),
+                        LocalDateTime.now().toString()
+                )
+        );
 
         return updatedFlag;
     }
