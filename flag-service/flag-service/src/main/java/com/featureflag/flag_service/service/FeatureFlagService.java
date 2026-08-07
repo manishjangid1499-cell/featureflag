@@ -5,6 +5,7 @@ import com.featureflag.flag_service.repository.FeatureFlagRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import com.featureflag.flag_service.dto.FlagEvaluationResponse;
 
 import java.util.List;
 

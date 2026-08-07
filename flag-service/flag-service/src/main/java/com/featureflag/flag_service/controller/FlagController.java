@@ -1,8 +1,10 @@
 package com.featureflag.flag_service.controller;
 
+import com.featureflag.flag_service.dto.FlagEvaluationResponse;
 import com.featureflag.flag_service.dto.FlagRequest;
 import com.featureflag.flag_service.entity.FeatureFlag;
 import com.featureflag.flag_service.service.FlagService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -11,6 +13,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/flags")
 @RequiredArgsConstructor
+@SecurityRequirement(name = "bearerAuth")
 public class FlagController {
 
     private final FlagService flagService;
@@ -33,6 +36,19 @@ public class FlagController {
             @PathVariable String key) {
 
         return flagService.getByKey(key);
+    }
+
+    @GetMapping("/{flagKey}/evaluate")
+    public FlagEvaluationResponse evaluateFlag(
+            @PathVariable String flagKey,
+            @RequestParam String userId,
+            @RequestParam String environment) {
+
+        return flagService.evaluateFlag(
+                flagKey,
+                userId,
+                environment
+        );
     }
 
     @PutMapping("/{id}")

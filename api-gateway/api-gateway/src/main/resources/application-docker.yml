@@ -1,0 +1,26 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: GATEWAY-SERVICE
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: auth-service
+              uri: lb://AUTH-SERVICE
+              predicates:
+                - Path=/auth/**
+
+            - id: flag-service
+              uri: lb://FLAG-SERVICE
+              predicates:
+                - Path=/flags/**
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://host.docker.internal:8761/eureka

@@ -1,0 +1,27 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: AUTH-SERVICE
+
+  datasource:
+    url: jdbc:mysql://host.docker.internal:3306/auth_db
+    username: root
+    password: root
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+eureka:
+  instance:
+    prefer-ip-address: true
+
+  client:
+    service-url:
+      defaultZone: http://host.docker.internal:8761/eureka
+
+jwt:
+  secret: 1234567890123456789012345678901234567890123456789012345678901234

@@ -1,0 +1,27 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: ANALYTICS-SERVICE
+
+  datasource:
+    url: jdbc:mysql://host.docker.internal:3306/analytics_db
+    username: root
+    password: root
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+  kafka:
+    bootstrap-servers: kafka:9092
+
+eureka:
+  instance:
+    prefer-ip-address: true
+
+  client:
+    service-url:
+      defaultZone: http://host.docker.internal:8761/eureka

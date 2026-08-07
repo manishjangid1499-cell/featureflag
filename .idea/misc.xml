@@ -9,6 +9,8 @@
         <option value="$PROJECT_DIR$/flag-service/flag-service/pom.xml" />
         <option value="$PROJECT_DIR$/api-gateway/api-gateway/pom.xml" />
         <option value="$PROJECT_DIR$/audit-service/audit-service/pom.xml" />
+        <option value="$PROJECT_DIR$/analytics-service/analytics-service/pom.xml" />
+        <option value="$PROJECT_DIR$/notification-service/notification-service/pom.xml" />
       </list>
     </option>
   </component>

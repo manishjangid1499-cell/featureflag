@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 
 @RestController
 @RequestMapping("/auth")
@@ -37,6 +38,7 @@ public class AuthController {
     }
 
     @Operation(summary = "Access protected profile")
+    @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/profile")
     public String profile() {
         return "Welcome to Protected Profile";
