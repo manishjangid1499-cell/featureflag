@@ -1,8 +1,9 @@
-package com.featureflag.flag_service.security;
+package com.featureflag.notification_service.security;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
@@ -46,58 +47,13 @@ public class SecurityConfig {
 
 
                         // =========================
-                        // CREATE FLAG
-                        // OWNER + ADMIN + DEVELOPER
+                        // CREATE NOTIFICATION
+                        // OWNER + ADMIN
                         // =========================
 
                         .requestMatchers(
-                                org.springframework.http.HttpMethod.POST,
-                                "/flags"
-                        ).hasAnyRole(
-                                "OWNER",
-                                "ADMIN",
-                                "DEVELOPER"
-                        )
-
-
-                        // =========================
-                        // UPDATE FLAG
-                        // OWNER + ADMIN + DEVELOPER
-                        // =========================
-
-                        .requestMatchers(
-                                org.springframework.http.HttpMethod.PUT,
-                                "/flags/**"
-                        ).hasAnyRole(
-                                "OWNER",
-                                "ADMIN",
-                                "DEVELOPER"
-                        )
-
-
-                        // =========================
-                        // TOGGLE FLAG
-                        // OWNER + ADMIN + DEVELOPER
-                        // =========================
-
-                        .requestMatchers(
-                                org.springframework.http.HttpMethod.PATCH,
-                                "/flags/**/toggle"
-                        ).hasAnyRole(
-                                "OWNER",
-                                "ADMIN",
-                                "DEVELOPER"
-                        )
-
-
-                        // =========================
-                        // DELETE FLAG
-                        // OWNER + ADMIN ONLY
-                        // =========================
-
-                        .requestMatchers(
-                                org.springframework.http.HttpMethod.DELETE,
-                                "/flags/**"
+                                HttpMethod.POST,
+                                "/api/notifications"
                         ).hasAnyRole(
                                 "OWNER",
                                 "ADMIN"
@@ -105,13 +61,27 @@ public class SecurityConfig {
 
 
                         // =========================
-                        // READ FLAGS
-                        // ALL AUTHENTICATED USERS
+                        // DELETE NOTIFICATION
+                        // OWNER + ADMIN
                         // =========================
 
                         .requestMatchers(
-                                org.springframework.http.HttpMethod.GET,
-                                "/flags/**"
+                                HttpMethod.DELETE,
+                                "/api/notifications/**"
+                        ).hasAnyRole(
+                                "OWNER",
+                                "ADMIN"
+                        )
+
+
+                        // =========================
+                        // READ NOTIFICATIONS
+                        // ALL ROLES
+                        // =========================
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/notifications/**"
                         ).hasAnyRole(
                                 "OWNER",
                                 "ADMIN",

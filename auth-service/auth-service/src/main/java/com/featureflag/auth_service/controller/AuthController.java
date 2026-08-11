@@ -3,6 +3,7 @@ package com.featureflag.auth_service.controller;
 import com.featureflag.auth_service.dto.AuthResponse;
 import com.featureflag.auth_service.dto.LoginRequest;
 import com.featureflag.auth_service.dto.RegisterRequest;
+import com.featureflag.auth_service.dto.TokenValidationResponse;
 import com.featureflag.auth_service.security.JwtService;
 import com.featureflag.auth_service.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -46,9 +47,9 @@ public class AuthController {
 
     @Operation(summary = "Validate JWT token")
     @GetMapping("/validate")
-    public boolean validateToken(
+    public TokenValidationResponse validateToken(
             @RequestParam String token) {
 
-        return jwtService.isTokenValid(token);
+        return authService.validateToken(token);
     }
 }

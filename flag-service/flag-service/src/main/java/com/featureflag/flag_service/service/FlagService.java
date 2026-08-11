@@ -46,19 +46,16 @@ public class FlagService {
 
         FeatureFlag savedFlag = repository.save(flag);
 
-        // Clear Redis cache
-        redisTemplate.delete(ALL_FLAGS_KEY);
+        // Invalidate Redis cache
+        clearFlagCache();
 
-        // Audit + Analytics Kafka event
-        producer.publishEvent(
-                new FlagEvent(
-                        "FLAG_CREATED",
-                        savedFlag.getFlagKey(),
-                        LocalDateTime.now().toString()
-                )
+        // Publish event for Audit + Analytics
+        publishFlagEvent(
+                "FLAG_CREATED",
+                savedFlag.getFlagKey()
         );
 
-        // Notification Kafka event
+        // Publish notification event
         publishNotification(
                 "Feature Flag Created",
                 "Feature flag '" + savedFlag.getFlagKey()
@@ -68,16 +65,38 @@ public class FlagService {
         return savedFlag;
     }
 
+
     // =========================================================
     // GET ALL FLAGS
     // =========================================================
 
     public List<FeatureFlag> getAllFlags() {
 
-        System.out.println("Fetching flags from MySQL");
+        List<FeatureFlag> cachedFlags =
+                getCachedFlags();
 
-        return repository.findAll();
+        if (cachedFlags != null) {
+
+            System.out.println(
+                    "Fetching flags from Redis"
+            );
+
+            return cachedFlags;
+        }
+
+        System.out.println(
+                "Fetching flags from MySQL"
+        );
+
+        List<FeatureFlag> flags =
+                repository.findAll();
+
+        redisTemplate.opsForValue()
+                .set(ALL_FLAGS_KEY, flags);
+
+        return flags;
     }
+
 
     // =========================================================
     // GET FLAG BY KEY
@@ -87,44 +106,55 @@ public class FlagService {
 
         return repository.findByFlagKey(key)
                 .orElseThrow(() ->
-                        new RuntimeException("Flag not found"));
+                        new RuntimeException(
+                                "Flag not found: " + key
+                        )
+                );
     }
+
 
     // =========================================================
     // UPDATE FLAG
     // =========================================================
 
-    public FeatureFlag updateFlag(Long id, FlagRequest request) {
+    public FeatureFlag updateFlag(
+            Long id,
+            FlagRequest request
+    ) {
 
-        FeatureFlag flag = repository.findById(id)
-                .orElseThrow(() ->
-                        new RuntimeException("Flag not found"));
+        FeatureFlag flag =
+                repository.findById(id)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Flag not found with id: " + id
+                                )
+                        );
 
         flag.setName(request.getName());
         flag.setFlagKey(request.getFlagKey());
         flag.setEnabled(request.getEnabled());
         flag.setDescription(request.getDescription());
         flag.setEnvironment(request.getEnvironment());
-        flag.setRolloutPercentage(request.getRolloutPercentage());
+        flag.setRolloutPercentage(
+                request.getRolloutPercentage()
+        );
         flag.setStartDate(request.getStartDate());
         flag.setEndDate(request.getEndDate());
         flag.setTargetUsers(request.getTargetUsers());
 
-        FeatureFlag updatedFlag = repository.save(flag);
+        FeatureFlag updatedFlag =
+                repository.save(flag);
 
-        // Clear Redis cache
-        redisTemplate.delete(ALL_FLAGS_KEY);
+        // Invalidate Redis cache
+        clearFlagCache();
 
-        // Audit + Analytics Kafka event
-        producer.publishEvent(
-                new FlagEvent(
-                        "FLAG_UPDATED",
-                        updatedFlag.getFlagKey(),
-                        LocalDateTime.now().toString()
-                )
+        // Publish event for Audit + Analytics
+        publishFlagEvent(
+                "FLAG_UPDATED",
+                updatedFlag.getFlagKey()
         );
 
-        // Notification Kafka event
+        // Publish notification
         publishNotification(
                 "Feature Flag Updated",
                 "Feature flag '" + updatedFlag.getFlagKey()
@@ -134,33 +164,36 @@ public class FlagService {
         return updatedFlag;
     }
 
+
     // =========================================================
     // DELETE FLAG
     // =========================================================
 
     public String deleteFlag(Long id) {
 
-        FeatureFlag flag = repository.findById(id)
-                .orElseThrow(() ->
-                        new RuntimeException("Flag not found"));
+        FeatureFlag flag =
+                repository.findById(id)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Flag not found with id: " + id
+                                )
+                        );
 
-        String flagKey = flag.getFlagKey();
+        String flagKey =
+                flag.getFlagKey();
 
         repository.deleteById(id);
 
-        // Clear Redis cache
-        redisTemplate.delete(ALL_FLAGS_KEY);
+        // Invalidate Redis cache
+        clearFlagCache();
 
-        // Audit + Analytics Kafka event
-        producer.publishEvent(
-                new FlagEvent(
-                        "FLAG_DELETED",
-                        flagKey,
-                        LocalDateTime.now().toString()
-                )
+        // Publish event for Audit + Analytics
+        publishFlagEvent(
+                "FLAG_DELETED",
+                flagKey
         );
 
-        // Notification Kafka event
+        // Publish notification
         publishNotification(
                 "Feature Flag Deleted",
                 "Feature flag '" + flagKey
@@ -170,48 +203,60 @@ public class FlagService {
         return "Flag Deleted Successfully";
     }
 
+
     // =========================================================
     // TOGGLE FLAG
     // =========================================================
 
     public FeatureFlag toggleFlag(Long id) {
 
-        FeatureFlag flag = repository.findById(id)
-                .orElseThrow(() ->
-                        new RuntimeException("Flag not found"));
+        FeatureFlag flag =
+                repository.findById(id)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Flag not found with id: " + id
+                                )
+                        );
 
+        // Null-safe toggle
         flag.setEnabled(
-                !Boolean.TRUE.equals(flag.getEnabled())
-        );
-
-        FeatureFlag updatedFlag = repository.save(flag);
-
-        // Clear Redis cache
-        redisTemplate.delete(ALL_FLAGS_KEY);
-
-        // Audit + Analytics Kafka event
-        producer.publishEvent(
-                new FlagEvent(
-                        "FLAG_TOGGLED",
-                        updatedFlag.getFlagKey(),
-                        LocalDateTime.now().toString()
+                !Boolean.TRUE.equals(
+                        flag.getEnabled()
                 )
         );
 
-        // Notification Kafka event
+        FeatureFlag updatedFlag =
+                repository.save(flag);
+
+        // Invalidate Redis cache
+        clearFlagCache();
+
+        // Publish event for Audit + Analytics
+        publishFlagEvent(
+                "FLAG_TOGGLED",
+                updatedFlag.getFlagKey()
+        );
+
         String status =
-                Boolean.TRUE.equals(updatedFlag.getEnabled())
+                Boolean.TRUE.equals(
+                        updatedFlag.getEnabled()
+                )
                         ? "ENABLED"
                         : "DISABLED";
 
+        // Publish notification
         publishNotification(
                 "Feature Flag Toggled",
-                "Feature flag '" + updatedFlag.getFlagKey()
-                        + "' is now " + status + "."
+                "Feature flag '"
+                        + updatedFlag.getFlagKey()
+                        + "' is now "
+                        + status
+                        + "."
         );
 
         return updatedFlag;
     }
+
 
     // =========================================================
     // EVALUATE FLAG
@@ -224,47 +269,69 @@ public class FlagService {
     ) {
 
         FeatureFlag flag =
-                repository.findByFlagKeyAndEnvironment(
-                        flagKey,
-                        environment
-                ).orElseThrow(() ->
-                        new RuntimeException(
-                                "Flag not found: "
-                                        + flagKey
-                                        + " in environment "
-                                        + environment
+                repository
+                        .findByFlagKeyAndEnvironment(
+                                flagKey,
+                                environment
                         )
-                );
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Flag not found: "
+                                                + flagKey
+                                                + " in environment "
+                                                + environment
+                                )
+                        );
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now =
+                LocalDateTime.now();
+
+        // -----------------------------------------------------
+        // Check schedule
+        // -----------------------------------------------------
 
         boolean withinSchedule = true;
 
-        // Start date check
         if (flag.getStartDate() != null) {
 
             withinSchedule =
-                    !now.isBefore(flag.getStartDate());
+                    !now.isBefore(
+                            flag.getStartDate()
+                    );
         }
 
-        // End date check
         if (withinSchedule
                 && flag.getEndDate() != null) {
 
             withinSchedule =
-                    !now.isAfter(flag.getEndDate());
+                    !now.isAfter(
+                            flag.getEndDate()
+                    );
         }
 
-        // Target user check
+
+        // -----------------------------------------------------
+        // Check targeted user
+        // -----------------------------------------------------
+
         boolean targetedUser =
                 flag.getTargetUsers() != null
-                        && flag.getTargetUsers().contains(userId);
+                        && userId != null
+                        && flag.getTargetUsers()
+                        .contains(userId);
+
+
+        // -----------------------------------------------------
+        // Determine final enabled state
+        // -----------------------------------------------------
 
         boolean enabled = false;
 
-        if (Boolean.TRUE.equals(flag.getEnabled())
-                && withinSchedule) {
+        if (Boolean.TRUE.equals(
+                flag.getEnabled()
+        ) && withinSchedule) {
 
+            // Targeted users always receive the feature
             if (targetedUser) {
 
                 enabled = true;
@@ -278,13 +345,18 @@ public class FlagService {
                         && rolloutPercentage > 0) {
 
                     int bucket =
-                            Math.abs(userId.hashCode()) % 100;
+                            calculateBucket(userId);
 
                     enabled =
                             bucket < rolloutPercentage;
                 }
             }
         }
+
+
+        // -----------------------------------------------------
+        // Return evaluation result
+        // -----------------------------------------------------
 
         return new FlagEvaluationResponse(
                 flag.getFlagKey(),
@@ -298,8 +370,77 @@ public class FlagService {
         );
     }
 
+
     // =========================================================
-    // SEND NOTIFICATION EVENT
+    // REDIS CACHE
+    // =========================================================
+
+    @SuppressWarnings("unchecked")
+    private List<FeatureFlag> getCachedFlags() {
+
+        return (List<FeatureFlag>)
+                redisTemplate.opsForValue()
+                        .get(ALL_FLAGS_KEY);
+    }
+
+
+    private void clearFlagCache() {
+
+        redisTemplate.delete(
+                ALL_FLAGS_KEY
+        );
+
+        System.out.println(
+                "Redis cache cleared: "
+                        + ALL_FLAGS_KEY
+        );
+    }
+
+
+    // =========================================================
+    // KAFKA FLAG EVENT
+    // =========================================================
+    //
+    // Used by:
+    //     Audit Service
+    //     Analytics Service
+    //
+    // Topic:
+    //     feature-flag-events
+    // =========================================================
+
+    private void publishFlagEvent(
+            String eventType,
+            String flagKey
+    ) {
+
+        FlagEvent event =
+                new FlagEvent(
+                        eventType,
+                        flagKey,
+                        LocalDateTime.now().toString()
+                );
+
+        producer.publishEvent(event);
+
+        System.out.println(
+                "Flag Kafka Event Published: "
+                        + eventType
+                        + " - "
+                        + flagKey
+        );
+    }
+
+
+    // =========================================================
+    // KAFKA NOTIFICATION EVENT
+    // =========================================================
+    //
+    // Used by:
+    //     Notification Service
+    //
+    // Topic:
+    //     notification-events
     // =========================================================
 
     private void publishNotification(
@@ -310,11 +451,44 @@ public class FlagService {
         NotificationEvent event =
                 new NotificationEvent();
 
-        event.setRecipient("test@example.com");
+        event.setRecipient(
+                "test@example.com"
+        );
+
         event.setSubject(subject);
+
         event.setMessage(message);
+
         event.setType("EMAIL");
 
-        notificationProducer.publishNotification(event);
+        notificationProducer.publishNotification(
+                event
+        );
+
+        System.out.println(
+                "Notification Kafka Event Published: "
+                        + subject
+        );
+    }
+
+
+    // =========================================================
+    // ROLLOUT BUCKET
+    // =========================================================
+
+    private int calculateBucket(
+            String userId
+    ) {
+
+        if (userId == null
+                || userId.isBlank()) {
+
+            return 0;
+        }
+
+        return Math.floorMod(
+                userId.hashCode(),
+                100
+        );
     }
 }

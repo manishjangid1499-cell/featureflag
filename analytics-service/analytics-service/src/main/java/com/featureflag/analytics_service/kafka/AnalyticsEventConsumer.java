@@ -2,16 +2,18 @@ package com.featureflag.analytics_service.kafka;
 
 import com.featureflag.analytics_service.entity.AnalyticsEvent;
 import com.featureflag.analytics_service.event.FlagEvent;
-import com.featureflag.analytics_service.repository.AnalyticsEventRepository;
+import com.featureflag.analytics_service.service.AnalyticsService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AnalyticsEventConsumer {
 
-    private final AnalyticsEventRepository analyticsEventRepository;
+    private final AnalyticsService analyticsService;
 
     @KafkaListener(
             topics = "feature-flag-events",
@@ -19,33 +21,32 @@ public class AnalyticsEventConsumer {
     )
     public void consume(FlagEvent event) {
 
-        AnalyticsEvent analyticsEvent =
-                analyticsEventRepository
-                        .findByFlagKeyAndEventType(
-                                event.getFlagKey(),
-                                event.getEventType()
-                        )
-                        .orElse(
-                                AnalyticsEvent.builder()
-                                        .flagKey(event.getFlagKey())
-                                        .eventType(event.getEventType())
-                                        .count(0L)
-                                        .build()
-                        );
+        try {
 
-        analyticsEvent.setCount(
-                analyticsEvent.getCount() + 1
-        );
+            log.info(
+                    "Received feature flag event: {} - {}",
+                    event.getEventType(),
+                    event.getFlagKey()
+            );
 
-        analyticsEventRepository.save(
-                analyticsEvent
-        );
+            AnalyticsEvent analyticsEvent =
+                    analyticsService.processEvent(
+                            event.getFlagKey(),
+                            event.getEventType()
+                    );
 
-        System.out.println(
-                "Analytics Updated: "
-                        + event.getFlagKey()
-                        + " -> "
-                        + analyticsEvent.getCount()
-        );
+            log.info(
+                    "Analytics Updated: {} -> {}",
+                    event.getFlagKey(),
+                    analyticsEvent.getCount()
+            );
+
+        } catch (Exception e) {
+
+            log.error(
+                    "Failed to process feature flag event",
+                    e
+            );
+        }
     }
 }

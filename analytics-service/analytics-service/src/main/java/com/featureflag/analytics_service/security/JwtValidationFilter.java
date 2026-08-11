@@ -1,7 +1,7 @@
-package com.featureflag.flag_service.security;
+package com.featureflag.analytics_service.security;
 
-import com.featureflag.flag_service.client.AuthClient;
-import com.featureflag.flag_service.dto.TokenValidationResponse;
+import com.featureflag.analytics_service.client.AuthClient;
+import com.featureflag.analytics_service.dto.TokenValidationResponse;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -18,18 +18,21 @@ import java.util.List;
 
 @Component
 @RequiredArgsConstructor
-public class JwtValidationFilter extends OncePerRequestFilter {
+public class JwtValidationFilter
+        extends OncePerRequestFilter {
 
     private final AuthClient authClient;
 
     @Override
     protected boolean shouldNotFilter(
-            HttpServletRequest request) {
+            HttpServletRequest request
+    ) {
 
         String path = request.getServletPath();
 
         return path.startsWith("/swagger-ui")
                 || path.startsWith("/v3/api-docs")
+                || path.startsWith("/analytics/v3/api-docs")
                 || path.startsWith("/actuator");
     }
 
@@ -37,14 +40,14 @@ public class JwtValidationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,
-            FilterChain filterChain)
-            throws ServletException, IOException {
+            FilterChain filterChain
+    ) throws ServletException, IOException {
 
         String authHeader =
                 request.getHeader("Authorization");
 
-        if (authHeader == null ||
-                !authHeader.startsWith("Bearer ")) {
+        if (authHeader == null
+                || !authHeader.startsWith("Bearer ")) {
 
             response.setStatus(
                     HttpServletResponse.SC_UNAUTHORIZED
@@ -61,8 +64,8 @@ public class JwtValidationFilter extends OncePerRequestFilter {
             TokenValidationResponse validation =
                     authClient.validateToken(token);
 
-            if (validation == null ||
-                    !validation.isValid()) {
+            if (validation == null
+                    || !validation.isValid()) {
 
                 response.setStatus(
                         HttpServletResponse.SC_UNAUTHORIZED
@@ -74,8 +77,8 @@ public class JwtValidationFilter extends OncePerRequestFilter {
             String role =
                     validation.getRole();
 
-            if (role == null ||
-                    role.isBlank()) {
+            if (role == null
+                    || role.isBlank()) {
 
                 response.setStatus(
                         HttpServletResponse.SC_UNAUTHORIZED
