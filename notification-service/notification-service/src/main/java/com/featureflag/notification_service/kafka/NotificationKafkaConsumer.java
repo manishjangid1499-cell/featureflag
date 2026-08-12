@@ -1,12 +1,15 @@
 package com.featureflag.notification_service.kafka;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.featureflag.notification_service.dto.NotificationEvent;
 import com.featureflag.notification_service.dto.NotificationRequest;
 import com.featureflag.notification_service.service.NotificationService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -25,12 +28,28 @@ public class NotificationKafkaConsumer {
         try {
             log.info("Received notification event: {}", message);
 
-            NotificationRequest request =
-                    objectMapper.readValue(message, NotificationRequest.class);
+            NotificationEvent event = objectMapper.readValue(message, NotificationEvent.class);
 
-            notificationService.createNotification(request);
+            if (event.getRecipient() != null && !event.getRecipient().isBlank()) {
+                // Direct notification for a specific single recipient
+                NotificationRequest request = new NotificationRequest(
+                        event.getRecipient(),
+                        event.getSubject(),
+                        event.getMessage(),
+                        event.getType() != null ? event.getType() : "EMAIL"
+                );
+                notificationService.createNotification(request);
+            } else {
+                // Dynamic broadcast to active OWNER and ADMIN database recipients
+                notificationService.sendToRoleRecipients(
+                        event.getSubject(),
+                        event.getMessage(),
+                        event.getType() != null ? event.getType() : "EMAIL",
+                        List.of("OWNER", "ADMIN")
+                );
+            }
 
-            log.info("Notification saved successfully");
+            log.info("Notification event processed successfully");
 
         } catch (Exception e) {
             log.error("Failed to process notification event", e);

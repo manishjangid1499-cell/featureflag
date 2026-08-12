@@ -24,9 +24,18 @@ public class JwtValidationFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(
-            HttpServletRequest request) {
+            HttpServletRequest request
+    ) {
 
         String path = request.getServletPath();
+
+        // ==========================================
+        // PUBLIC / NON-AUTHENTICATED REQUESTS
+        // ==========================================
+
+        if (request.getMethod().equalsIgnoreCase("OPTIONS")) {
+            return true;
+        }
 
         return path.startsWith("/swagger-ui")
                 || path.startsWith("/v3/api-docs")
@@ -37,11 +46,15 @@ public class JwtValidationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,
-            FilterChain filterChain)
-            throws ServletException, IOException {
+            FilterChain filterChain
+    ) throws ServletException, IOException {
 
         String authHeader =
                 request.getHeader("Authorization");
+
+        // ==========================================
+        // NO JWT
+        // ==========================================
 
         if (authHeader == null ||
                 !authHeader.startsWith("Bearer ")) {
@@ -58,11 +71,17 @@ public class JwtValidationFilter extends OncePerRequestFilter {
 
         try {
 
+            // ==========================================
+            // ASK AUTH-SERVICE TO VALIDATE JWT
+            // ==========================================
+
             TokenValidationResponse validation =
                     authClient.validateToken(token);
 
             if (validation == null ||
                     !validation.isValid()) {
+
+                SecurityContextHolder.clearContext();
 
                 response.setStatus(
                         HttpServletResponse.SC_UNAUTHORIZED
@@ -70,6 +89,10 @@ public class JwtValidationFilter extends OncePerRequestFilter {
 
                 return;
             }
+
+            // ==========================================
+            // GET ROLE
+            // ==========================================
 
             String role =
                     validation.getRole();
@@ -77,12 +100,18 @@ public class JwtValidationFilter extends OncePerRequestFilter {
             if (role == null ||
                     role.isBlank()) {
 
+                SecurityContextHolder.clearContext();
+
                 response.setStatus(
                         HttpServletResponse.SC_UNAUTHORIZED
                 );
 
                 return;
             }
+
+            // ==========================================
+            // CREATE SPRING SECURITY AUTHORITY
+            // ==========================================
 
             SimpleGrantedAuthority authority =
                     new SimpleGrantedAuthority(
@@ -100,6 +129,10 @@ public class JwtValidationFilter extends OncePerRequestFilter {
                     .getContext()
                     .setAuthentication(authentication);
 
+            // ==========================================
+            // CONTINUE REQUEST
+            // ==========================================
+
             filterChain.doFilter(
                     request,
                     response
@@ -107,8 +140,9 @@ public class JwtValidationFilter extends OncePerRequestFilter {
 
         } catch (Exception e) {
 
-            SecurityContextHolder
-                    .clearContext();
+            e.printStackTrace();
+
+            SecurityContextHolder.clearContext();
 
             response.setStatus(
                     HttpServletResponse.SC_UNAUTHORIZED

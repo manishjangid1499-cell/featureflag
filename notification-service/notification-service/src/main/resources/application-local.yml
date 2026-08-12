@@ -6,23 +6,23 @@ spring:
     name: NOTIFICATION-SERVICE
 
   datasource:
-    url: jdbc:mysql://localhost:3306/notification_db
-    username: root
-    password: root
+    url: jdbc:mysql://localhost:3306/notification_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
 
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
   mail:
-    host: smtp.gmail.com
-    port: 587
-    username: manishjangid1499@gmail.com
-    password: inkt rcyb mrjg ator
+    host: ${SPRING_MAIL_HOST:smtp.gmail.com}
+    port: ${SPRING_MAIL_PORT:587}
+    username: ${SPRING_MAIL_USERNAME:manishjangid1499@gmail.com}
+    password: ${SPRING_MAIL_PASSWORD:inkt rcyb mrjg ator}
     properties:
       mail:
         smtp:
@@ -44,4 +44,4 @@ management:
         include: health,info
 
 jwt:
-  secret: 1234567890123456789012345678901234567890123456789012345678901234
+  secret: ${JWT_SECRET:1234567890123456789012345678901234567890123456789012345678901234}

@@ -13,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
@@ -51,5 +53,13 @@ public class AuthController {
             @RequestParam String token) {
 
         return authService.validateToken(token);
+    }
+
+    @Operation(summary = "Get active notification recipients by role")
+    @GetMapping("/recipients")
+    public List<String> getNotificationRecipients(
+            @RequestParam(required = false) List<String> roles) {
+
+        return authService.getNotificationRecipients(roles);
     }
 }

@@ -10,12 +10,39 @@ spring:
       server:
         webflux:
 
+          # ==========================================
+          # GLOBAL CORS CONFIGURATION
+          # ==========================================
+          globalcors:
+            add-to-simple-url-handler-mapping: true
+            cors-configurations:
+              '[/**]':
+                allowedOrigins:
+                  - "http://localhost:5173"
+                  - "http://127.0.0.1:5173"
+                allowedMethods:
+                  - GET
+                  - POST
+                  - PUT
+                  - DELETE
+                  - PATCH
+                  - OPTIONS
+                allowedHeaders:
+                  - "*"
+                exposedHeaders:
+                  - "*"
+                allowCredentials: false
+                maxAge: 3600
+
+          # ==========================================
+          # ROUTES
+          # ==========================================
           routes:
 
             - id: auth-service
               uri: lb://AUTH-SERVICE
               predicates:
-                - Path=/auth/**
+                - Path=/auth/**, /members/**, /test/**
 
             - id: auth-service-openapi
               uri: lb://AUTH-SERVICE
@@ -63,6 +90,11 @@ spring:
               filters:
                 - RewritePath=/notification/v3/api-docs, /v3/api-docs
 
+
+            - id: audit-service
+              uri: lb://AUDIT-SERVICE
+              predicates:
+                - Path=/audit/**
 
             - id: audit-service-openapi
               uri: lb://AUDIT-SERVICE

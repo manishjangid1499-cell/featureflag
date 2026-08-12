@@ -15,8 +15,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter
-            jwtAuthenticationFilter;
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
 
     @Bean
     public SecurityFilterChain securityFilterChain(
@@ -24,9 +24,19 @@ public class SecurityConfig {
     ) throws Exception {
 
         http
+
+                // =========================
+                // CSRF
+                // =========================
+
                 .csrf(csrf ->
                         csrf.disable()
                 )
+
+
+                // =========================
+                // STATELESS JWT
+                // =========================
 
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(
@@ -34,40 +44,73 @@ public class SecurityConfig {
                         )
                 )
 
+
+                // =========================
+                // AUTHORIZATION
+                // =========================
+
                 .authorizeHttpRequests(auth -> auth
 
-                        // Public
+
+                        // =========================
+                        // PUBLIC
+                        // =========================
+
                         .requestMatchers(
                                 "/auth/register",
                                 "/auth/login",
                                 "/auth/validate",
+                                "/auth/recipients",
+                                "/auth/invitations/**",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
                                 "/swagger-ui.html"
                         ).permitAll()
 
-                        // OWNER
+
+                        // =========================
+                        // OWNER + ADMIN
+                        // =========================
+
                         .requestMatchers(
                                 "/members/**"
-                        ).hasAnyRole("OWNER", "ADMIN")
+                        ).hasAnyRole(
+                                "OWNER",
+                                "ADMIN"
+                        )
 
-                        // Authenticated users
+
+                        // =========================
+                        // AUTHENTICATED
+                        // =========================
+
                         .requestMatchers(
                                 "/auth/profile"
                         ).authenticated()
 
-                        // Everything else
+
+                        // =========================
+                        // EVERYTHING ELSE
+                        // =========================
+
                         .anyRequest()
                         .authenticated()
                 )
+
+
+                // =========================
+                // JWT FILTER
+                // =========================
 
                 .addFilterBefore(
                         jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class
                 );
 
+
         return http.build();
     }
+
 
     @Bean
     public PasswordEncoder passwordEncoder() {

@@ -10,16 +10,43 @@ spring:
       server:
         webflux:
 
+          # ==========================================
+          # GLOBAL CORS CONFIGURATION
+          # ==========================================
+          globalcors:
+            add-to-simple-url-handler-mapping: true
+            cors-configurations:
+              '[/**]':
+                allowedOrigins:
+                  - "http://localhost:5173"
+                  - "http://127.0.0.1:5173"
+                allowedMethods:
+                  - GET
+                  - POST
+                  - PUT
+                  - DELETE
+                  - PATCH
+                  - OPTIONS
+                allowedHeaders:
+                  - "*"
+                exposedHeaders:
+                  - "*"
+                allowCredentials: false
+                maxAge: 3600
+
+          # ==========================================
+          # ROUTES
+          # ==========================================
           routes:
 
-            # =====================================================
-            # AUTH SERVICE
-            # =====================================================
+            # ==========================================
+            # AUTH SERVICE & MEMBERS
+            # ==========================================
 
             - id: auth-service
               uri: lb://AUTH-SERVICE
               predicates:
-                - Path=/auth/**
+                - Path=/auth/**, /members/**, /test/**
 
             - id: auth-service-openapi
               uri: lb://AUTH-SERVICE
@@ -29,9 +56,9 @@ spring:
                 - RewritePath=/auth/v3/api-docs, /v3/api-docs
 
 
-            # =====================================================
+            # ==========================================
             # FLAG SERVICE
-            # =====================================================
+            # ==========================================
 
             - id: flag-service
               uri: lb://FLAG-SERVICE
@@ -46,9 +73,9 @@ spring:
                 - RewritePath=/flags/v3/api-docs, /v3/api-docs
 
 
-            # =====================================================
+            # ==========================================
             # ANALYTICS SERVICE
-            # =====================================================
+            # ==========================================
 
             - id: analytics-service
               uri: lb://ANALYTICS-SERVICE
@@ -63,9 +90,9 @@ spring:
                 - RewritePath=/analytics/v3/api-docs, /v3/api-docs
 
 
-            # =====================================================
+            # ==========================================
             # NOTIFICATION SERVICE
-            # =====================================================
+            # ==========================================
 
             - id: notification-service
               uri: lb://NOTIFICATION-SERVICE
@@ -80,9 +107,14 @@ spring:
                 - RewritePath=/notification/v3/api-docs, /v3/api-docs
 
 
-            # =====================================================
+            # ==========================================
             # AUDIT SERVICE
-            # =====================================================
+            # ==========================================
+
+            - id: audit-service
+              uri: lb://AUDIT-SERVICE
+              predicates:
+                - Path=/audit/**
 
             - id: audit-service-openapi
               uri: lb://AUDIT-SERVICE
@@ -92,9 +124,9 @@ spring:
                 - RewritePath=/audit/v3/api-docs, /v3/api-docs
 
 
-# =============================================================
+# ==========================================
 # EUREKA
-# =============================================================
+# ==========================================
 
 eureka:
   client:
@@ -102,32 +134,26 @@ eureka:
       defaultZone: http://localhost:8761/eureka
 
 
-# =============================================================
-# CENTRAL SWAGGER
-# =============================================================
+# ==========================================
+# SWAGGER / SPRINGDOC
+# ==========================================
 
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
 
     urls:
-
-      # AUTH
       - name: Auth Service
         url: /auth/v3/api-docs
 
-      # FLAG
       - name: Flag Service
         url: /flags/v3/api-docs
 
-      # ANALYTICS
       - name: Analytics Service
         url: /analytics/v3/api-docs
 
-      # NOTIFICATION
       - name: Notification Service
         url: /notification/v3/api-docs
 
-      # AUDIT
       - name: Audit Service
         url: /audit/v3/api-docs

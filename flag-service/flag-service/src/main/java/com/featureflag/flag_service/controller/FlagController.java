@@ -30,7 +30,6 @@ public class FlagController {
 
     private final FlagService flagService;
 
-
     // =========================================================
     // CREATE FLAG
     // =========================================================
@@ -44,64 +43,50 @@ public class FlagController {
             @ApiResponse(responseCode = "400", description = "Invalid request")
     })
     @PostMapping
-    public ResponseEntity<FeatureFlag> createFlag(
-            @Valid @RequestBody FlagRequest request) {
-
+    public ResponseEntity<FeatureFlag> createFlag(@Valid @RequestBody FlagRequest request) {
         FeatureFlag createdFlag = flagService.createFlag(request);
-
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(createdFlag);
+        return ResponseEntity.status(HttpStatus.CREATED).body(createdFlag);
     }
-
 
     // =========================================================
     // GET ALL FLAGS
     // =========================================================
 
-    @Operation(
-            summary = "Get all feature flags",
-            description = "Returns all feature flags"
-    )
-    @ApiResponse(
-            responseCode = "200",
-            description = "Feature flags retrieved successfully"
-    )
+    @Operation(summary = "Get all feature flags", description = "Returns all feature flags")
+    @ApiResponse(responseCode = "200", description = "Feature flags retrieved successfully")
     @GetMapping
     public ResponseEntity<List<FeatureFlag>> getAllFlags() {
-
         List<FeatureFlag> flags = flagService.getAllFlags();
-
         return ResponseEntity.ok(flags);
     }
 
+    // =========================================================
+    // GET FLAG BY ID
+    // =========================================================
+
+    @Operation(summary = "Get feature flag by database ID", description = "Returns a feature flag using its numerical ID")
+    @GetMapping("/id/{id}")
+    public ResponseEntity<FeatureFlag> getFlagById(@PathVariable Long id) {
+        FeatureFlag flag = flagService.getById(id);
+        return ResponseEntity.ok(flag);
+    }
 
     // =========================================================
     // GET FLAG BY KEY
     // =========================================================
 
-    @Operation(
-            summary = "Get feature flag by key",
-            description = "Returns a feature flag using its flag key"
-    )
+    @Operation(summary = "Get feature flag by key", description = "Returns a feature flag using its flag key")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Flag found"),
             @ApiResponse(responseCode = "404", description = "Flag not found")
     })
     @GetMapping("/{key}")
     public ResponseEntity<FeatureFlag> getFlagByKey(
-
-            @Parameter(
-                    description = "Feature flag key",
-                    example = "NEW_CHECKOUT"
-            )
+            @Parameter(description = "Feature flag key", example = "NEW_CHECKOUT")
             @PathVariable String key) {
-
         FeatureFlag flag = flagService.getByKey(key);
-
         return ResponseEntity.ok(flag);
     }
-
 
     // =========================================================
     // EVALUATE FLAG
@@ -109,16 +94,7 @@ public class FlagController {
 
     @Operation(
             summary = "Evaluate a feature flag",
-            description = """
-                    Evaluates whether a feature flag should be enabled for a user.
-                    
-                    Evaluation considers:
-                    - Flag enabled status
-                    - Environment
-                    - Start and end dates
-                    - Target users
-                    - Rollout percentage
-                    """
+            description = "Evaluates whether a feature flag should be enabled for a user given schedule, targeting whitelist, and rollout bucket"
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Flag evaluated successfully"),
@@ -126,44 +102,22 @@ public class FlagController {
     })
     @GetMapping("/{flagKey}/evaluate")
     public ResponseEntity<FlagEvaluationResponse> evaluateFlag(
-
-            @Parameter(
-                    description = "Feature flag key",
-                    example = "NEW_CHECKOUT"
-            )
+            @Parameter(description = "Feature flag key", example = "NEW_CHECKOUT")
             @PathVariable String flagKey,
-
-            @Parameter(
-                    description = "User ID used for targeting and rollout calculation",
-                    example = "user123"
-            )
+            @Parameter(description = "User ID used for targeting and rollout calculation", example = "user123")
             @RequestParam String userId,
-
-            @Parameter(
-                    description = "Environment",
-                    example = "dev"
-            )
+            @Parameter(description = "Environment", example = "DEV")
             @RequestParam String environment) {
 
-        FlagEvaluationResponse response =
-                flagService.evaluateFlag(
-                        flagKey,
-                        userId,
-                        environment
-                );
-
+        FlagEvaluationResponse response = flagService.evaluateFlag(flagKey, userId, environment);
         return ResponseEntity.ok(response);
     }
-
 
     // =========================================================
     // UPDATE FLAG
     // =========================================================
 
-    @Operation(
-            summary = "Update a feature flag",
-            description = "Updates a feature flag and publishes a FLAG_UPDATED Kafka event"
-    )
+    @Operation(summary = "Update a feature flag", description = "Updates a feature flag and publishes a FLAG_UPDATED Kafka event")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Feature flag updated successfully"),
             @ApiResponse(responseCode = "404", description = "Flag not found"),
@@ -171,78 +125,47 @@ public class FlagController {
     })
     @PutMapping("/{id}")
     public ResponseEntity<FeatureFlag> updateFlag(
-
-            @Parameter(
-                    description = "Feature flag ID",
-                    example = "1"
-            )
+            @Parameter(description = "Feature flag ID", example = "1")
             @PathVariable Long id,
-
             @Valid @RequestBody FlagRequest request) {
 
-        FeatureFlag updatedFlag =
-                flagService.updateFlag(id, request);
-
+        FeatureFlag updatedFlag = flagService.updateFlag(id, request);
         return ResponseEntity.ok(updatedFlag);
     }
-
 
     // =========================================================
     // DELETE FLAG
     // =========================================================
 
-    @Operation(
-            summary = "Delete a feature flag",
-            description = "Deletes a feature flag and publishes a FLAG_DELETED Kafka event"
-    )
+    @Operation(summary = "Delete a feature flag", description = "Deletes a feature flag and publishes a FLAG_DELETED Kafka event")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Feature flag deleted successfully"),
             @ApiResponse(responseCode = "404", description = "Flag not found")
     })
     @DeleteMapping("/{id}")
     public ResponseEntity<String> deleteFlag(
-
-            @Parameter(
-                    description = "Feature flag ID",
-                    example = "1"
-            )
+            @Parameter(description = "Feature flag ID", example = "1")
             @PathVariable Long id) {
 
         String message = flagService.deleteFlag(id);
-
         return ResponseEntity.ok(message);
     }
-
 
     // =========================================================
     // TOGGLE FLAG
     // =========================================================
 
-    @Operation(
-            summary = "Toggle feature flag",
-            description = """
-                    Toggles the enabled state of a feature flag.
-                    If enabled is true, it becomes false.
-                    If enabled is false, it becomes true.
-                    Publishes a FLAG_TOGGLED Kafka event.
-                    """
-    )
+    @Operation(summary = "Toggle feature flag", description = "Inverts the enabled state of a feature flag and publishes a FLAG_TOGGLED Kafka event")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Feature flag toggled successfully"),
             @ApiResponse(responseCode = "404", description = "Flag not found")
     })
     @PatchMapping("/{id}/toggle")
     public ResponseEntity<FeatureFlag> toggleFlag(
-
-            @Parameter(
-                    description = "Feature flag ID",
-                    example = "1"
-            )
+            @Parameter(description = "Feature flag ID", example = "1")
             @PathVariable Long id) {
 
-        FeatureFlag toggledFlag =
-                flagService.toggleFlag(id);
-
+        FeatureFlag toggledFlag = flagService.toggleFlag(id);
         return ResponseEntity.ok(toggledFlag);
     }
 }

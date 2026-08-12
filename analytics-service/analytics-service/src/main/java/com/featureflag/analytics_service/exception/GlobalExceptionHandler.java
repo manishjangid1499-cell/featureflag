@@ -13,33 +13,29 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<Map<String, Object>> handleRuntimeException(
-            RuntimeException ex) {
+    public ResponseEntity<Map<String, Object>> handleRuntimeException(RuntimeException ex) {
 
         Map<String, Object> response = new HashMap<>();
 
-        response.put("timestamp", LocalDateTime.now());
-        response.put("status", HttpStatus.NOT_FOUND.value());
-        response.put("error", "Not Found");
+        response.put("timestamp", LocalDateTime.now().toString());
+        response.put("status", HttpStatus.BAD_REQUEST.value());
+        response.put("error", "Bad Request");
         response.put("message", ex.getMessage());
 
         return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
+                .status(HttpStatus.BAD_REQUEST)
                 .body(response);
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, Object>> handleGeneralException(
-            Exception ex) {
+    public ResponseEntity<Map<String, Object>> handleGeneralException(Exception ex) {
 
         Map<String, Object> response = new HashMap<>();
 
-        response.put("timestamp", LocalDateTime.now());
-        response.put("status",
-                HttpStatus.INTERNAL_SERVER_ERROR.value());
+        response.put("timestamp", LocalDateTime.now().toString());
+        response.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
         response.put("error", "Internal Server Error");
-        response.put("message",
-                "An unexpected error occurred");
+        response.put("message", ex.getMessage() != null ? ex.getMessage() : "An unexpected error occurred");
 
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
