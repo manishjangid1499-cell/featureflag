@@ -25,6 +25,7 @@ function Layout() {
         return "#4b5563";
       default:
         return "#4f46e5";
+        
     }
   };
 

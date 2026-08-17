@@ -16,6 +16,8 @@ public class NotificationRequest {
     @Email(message = "Recipient must be a valid email address")
     private String recipient;
 
+    private String creatorEmail;
+
     @NotBlank(message = "Subject is required")
     private String subject;
 
@@ -28,4 +30,11 @@ public class NotificationRequest {
             message = "Notification type must be EMAIL, SMS, or PUSH"
     )
     private String type;
+
+    public NotificationRequest(String recipient, String subject, String message, String type) {
+        this.recipient = recipient;
+        this.subject = subject;
+        this.message = message;
+        this.type = type;
+    }
 }

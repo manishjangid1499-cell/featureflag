@@ -23,6 +23,8 @@ public class Notification {
     @Column(nullable = false)
     private String recipient;
 
+    private String creatorEmail;
+
     @Column(nullable = false)
     private String subject;
 

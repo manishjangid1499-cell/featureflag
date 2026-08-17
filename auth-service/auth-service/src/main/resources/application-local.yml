@@ -6,7 +6,7 @@ spring:
     name: AUTH-SERVICE
 
   datasource:
-    url: jdbc:mysql://localhost:3306/auth_db
+    url: jdbc:mysql://localhost:3306/auth_db?createDatabaseIfNotExist=true
     username: root
     password: root
 
@@ -22,6 +22,14 @@ eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka
+
+app:
+  bootstrap:
+    owner:
+      enabled: ${BOOTSTRAP_OWNER_ENABLED:false}
+      name: ${BOOTSTRAP_OWNER_NAME:}
+      email: ${BOOTSTRAP_OWNER_EMAIL:}
+      password: ${BOOTSTRAP_OWNER_PASSWORD:}
 
 jwt:
   secret: 1234567890123456789012345678901234567890123456789012345678901234

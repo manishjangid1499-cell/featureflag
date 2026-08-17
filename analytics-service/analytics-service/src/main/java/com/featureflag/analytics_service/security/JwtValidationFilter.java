@@ -29,11 +29,14 @@ public class JwtValidationFilter
     ) {
 
         String path = request.getServletPath();
+        String uri = request.getRequestURI();
 
-        return path.startsWith("/swagger-ui")
-                || path.startsWith("/v3/api-docs")
-                || path.startsWith("/analytics/v3/api-docs")
-                || path.startsWith("/actuator");
+        if (request.getMethod().equalsIgnoreCase("OPTIONS")) {
+            return true;
+        }
+
+        return (path != null && (path.startsWith("/swagger-ui") || path.startsWith("/v3/api-docs") || path.startsWith("/analytics/v3/api-docs") || path.startsWith("/actuator") || path.contains("api-docs")))
+                || (uri != null && (uri.startsWith("/swagger-ui") || uri.startsWith("/v3/api-docs") || uri.startsWith("/analytics/v3/api-docs") || uri.startsWith("/actuator") || uri.contains("api-docs")));
     }
 
     @Override

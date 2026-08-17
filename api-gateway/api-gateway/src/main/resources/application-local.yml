@@ -40,7 +40,52 @@ spring:
           routes:
 
             # ==========================================
-            # AUTH SERVICE & MEMBERS
+            # OPENAPI SPECIFICATION ROUTES (ORDER: -1)
+            # ==========================================
+
+            - id: auth-service-openapi
+              uri: lb://AUTH-SERVICE
+              order: -1
+              predicates:
+                - Path=/auth/v3/api-docs
+              filters:
+                - RewritePath=/auth/v3/api-docs, /v3/api-docs
+
+            - id: flag-service-openapi
+              uri: lb://FLAG-SERVICE
+              order: -1
+              predicates:
+                - Path=/flags/v3/api-docs
+              filters:
+                - RewritePath=/flags/v3/api-docs, /v3/api-docs
+
+            - id: analytics-service-openapi
+              uri: lb://ANALYTICS-SERVICE
+              order: -1
+              predicates:
+                - Path=/analytics/v3/api-docs
+              filters:
+                - RewritePath=/analytics/v3/api-docs, /v3/api-docs
+
+            - id: notification-service-openapi
+              uri: lb://NOTIFICATION-SERVICE
+              order: -1
+              predicates:
+                - Path=/notification/v3/api-docs
+              filters:
+                - RewritePath=/notification/v3/api-docs, /v3/api-docs
+
+            - id: audit-service-openapi
+              uri: lb://AUDIT-SERVICE
+              order: -1
+              predicates:
+                - Path=/audit/v3/api-docs
+              filters:
+                - RewritePath=/audit/v3/api-docs, /v3/api-docs
+
+
+            # ==========================================
+            # APPLICATION BUSINESS ROUTES
             # ==========================================
 
             - id: auth-service
@@ -48,80 +93,25 @@ spring:
               predicates:
                 - Path=/auth/**, /members/**, /test/**
 
-            - id: auth-service-openapi
-              uri: lb://AUTH-SERVICE
-              predicates:
-                - Path=/auth/v3/api-docs
-              filters:
-                - RewritePath=/auth/v3/api-docs, /v3/api-docs
-
-
-            # ==========================================
-            # FLAG SERVICE
-            # ==========================================
-
             - id: flag-service
               uri: lb://FLAG-SERVICE
               predicates:
                 - Path=/flags/**
-
-            - id: flag-service-openapi
-              uri: lb://FLAG-SERVICE
-              predicates:
-                - Path=/flags/v3/api-docs
-              filters:
-                - RewritePath=/flags/v3/api-docs, /v3/api-docs
-
-
-            # ==========================================
-            # ANALYTICS SERVICE
-            # ==========================================
 
             - id: analytics-service
               uri: lb://ANALYTICS-SERVICE
               predicates:
                 - Path=/analytics/**
 
-            - id: analytics-service-openapi
-              uri: lb://ANALYTICS-SERVICE
-              predicates:
-                - Path=/analytics/v3/api-docs
-              filters:
-                - RewritePath=/analytics/v3/api-docs, /v3/api-docs
-
-
-            # ==========================================
-            # NOTIFICATION SERVICE
-            # ==========================================
-
             - id: notification-service
               uri: lb://NOTIFICATION-SERVICE
               predicates:
                 - Path=/api/notifications/**
 
-            - id: notification-service-openapi
-              uri: lb://NOTIFICATION-SERVICE
-              predicates:
-                - Path=/notification/v3/api-docs
-              filters:
-                - RewritePath=/notification/v3/api-docs, /v3/api-docs
-
-
-            # ==========================================
-            # AUDIT SERVICE
-            # ==========================================
-
             - id: audit-service
               uri: lb://AUDIT-SERVICE
               predicates:
                 - Path=/audit/**
-
-            - id: audit-service-openapi
-              uri: lb://AUDIT-SERVICE
-              predicates:
-                - Path=/audit/v3/api-docs
-              filters:
-                - RewritePath=/audit/v3/api-docs, /v3/api-docs
 
 
 # ==========================================

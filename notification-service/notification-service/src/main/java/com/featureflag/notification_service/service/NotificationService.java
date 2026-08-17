@@ -32,6 +32,7 @@ public class NotificationService {
 
         Notification notification = Notification.builder()
                 .recipient(request.getRecipient())
+                .creatorEmail(request.getCreatorEmail())
                 .subject(request.getSubject())
                 .message(request.getMessage())
                 .type(request.getType() != null ? request.getType() : "EMAIL")
@@ -125,6 +126,30 @@ public class NotificationService {
         }
 
         return dispatched;
+    }
+
+    public List<Notification> getNotificationsForUser(String userEmail, String userRole) {
+        if (userEmail == null || userEmail.isBlank()) {
+            return List.of();
+        }
+
+        String normalizedEmail = userEmail.toLowerCase().trim();
+        String normalizedRole = userRole != null ? userRole.toUpperCase().trim() : "VIEWER";
+
+        if ("OWNER".equals(normalizedRole)) {
+            // OWNER sees all organization invitation & notification activity
+            return notificationRepository.findAllByOrderByCreatedAtDesc();
+        } else if ("ADMIN".equals(normalizedRole)) {
+            // ADMIN sees notifications where they are the recipient OR the creator/actor of the action
+            return notificationRepository.findByRecipientOrCreatorEmailOrderByCreatedAtDesc(normalizedEmail, normalizedEmail);
+        } else {
+            // DEVELOPER and VIEWER see only notifications directed specifically to themselves
+            return notificationRepository.findByRecipientOrderByCreatedAtDesc(normalizedEmail);
+        }
+    }
+
+    public List<Notification> getUserNotifications(String userEmail) {
+        return getNotificationsForUser(userEmail, "VIEWER");
     }
 
     public List<Notification> getAllNotifications() {

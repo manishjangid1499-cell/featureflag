@@ -32,12 +32,13 @@ public class NotificationKafkaConsumer {
 
             if (event.getRecipient() != null && !event.getRecipient().isBlank()) {
                 // Direct notification for a specific single recipient
-                NotificationRequest request = new NotificationRequest(
-                        event.getRecipient(),
-                        event.getSubject(),
-                        event.getMessage(),
-                        event.getType() != null ? event.getType() : "EMAIL"
-                );
+                NotificationRequest request = new NotificationRequest();
+                request.setRecipient(event.getRecipient());
+                request.setCreatorEmail(event.getCreatorEmail());
+                request.setSubject(event.getSubject());
+                request.setMessage(event.getMessage());
+                request.setType(event.getType() != null ? event.getType() : "EMAIL");
+
                 notificationService.createNotification(request);
             } else {
                 // Dynamic broadcast to active OWNER and ADMIN database recipients

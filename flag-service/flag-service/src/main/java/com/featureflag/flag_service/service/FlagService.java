@@ -16,6 +16,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -343,7 +346,7 @@ public class FlagService {
                 Integer rolloutPercentage = flag.getRolloutPercentage();
 
                 if (rolloutPercentage != null && rolloutPercentage > 0) {
-                    int bucket = calculateBucket(userId);
+                    int bucket = calculateBucket(flag.getEnvironment(), flag.getFlagKey(), userId);
                     enabled = bucket < rolloutPercentage;
                 }
             }
@@ -428,10 +431,21 @@ public class FlagService {
     // ROLLOUT BUCKET
     // =========================================================
 
-    private int calculateBucket(String userId) {
+    private int calculateBucket(String environment, String flagKey, String userId) {
         if (userId == null || userId.isBlank()) {
             return 0;
         }
-        return Math.floorMod(userId.hashCode(), 100);
+        String input = (environment != null ? environment : "") + ":" + (flagKey != null ? flagKey : "") + ":" + userId;
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+            int value = ((hash[0] & 0xFF) << 24) |
+                        ((hash[1] & 0xFF) << 16) |
+                        ((hash[2] & 0xFF) << 8)  |
+                        (hash[3] & 0xFF);
+            return Math.abs(value % 100);
+        } catch (NoSuchAlgorithmException e) {
+            return Math.floorMod(input.hashCode(), 100);
+        }
     }
 }

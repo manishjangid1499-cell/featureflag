@@ -15,4 +15,5 @@ public class NotificationDto {
     private String subject;
     private String message;
     private String type;
+    private String creatorEmail;
 }

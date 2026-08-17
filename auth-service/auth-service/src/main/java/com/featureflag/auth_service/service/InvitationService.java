@@ -107,6 +107,7 @@ public class InvitationService {
                     .subject(subject)
                     .message(message)
                     .type("EMAIL")
+                    .creatorEmail(currentUser != null ? currentUser.getEmail() : null)
                     .build();
 
             notificationClient.sendNotification(notificationDto);
