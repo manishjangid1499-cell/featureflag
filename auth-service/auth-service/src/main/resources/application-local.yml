@@ -31,5 +31,11 @@ app:
       email: ${BOOTSTRAP_OWNER_EMAIL:}
       password: ${BOOTSTRAP_OWNER_PASSWORD:}
 
-jwt:
-  secret: ${AUTH_JWT_SECRET}
+security:
+  jwt:
+    private-key-location: ${AUTH_JWT_PRIVATE_KEY_LOCATION}
+    public-key-location: ${JWT_PUBLIC_KEY_LOCATION}
+    issuer: ${JWT_ISSUER}
+    audience: ${JWT_AUDIENCE}
+    access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:15m}
+    key-id: ${JWT_KEY_ID}
