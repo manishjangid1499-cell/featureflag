@@ -76,6 +76,14 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       AUDIT_DB_USERNAME: "${AUDIT_DB_USERNAME:?AUDIT_DB_USERNAME is required}"
       AUDIT_DB_PASSWORD: "${AUDIT_DB_PASSWORD:?AUDIT_DB_PASSWORD is required}"
+      JWT_PUBLIC_KEY_LOCATION: "file:/run/secrets/jwt-public.pem"
+      JWT_ISSUER: "${JWT_ISSUER:?JWT_ISSUER is required}"
+      JWT_AUDIENCE: "${JWT_AUDIENCE:?JWT_AUDIENCE is required}"
+    volumes:
+      - type: bind
+        source: "${JWT_PUBLIC_KEY_FILE:?JWT_PUBLIC_KEY_FILE is required}"
+        target: /run/secrets/jwt-public.pem
+        read_only: true
     depends_on:
       - kafka
       - eureka-server
@@ -89,6 +97,14 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       ANALYTICS_DB_USERNAME: "${ANALYTICS_DB_USERNAME:?ANALYTICS_DB_USERNAME is required}"
       ANALYTICS_DB_PASSWORD: "${ANALYTICS_DB_PASSWORD:?ANALYTICS_DB_PASSWORD is required}"
+      JWT_PUBLIC_KEY_LOCATION: "file:/run/secrets/jwt-public.pem"
+      JWT_ISSUER: "${JWT_ISSUER:?JWT_ISSUER is required}"
+      JWT_AUDIENCE: "${JWT_AUDIENCE:?JWT_AUDIENCE is required}"
+    volumes:
+      - type: bind
+        source: "${JWT_PUBLIC_KEY_FILE:?JWT_PUBLIC_KEY_FILE is required}"
+        target: /run/secrets/jwt-public.pem
+        read_only: true
     depends_on:
       - kafka
       - eureka-server
