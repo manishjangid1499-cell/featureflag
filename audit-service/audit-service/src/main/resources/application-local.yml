@@ -7,8 +7,8 @@ spring:
 
   datasource:
     url: jdbc:mysql://localhost:3306/audit_db?createDatabaseIfNotExist=true
-    username: root
-    password: root
+    username: ${AUDIT_DB_USERNAME}
+    password: ${AUDIT_DB_PASSWORD}
 
   jpa:
     hibernate:
