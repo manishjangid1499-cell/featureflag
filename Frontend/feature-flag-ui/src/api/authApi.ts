@@ -22,11 +22,6 @@ export const getProfile = async (): Promise<string> => {
   return response.data;
 };
 
-export const validateToken = async (token: string): Promise<{ valid: boolean; email: string; role: string }> => {
-  const response = await api.get<{ valid: boolean; email: string; role: string }>(`/auth/validate?token=${encodeURIComponent(token)}`);
-  return response.data;
-};
-
 export const validateInvitation = async (token: string): Promise<ValidateInvitationResponse> => {
   const response = await api.get<ValidateInvitationResponse>(`/auth/invitations/validate?token=${encodeURIComponent(token)}`);
   return response.data;
