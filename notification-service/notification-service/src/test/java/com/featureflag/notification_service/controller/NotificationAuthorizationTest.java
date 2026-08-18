@@ -1,21 +1,27 @@
 package com.featureflag.notification_service.controller;
 
-import com.featureflag.notification_service.client.AuthClient;
 import com.featureflag.notification_service.dto.NotificationRequest;
-import com.featureflag.notification_service.dto.TokenValidationResponse;
 import com.featureflag.notification_service.entity.Notification;
-import com.featureflag.notification_service.security.JwtValidationFilter;
+import com.featureflag.notification_service.security.JwtSecurityConfig;
 import com.featureflag.notification_service.security.SecurityConfig;
 import com.featureflag.notification_service.service.NotificationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -27,7 +33,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(NotificationController.class)
-@Import({SecurityConfig.class, JwtValidationFilter.class})
+@Import({SecurityConfig.class, NotificationAuthorizationTest.TestJwtConfiguration.class})
 class NotificationAuthorizationTest {
 
     @Autowired
@@ -37,7 +43,7 @@ class NotificationAuthorizationTest {
     private NotificationService notificationService;
 
     @MockitoBean
-    private AuthClient authClient;
+    private JwtDecoder jwtDecoder;
 
     @Test
     void ownerCanQueryOrganizationWideStatus() throws Exception {
@@ -108,8 +114,14 @@ class NotificationAuthorizationTest {
     }
 
     private void authenticate(String token, String email, String role) {
-        when(authClient.validateToken(token))
-                .thenReturn(new TokenValidationResponse(true, email, role));
+        Instant now = Instant.now();
+        when(jwtDecoder.decode(token)).thenReturn(new Jwt(
+                token,
+                now.minusSeconds(10),
+                now.plusSeconds(300),
+                Map.of("alg", "RS256"),
+                Map.of("sub", email, "role", role)
+        ));
     }
 
     private String validNotificationJson(String creatorEmail) {
@@ -122,5 +134,14 @@ class NotificationAuthorizationTest {
                   "type": "EMAIL"
                 }
                 """.formatted(creatorEmail);
+    }
+
+    @TestConfiguration
+    static class TestJwtConfiguration {
+
+        @Bean
+        Converter<Jwt, ? extends AbstractAuthenticationToken> jwtAuthenticationConverter() {
+            return new JwtSecurityConfig().jwtAuthenticationConverter();
+        }
     }
 }

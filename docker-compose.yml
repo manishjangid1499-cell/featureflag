@@ -130,6 +130,15 @@ services:
       NOTIFICATION_DB_PASSWORD: "${NOTIFICATION_DB_PASSWORD:?NOTIFICATION_DB_PASSWORD is required}"
       NOTIFICATION_MAIL_USERNAME: "${NOTIFICATION_MAIL_USERNAME:?NOTIFICATION_MAIL_USERNAME is required}"
       NOTIFICATION_MAIL_PASSWORD: "${NOTIFICATION_MAIL_PASSWORD:?NOTIFICATION_MAIL_PASSWORD is required}"
+      AUTH_RECIPIENTS_SERVICE_KEY: "${AUTH_RECIPIENTS_SERVICE_KEY:?AUTH_RECIPIENTS_SERVICE_KEY is required}"
+      JWT_PUBLIC_KEY_LOCATION: "file:/run/secrets/jwt-public.pem"
+      JWT_ISSUER: "${JWT_ISSUER:?JWT_ISSUER is required}"
+      JWT_AUDIENCE: "${JWT_AUDIENCE:?JWT_AUDIENCE is required}"
+    volumes:
+      - type: bind
+        source: "${JWT_PUBLIC_KEY_FILE:?JWT_PUBLIC_KEY_FILE is required}"
+        target: /run/secrets/jwt-public.pem
+        read_only: true
     depends_on:
       - kafka
       - eureka-server
