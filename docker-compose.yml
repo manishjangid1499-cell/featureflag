@@ -23,12 +23,18 @@ services:
 
   eureka-server:
     image: eureka-server:latest
+    build:
+      context: ./eureka-server/eureka-server
+      dockerfile: Dockerfile
     container_name: eureka-server
     ports:
       - "8761:8761"
 
   auth-service:
     image: auth-service:latest
+    build:
+      context: ./auth-service/auth-service
+      dockerfile: Dockerfile
     container_name: auth-service
     ports:
       - "8081:8081"
@@ -47,6 +53,9 @@ services:
 
   flag-service:
     image: flag-service:latest
+    build:
+      context: ./flag-service/flag-service
+      dockerfile: Dockerfile
     container_name: flag-service
     ports:
       - "8082:8082"
@@ -69,6 +78,9 @@ services:
 
   audit-service:
     image: audit-service:latest
+    build:
+      context: ./audit-service/audit-service
+      dockerfile: Dockerfile
     container_name: audit-service
     ports:
       - "8084:8084"
@@ -90,6 +102,9 @@ services:
 
   analytics-service:
     image: analytics-service:latest
+    build:
+      context: ./analytics-service/analytics-service
+      dockerfile: Dockerfile
     container_name: analytics-service
     ports:
       - "8085:8085"
@@ -111,6 +126,9 @@ services:
 
   api-gateway:
     image: api-gateway:latest
+    build:
+      context: ./api-gateway/api-gateway
+      dockerfile: Dockerfile
     container_name: api-gateway
     ports:
       - "8080:8080"
@@ -121,6 +139,9 @@ services:
 
   notification-service:
     image: notification-service:latest
+    build:
+      context: ./notification-service/notification-service
+      dockerfile: Dockerfile
     container_name: notification-service
     ports:
       - "8086:8086"

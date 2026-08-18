@@ -1,0 +1,16 @@
+target/
+.git/
+.idea/
+*.iml
+.env
+.env.*
+!.env.example
+*.pem
+**/*.pem
+*.key
+**/*.key
+logs/
+*.log
+node_modules/
+tmp/
+temp/
