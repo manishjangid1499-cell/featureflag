@@ -29,12 +29,14 @@ public class NotificationController {
     @Operation(summary = "Create and send notification")
     @PostMapping
     public ResponseEntity<Notification> createNotification(
-            @Valid @RequestBody NotificationRequest request
+            @Valid @RequestBody NotificationRequest request,
+            Authentication authentication
     ) {
 
         Notification notification =
                 notificationService.createNotification(
-                        request
+                        request,
+                        authentication.getName()
                 );
 
         return ResponseEntity
@@ -82,11 +84,16 @@ public class NotificationController {
     @Operation(summary = "Get notification by ID")
     @GetMapping("/{id}")
     public ResponseEntity<Notification> getNotificationById(
-            @PathVariable Long id
+            @PathVariable Long id,
+            Authentication authentication
     ) {
 
         return ResponseEntity.ok(
-                notificationService.getNotificationById(id)
+                notificationService.getNotificationById(
+                        id,
+                        authentication.getName(),
+                        extractRole(authentication)
+                )
         );
     }
 
@@ -99,14 +106,12 @@ public class NotificationController {
             @PathVariable String recipient,
             Authentication authentication
     ) {
-        String currentUserEmail = authentication != null ? authentication.getName() : null;
-        if (currentUserEmail != null && !currentUserEmail.equalsIgnoreCase(recipient.trim())) {
-            // Prevent unauthorized parameter tampering
-            return ResponseEntity.ok(notificationService.getUserNotifications(currentUserEmail));
-        }
-
         return ResponseEntity.ok(
-                notificationService.getNotificationsByRecipient(recipient)
+                notificationService.getNotificationsByRecipient(
+                        recipient,
+                        authentication.getName(),
+                        extractRole(authentication)
+                )
         );
     }
 
@@ -130,10 +135,15 @@ public class NotificationController {
     @Operation(summary = "Delete notification")
     @DeleteMapping("/{id}")
     public ResponseEntity<String> deleteNotification(
-            @PathVariable Long id
+            @PathVariable Long id,
+            Authentication authentication
     ) {
 
-        notificationService.deleteNotification(id);
+        notificationService.deleteNotification(
+                id,
+                authentication.getName(),
+                extractRole(authentication)
+        );
 
         return ResponseEntity.ok(
                 "Notification deleted successfully"

@@ -1,9 +1,10 @@
 package com.featureflag.notification_service.service;
 
-import com.featureflag.notification_service.client.AuthClient;
+import com.featureflag.notification_service.client.AuthRecipientsClient;
 import com.featureflag.notification_service.dto.NotificationRequest;
 import com.featureflag.notification_service.entity.Notification;
 import com.featureflag.notification_service.exception.ResourceNotFoundException;
+import com.featureflag.notification_service.exception.ForbiddenException;
 import com.featureflag.notification_service.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -24,15 +26,31 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final JavaMailSender mailSender;
-    private final AuthClient authClient;
+    private final AuthRecipientsClient authRecipientsClient;
 
     public Notification createNotification(
             NotificationRequest request
     ) {
 
+        return createNotificationInternal(request, request.getCreatorEmail());
+    }
+
+    public Notification createNotification(
+            NotificationRequest request,
+            String authenticatedCreatorEmail
+    ) {
+
+        return createNotificationInternal(request, authenticatedCreatorEmail);
+    }
+
+    private Notification createNotificationInternal(
+            NotificationRequest request,
+            String creatorEmail
+    ) {
+
         Notification notification = Notification.builder()
-                .recipient(request.getRecipient())
-                .creatorEmail(request.getCreatorEmail())
+                .recipient(request.getRecipient().trim())
+                .creatorEmail(normalizeNullableEmail(creatorEmail))
                 .subject(request.getSubject())
                 .message(request.getMessage())
                 .type(request.getType() != null ? request.getType() : "EMAIL")
@@ -71,7 +89,7 @@ public class NotificationService {
         List<String> recipients = new ArrayList<>();
 
         try {
-            List<String> fetched = authClient.getNotificationRecipients(targetRoles);
+            List<String> fetched = authRecipientsClient.getNotificationRecipients(targetRoles);
             if (fetched != null) {
                 recipients = fetched.stream()
                         .filter(Objects::nonNull)
@@ -141,10 +159,15 @@ public class NotificationService {
             return notificationRepository.findAllByOrderByCreatedAtDesc();
         } else if ("ADMIN".equals(normalizedRole)) {
             // ADMIN sees notifications where they are the recipient OR the creator/actor of the action
-            return notificationRepository.findByRecipientOrCreatorEmailOrderByCreatedAtDesc(normalizedEmail, normalizedEmail);
+            return notificationRepository
+                    .findByRecipientIgnoreCaseOrCreatorEmailIgnoreCaseOrderByCreatedAtDesc(
+                            normalizedEmail,
+                            normalizedEmail
+                    );
         } else {
             // DEVELOPER and VIEWER see only notifications directed specifically to themselves
-            return notificationRepository.findByRecipientOrderByCreatedAtDesc(normalizedEmail);
+            return notificationRepository
+                    .findByRecipientIgnoreCaseOrderByCreatedAtDesc(normalizedEmail);
         }
     }
 
@@ -157,23 +180,47 @@ public class NotificationService {
         return notificationRepository.findAll();
     }
 
-    public Notification getNotificationById(Long id) {
+    public Notification getNotificationById(
+            Long id,
+            String userEmail,
+            String userRole
+    ) {
 
-        return notificationRepository.findById(id)
+        Notification notification = notificationRepository.findById(id)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
                                 "Notification not found with id: "
                                         + id
                         )
                 );
+
+        if (!canAccessNotification(notification, userEmail, userRole)) {
+            throw new ResourceNotFoundException(
+                    "Notification not found with id: " + id
+            );
+        }
+
+        return notification;
     }
 
     public List<Notification> getNotificationsByRecipient(
-            String recipient
+            String recipient,
+            String userEmail,
+            String userRole
     ) {
 
+        String normalizedRole = normalizeRole(userRole);
+        String normalizedRecipient = normalizeEmail(recipient);
+
+        if (!"OWNER".equals(normalizedRole)
+                && !emailsEqual(normalizedRecipient, userEmail)) {
+            throw new ForbiddenException(
+                    "You do not have permission to query this recipient"
+            );
+        }
+
         return notificationRepository
-                .findByRecipient(recipient);
+                .findByRecipientIgnoreCaseOrderByCreatedAtDesc(normalizedRecipient);
     }
 
     public List<Notification> getNotificationsByStatus(
@@ -184,16 +231,61 @@ public class NotificationService {
                 .findByStatus(status);
     }
 
-    public void deleteNotification(Long id) {
+    public void deleteNotification(
+            Long id,
+            String userEmail,
+            String userRole
+    ) {
 
-        if (!notificationRepository.existsById(id)) {
+        Notification notification = notificationRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Notification not found with id: " + id
+                ));
 
+        if (!canAccessNotification(notification, userEmail, userRole)) {
             throw new ResourceNotFoundException(
-                    "Notification not found with id: "
-                            + id
+                    "Notification not found with id: " + id
             );
         }
 
-        notificationRepository.deleteById(id);
+        notificationRepository.delete(notification);
+    }
+
+    private boolean canAccessNotification(
+            Notification notification,
+            String userEmail,
+            String userRole
+    ) {
+        String normalizedRole = normalizeRole(userRole);
+
+        if ("OWNER".equals(normalizedRole)) {
+            return true;
+        }
+
+        boolean isRecipient = emailsEqual(notification.getRecipient(), userEmail);
+
+        if ("ADMIN".equals(normalizedRole)) {
+            return isRecipient || emailsEqual(notification.getCreatorEmail(), userEmail);
+        }
+
+        return isRecipient;
+    }
+
+    private boolean emailsEqual(String first, String second) {
+        return first != null
+                && second != null
+                && first.trim().equalsIgnoreCase(second.trim());
+    }
+
+    private String normalizeEmail(String email) {
+        return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeNullableEmail(String email) {
+        return email == null ? null : email.trim();
+    }
+
+    private String normalizeRole(String role) {
+        return role == null ? "VIEWER" : role.trim().toUpperCase(Locale.ROOT);
     }
 }

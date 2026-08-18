@@ -1,6 +1,6 @@
 package com.featureflag.notification_service.service;
 
-import com.featureflag.notification_service.client.AuthClient;
+import com.featureflag.notification_service.client.AuthRecipientsClient;
 import com.featureflag.notification_service.dto.NotificationRequest;
 import com.featureflag.notification_service.entity.Notification;
 import com.featureflag.notification_service.exception.ResourceNotFoundException;
@@ -32,7 +32,7 @@ class NotificationServiceTest {
     private JavaMailSender mailSender;
 
     @Mock
-    private AuthClient authClient;
+    private AuthRecipientsClient authRecipientsClient;
 
     @InjectMocks
     private NotificationService notificationService;
@@ -68,7 +68,7 @@ class NotificationServiceTest {
     @Test
     @DisplayName("Get Notifications For ADMIN - Returns notifications where recipient or creator is the admin")
     void testGetNotificationsForUser_Admin() {
-        when(notificationRepository.findByRecipientOrCreatorEmailOrderByCreatedAtDesc("admina@company.com", "admina@company.com"))
+        when(notificationRepository.findByRecipientIgnoreCaseOrCreatorEmailIgnoreCaseOrderByCreatedAtDesc("admina@company.com", "admina@company.com"))
                 .thenReturn(List.of(testNotification));
 
         List<Notification> results = notificationService.getNotificationsForUser("admina@company.com", "ADMIN");
@@ -76,20 +76,20 @@ class NotificationServiceTest {
         assertNotNull(results);
         assertEquals(1, results.size());
         verify(notificationRepository, times(1))
-                .findByRecipientOrCreatorEmailOrderByCreatedAtDesc("admina@company.com", "admina@company.com");
+                .findByRecipientIgnoreCaseOrCreatorEmailIgnoreCaseOrderByCreatedAtDesc("admina@company.com", "admina@company.com");
     }
 
     @Test
     @DisplayName("Get Notifications For DEVELOPER - Returns only notifications directed specifically to themselves")
     void testGetNotificationsForUser_Developer() {
-        when(notificationRepository.findByRecipientOrderByCreatedAtDesc("dev@company.com"))
+        when(notificationRepository.findByRecipientIgnoreCaseOrderByCreatedAtDesc("dev@company.com"))
                 .thenReturn(List.of(testNotification));
 
         List<Notification> results = notificationService.getNotificationsForUser("dev@company.com", "DEVELOPER");
 
         assertNotNull(results);
         assertEquals(1, results.size());
-        verify(notificationRepository, times(1)).findByRecipientOrderByCreatedAtDesc("dev@company.com");
+        verify(notificationRepository, times(1)).findByRecipientIgnoreCaseOrderByCreatedAtDesc("dev@company.com");
     }
 
     @Test
@@ -102,7 +102,7 @@ class NotificationServiceTest {
         assertTrue(nullResults.isEmpty());
         assertNotNull(blankResults);
         assertTrue(blankResults.isEmpty());
-        verify(notificationRepository, never()).findByRecipientOrderByCreatedAtDesc(anyString());
+        verify(notificationRepository, never()).findByRecipientIgnoreCaseOrderByCreatedAtDesc(anyString());
     }
 
     @Test
@@ -150,7 +150,7 @@ class NotificationServiceTest {
     @Test
     @DisplayName("Send To Role Recipients - Dispatches email to each resolved recipient")
     void testSendToRoleRecipients_Success() {
-        when(authClient.getNotificationRecipients(List.of("OWNER", "ADMIN")))
+        when(authRecipientsClient.getNotificationRecipients(List.of("OWNER", "ADMIN")))
                 .thenReturn(List.of("owner@company.com", "admin@company.com"));
         when(notificationRepository.save(any(Notification.class))).thenAnswer(i -> i.getArgument(0));
 
@@ -169,7 +169,7 @@ class NotificationServiceTest {
     @Test
     @DisplayName("Send To Role Recipients - Empty recipient list skips mail delivery")
     void testSendToRoleRecipients_EmptyList() {
-        when(authClient.getNotificationRecipients(anyList())).thenReturn(List.of());
+        when(authRecipientsClient.getNotificationRecipients(anyList())).thenReturn(List.of());
 
         List<Notification> dispatched = notificationService.sendToRoleRecipients(
                 "Flag Created",
@@ -188,7 +188,11 @@ class NotificationServiceTest {
     void testGetNotificationById_Success() {
         when(notificationRepository.findById(1L)).thenReturn(Optional.of(testNotification));
 
-        Notification found = notificationService.getNotificationById(1L);
+        Notification found = notificationService.getNotificationById(
+                1L,
+                "any-owner@company.com",
+                "OWNER"
+        );
 
         assertNotNull(found);
         assertEquals("owner@company.com", found.getRecipient());
@@ -199,16 +203,169 @@ class NotificationServiceTest {
     void testGetNotificationById_NotFound() {
         when(notificationRepository.findById(999L)).thenReturn(Optional.empty());
 
-        assertThrows(ResourceNotFoundException.class, () -> notificationService.getNotificationById(999L));
+        assertThrows(ResourceNotFoundException.class, () ->
+                notificationService.getNotificationById(
+                        999L,
+                        "owner@company.com",
+                        "OWNER"
+                )
+        );
     }
 
     @Test
     @DisplayName("Delete Notification - Success")
     void testDeleteNotification_Success() {
-        when(notificationRepository.existsById(1L)).thenReturn(true);
+        when(notificationRepository.findById(1L)).thenReturn(Optional.of(testNotification));
 
-        notificationService.deleteNotification(1L);
+        notificationService.deleteNotification(
+                1L,
+                "ADMIN@company.com ",
+                "ADMIN"
+        );
 
-        verify(notificationRepository, times(1)).deleteById(1L);
+        verify(notificationRepository, times(1)).delete(testNotification);
+    }
+
+    @Test
+    @DisplayName("REST create ignores forged creator email")
+    void testCreateNotification_RestCreatorCannotBeForged() {
+        NotificationRequest request = new NotificationRequest();
+        request.setRecipient("recipient@company.com");
+        request.setCreatorEmail("forged@company.com");
+        request.setSubject("Alert");
+        request.setMessage("Message");
+        request.setType("EMAIL");
+
+        when(notificationRepository.save(any(Notification.class))).thenAnswer(i -> i.getArgument(0));
+
+        Notification result = notificationService.createNotification(
+                request,
+                " authenticated-admin@company.com "
+        );
+
+        assertEquals("authenticated-admin@company.com", result.getCreatorEmail());
+        assertNotEquals("forged@company.com", result.getCreatorEmail());
+    }
+
+    @Test
+    @DisplayName("ADMIN can read notification when creator email matches ignoring case and whitespace")
+    void testGetNotificationById_AdminCreatorAccess() {
+        when(notificationRepository.findById(1L)).thenReturn(Optional.of(testNotification));
+
+        Notification result = notificationService.getNotificationById(
+                1L,
+                " ADMIN@COMPANY.COM ",
+                "ADMIN"
+        );
+
+        assertSame(testNotification, result);
+    }
+
+    @Test
+    @DisplayName("ADMIN can read notification when recipient email matches")
+    void testGetNotificationById_AdminRecipientAccess() {
+        when(notificationRepository.findById(1L)).thenReturn(Optional.of(testNotification));
+
+        Notification result = notificationService.getNotificationById(
+                1L,
+                "owner@company.com",
+                "ADMIN"
+        );
+
+        assertSame(testNotification, result);
+    }
+
+    @Test
+    @DisplayName("ADMIN unrelated notification is hidden as not found")
+    void testGetNotificationById_AdminUnrelatedDeniedAsNotFound() {
+        when(notificationRepository.findById(1L)).thenReturn(Optional.of(testNotification));
+
+        assertThrows(ResourceNotFoundException.class, () ->
+                notificationService.getNotificationById(
+                        1L,
+                        "unrelated-admin@company.com",
+                        "ADMIN"
+                )
+        );
+    }
+
+    @Test
+    @DisplayName("DEVELOPER can read own recipient notification")
+    void testGetNotificationById_DeveloperRecipientAccess() {
+        when(notificationRepository.findById(1L)).thenReturn(Optional.of(testNotification));
+
+        Notification result = notificationService.getNotificationById(
+                1L,
+                " OWNER@COMPANY.COM ",
+                "DEVELOPER"
+        );
+
+        assertSame(testNotification, result);
+    }
+
+    @Test
+    @DisplayName("VIEWER cross-user notification is hidden as not found")
+    void testGetNotificationById_ViewerCrossUserDeniedAsNotFound() {
+        when(notificationRepository.findById(1L)).thenReturn(Optional.of(testNotification));
+
+        assertThrows(ResourceNotFoundException.class, () ->
+                notificationService.getNotificationById(
+                        1L,
+                        "viewer@company.com",
+                        "VIEWER"
+                )
+        );
+    }
+
+    @Test
+    @DisplayName("VIEWER can read own recipient notification")
+    void testGetNotificationById_ViewerRecipientAccess() {
+        when(notificationRepository.findById(1L)).thenReturn(Optional.of(testNotification));
+
+        Notification result = notificationService.getNotificationById(
+                1L,
+                "owner@company.com",
+                "VIEWER"
+        );
+
+        assertSame(testNotification, result);
+    }
+
+    @Test
+    @DisplayName("Recipient query allows self and rejects another recipient")
+    void testRecipientQuery_SelfOnlyForNonOwner() {
+        when(notificationRepository.findByRecipientIgnoreCaseOrderByCreatedAtDesc("admin@company.com"))
+                .thenReturn(List.of(testNotification));
+
+        List<Notification> ownResults = notificationService.getNotificationsByRecipient(
+                " Admin@Company.com ",
+                "admin@company.com",
+                "ADMIN"
+        );
+
+        assertEquals(1, ownResults.size());
+        assertThrows(com.featureflag.notification_service.exception.ForbiddenException.class, () ->
+                notificationService.getNotificationsByRecipient(
+                        "other@company.com",
+                        "admin@company.com",
+                        "ADMIN"
+                )
+        );
+    }
+
+    @Test
+    @DisplayName("ADMIN cannot delete unrelated notification")
+    void testDeleteNotification_AdminUnrelatedDeniedAsNotFound() {
+        when(notificationRepository.findById(1L)).thenReturn(Optional.of(testNotification));
+
+        assertThrows(ResourceNotFoundException.class, () ->
+                notificationService.deleteNotification(
+                        1L,
+                        "unrelated-admin@company.com",
+                        "ADMIN"
+                )
+        );
+
+        verify(notificationRepository, never()).delete(any(Notification.class));
     }
 }

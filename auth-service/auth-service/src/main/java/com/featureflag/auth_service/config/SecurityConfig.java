@@ -1,6 +1,7 @@
 package com.featureflag.auth_service.config;
 
 import com.featureflag.auth_service.security.JwtAuthenticationFilter;
+import com.featureflag.auth_service.security.AuthRecipientsServiceKeyFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,6 +17,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final AuthRecipientsServiceKeyFilter authRecipientsServiceKeyFilter;
 
 
     @Bean
@@ -60,13 +62,18 @@ public class SecurityConfig {
                                 "/auth/register",
                                 "/auth/login",
                                 "/auth/validate",
-                                "/auth/recipients",
                                 "/auth/invitations/**",
                                 "/swagger-ui/**",
                                 "/v3/api-docs",
                                 "/v3/api-docs/**",
                                 "/swagger-ui.html"
                         ).permitAll()
+
+                        .requestMatchers(
+                                "/auth/recipients"
+                        ).hasAuthority(
+                                AuthRecipientsServiceKeyFilter.AUTHORITY
+                        )
 
 
                         // =========================
@@ -103,6 +110,10 @@ public class SecurityConfig {
                 // JWT FILTER
                 // =========================
 
+                .addFilterBefore(
+                        authRecipientsServiceKeyFilter,
+                        UsernamePasswordAuthenticationFilter.class
+                )
                 .addFilterBefore(
                         jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class
