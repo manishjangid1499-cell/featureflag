@@ -1,7 +1,6 @@
 export const API_ENDPOINTS = {
   AUTH: {
     LOGIN: "/auth/login",
-    VALIDATE: "/auth/validate",
   },
 
   FLAGS: {
