@@ -19,8 +19,8 @@ spring:
 
   datasource:
     url: jdbc:mysql://host.docker.internal:3306/flag_db
-    username: root
-    password: root
+    username: ${FLAG_DB_USERNAME}
+    password: ${FLAG_DB_PASSWORD}
 
   jpa:
     hibernate:

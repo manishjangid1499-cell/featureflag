@@ -34,6 +34,9 @@ services:
       - "8081:8081"
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      AUTH_DB_USERNAME: "${AUTH_DB_USERNAME:?AUTH_DB_USERNAME is required}"
+      AUTH_DB_PASSWORD: "${AUTH_DB_PASSWORD:?AUTH_DB_PASSWORD is required}"
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
     depends_on:
       - eureka-server
 
@@ -42,6 +45,10 @@ services:
     container_name: flag-service
     ports:
       - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      FLAG_DB_USERNAME: "${FLAG_DB_USERNAME:?FLAG_DB_USERNAME is required}"
+      FLAG_DB_PASSWORD: "${FLAG_DB_PASSWORD:?FLAG_DB_PASSWORD is required}"
     depends_on:
       - redis
       - kafka
@@ -52,6 +59,10 @@ services:
     container_name: audit-service
     ports:
       - "8084:8084"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      AUDIT_DB_USERNAME: "${AUDIT_DB_USERNAME:?AUDIT_DB_USERNAME is required}"
+      AUDIT_DB_PASSWORD: "${AUDIT_DB_PASSWORD:?AUDIT_DB_PASSWORD is required}"
     depends_on:
       - kafka
       - eureka-server
@@ -61,6 +72,10 @@ services:
     container_name: analytics-service
     ports:
       - "8085:8085"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      ANALYTICS_DB_USERNAME: "${ANALYTICS_DB_USERNAME:?ANALYTICS_DB_USERNAME is required}"
+      ANALYTICS_DB_PASSWORD: "${ANALYTICS_DB_PASSWORD:?ANALYTICS_DB_PASSWORD is required}"
     depends_on:
       - kafka
       - eureka-server
@@ -80,6 +95,12 @@ services:
     container_name: notification-service
     ports:
       - "8086:8086"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      NOTIFICATION_DB_USERNAME: "${NOTIFICATION_DB_USERNAME:?NOTIFICATION_DB_USERNAME is required}"
+      NOTIFICATION_DB_PASSWORD: "${NOTIFICATION_DB_PASSWORD:?NOTIFICATION_DB_PASSWORD is required}"
+      NOTIFICATION_MAIL_USERNAME: "${NOTIFICATION_MAIL_USERNAME:?NOTIFICATION_MAIL_USERNAME is required}"
+      NOTIFICATION_MAIL_PASSWORD: "${NOTIFICATION_MAIL_PASSWORD:?NOTIFICATION_MAIL_PASSWORD is required}"
     depends_on:
       - kafka
       - eureka-server

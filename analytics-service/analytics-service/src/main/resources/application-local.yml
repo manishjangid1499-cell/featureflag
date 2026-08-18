@@ -7,8 +7,8 @@ spring:
 
   datasource:
     url: jdbc:mysql://localhost:3306/analytics_db?createDatabaseIfNotExist=true
-    username: root
-    password: root
+    username: ${ANALYTICS_DB_USERNAME}
+    password: ${ANALYTICS_DB_PASSWORD}
 
   jpa:
     hibernate:
