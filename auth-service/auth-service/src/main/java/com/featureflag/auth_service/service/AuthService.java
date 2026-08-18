@@ -3,7 +3,6 @@ package com.featureflag.auth_service.service;
 import com.featureflag.auth_service.dto.AuthResponse;
 import com.featureflag.auth_service.dto.LoginRequest;
 import com.featureflag.auth_service.dto.RegisterRequest;
-import com.featureflag.auth_service.dto.TokenValidationResponse;
 import com.featureflag.auth_service.entity.Role;
 import com.featureflag.auth_service.entity.User;
 import com.featureflag.auth_service.repository.UserRepository;
@@ -82,47 +81,6 @@ public class AuthService {
                 user.getEmail(),
                 user.getRole().name()
         );
-    }
-
-    public TokenValidationResponse validateToken(String token) {
-
-        try {
-
-            String email = jwtService.extractEmail(token);
-
-            if (!jwtService.isTokenValid(token)) {
-                return new TokenValidationResponse(
-                        false,
-                        null,
-                        null
-                );
-            }
-
-            User user = userRepository.findByEmail(email)
-                    .orElse(null);
-
-            if (user == null) {
-                return new TokenValidationResponse(
-                        false,
-                        null,
-                        null
-                );
-            }
-
-            return new TokenValidationResponse(
-                    true,
-                    user.getEmail(),
-                    user.getRole().name()
-            );
-
-        } catch (Exception e) {
-
-            return new TokenValidationResponse(
-                    false,
-                    null,
-                    null
-            );
-        }
     }
 
     public List<String> getNotificationRecipients(List<String> roleNames) {

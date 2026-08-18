@@ -3,8 +3,6 @@ package com.featureflag.auth_service.controller;
 import com.featureflag.auth_service.dto.AuthResponse;
 import com.featureflag.auth_service.dto.LoginRequest;
 import com.featureflag.auth_service.dto.RegisterRequest;
-import com.featureflag.auth_service.dto.TokenValidationResponse;
-import com.featureflag.auth_service.security.JwtService;
 import com.featureflag.auth_service.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,7 +20,6 @@ import java.util.List;
 public class AuthController {
 
     private final AuthService authService;
-    private final JwtService jwtService;
 
     @Operation(summary = "Register a new user")
     @PostMapping("/register")
@@ -45,14 +42,6 @@ public class AuthController {
     @GetMapping("/profile")
     public String profile() {
         return "Welcome to Protected Profile";
-    }
-
-    @Operation(summary = "Validate JWT token")
-    @GetMapping("/validate")
-    public TokenValidationResponse validateToken(
-            @RequestParam String token) {
-
-        return authService.validateToken(token);
     }
 
     @Operation(summary = "Get active notification recipients by role")

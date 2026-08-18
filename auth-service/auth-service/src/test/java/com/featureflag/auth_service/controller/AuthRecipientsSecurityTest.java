@@ -1,7 +1,8 @@
 package com.featureflag.auth_service.controller;
 
 import com.featureflag.auth_service.config.SecurityConfig;
-import com.featureflag.auth_service.dto.TokenValidationResponse;
+import com.featureflag.auth_service.entity.Role;
+import com.featureflag.auth_service.entity.User;
 import com.featureflag.auth_service.security.AuthRecipientsServiceKeyFilter;
 import com.featureflag.auth_service.security.CustomUserDetailsService;
 import com.featureflag.auth_service.security.JwtAuthenticationFilter;
@@ -21,7 +22,6 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(AuthController.class)
@@ -85,19 +85,62 @@ class AuthRecipientsSecurityTest {
     }
 
     @Test
-    void validateEndpointRemainsPublicAndUnchanged() throws Exception {
-        when(authService.validateToken("existing-token"))
-                .thenReturn(new TokenValidationResponse(
-                        true,
-                        "user@company.com",
-                        "VIEWER"
-                ));
+    void protectedProfileAcceptsValidRsaToken() throws Exception {
+        authenticateToken("valid-rsa-token", Role.VIEWER, true);
+
+        mockMvc.perform(get("/auth/profile")
+                        .header("Authorization", "Bearer valid-rsa-token"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("Welcome to Protected Profile"));
+    }
+
+    @Test
+    void protectedProfileRejectsInvalidToken() throws Exception {
+        when(jwtService.extractEmail("invalid-token"))
+                .thenThrow(new IllegalArgumentException("Invalid JWT"));
+
+        mockMvc.perform(get("/auth/profile")
+                        .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void protectedProfileRejectsExpiredToken() throws Exception {
+        authenticateToken("expired-token", Role.VIEWER, false);
+
+        mockMvc.perform(get("/auth/profile")
+                        .header("Authorization", "Bearer expired-token"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void viewerRoleStillCannotAccessMemberEndpoints() throws Exception {
+        authenticateToken("viewer-token", Role.VIEWER, true);
+
+        mockMvc.perform(get("/members")
+                        .header("Authorization", "Bearer viewer-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void validateEndpointIsNoLongerMapped() throws Exception {
+        authenticateToken("valid-rsa-token", Role.VIEWER, true);
 
         mockMvc.perform(get("/auth/validate")
-                        .queryParam("token", "existing-token"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.valid").value(true))
-                .andExpect(jsonPath("$.email").value("user@company.com"))
-                .andExpect(jsonPath("$.role").value("VIEWER"));
+                        .header("Authorization", "Bearer valid-rsa-token"))
+                .andExpect(status().isNotFound());
+    }
+
+    private void authenticateToken(String token, Role role, boolean valid) {
+        User currentUser = User.builder()
+                .email("user@company.com")
+                .password("encoded")
+                .role(role)
+                .build();
+        when(jwtService.extractEmail(token)).thenReturn("user@company.com");
+        when(customUserDetailsService.loadUserByUsername("user@company.com"))
+                .thenReturn(currentUser);
+        when(jwtService.isTokenValid(token, "user@company.com"))
+                .thenReturn(valid);
     }
 }

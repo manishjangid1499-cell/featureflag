@@ -3,7 +3,6 @@ package com.featureflag.auth_service.service;
 import com.featureflag.auth_service.dto.AuthResponse;
 import com.featureflag.auth_service.dto.LoginRequest;
 import com.featureflag.auth_service.dto.RegisterRequest;
-import com.featureflag.auth_service.dto.TokenValidationResponse;
 import com.featureflag.auth_service.entity.Role;
 import com.featureflag.auth_service.entity.User;
 import com.featureflag.auth_service.repository.UserRepository;
@@ -126,35 +125,6 @@ class AuthServiceTest {
         when(passwordEncoder.matches("wrongpassword", "encoded_password")).thenReturn(false);
 
         assertThrows(RuntimeException.class, () -> authService.login(request));
-    }
-
-    @Test
-    @DisplayName("Validate Token - Valid Token Returns True with User Details")
-    void testValidateToken_ValidToken() {
-        String token = "valid_jwt_token";
-        when(jwtService.extractEmail(token)).thenReturn("test@company.com");
-        when(jwtService.isTokenValid(token)).thenReturn(true);
-        when(userRepository.findByEmail("test@company.com")).thenReturn(Optional.of(testUser));
-
-        TokenValidationResponse response = authService.validateToken(token);
-
-        assertNotNull(response);
-        assertTrue(response.isValid());
-        assertEquals("test@company.com", response.getEmail());
-        assertEquals("DEVELOPER", response.getRole());
-    }
-
-    @Test
-    @DisplayName("Validate Token - Invalid Token Returns False")
-    void testValidateToken_InvalidToken() {
-        String token = "invalid_token";
-        when(jwtService.extractEmail(token)).thenThrow(new RuntimeException("Expired JWT"));
-
-        TokenValidationResponse response = authService.validateToken(token);
-
-        assertNotNull(response);
-        assertFalse(response.isValid());
-        assertNull(response.getEmail());
     }
 
     @Test
