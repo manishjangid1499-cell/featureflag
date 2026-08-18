@@ -304,6 +304,20 @@ class NotificationServiceTest {
     }
 
     @Test
+    @DisplayName("DEVELOPER cross-user notification is hidden as not found")
+    void testGetNotificationById_DeveloperCrossUserDeniedAsNotFound() {
+        when(notificationRepository.findById(1L)).thenReturn(Optional.of(testNotification));
+
+        assertThrows(ResourceNotFoundException.class, () ->
+                notificationService.getNotificationById(
+                        1L,
+                        "developer@company.com",
+                        "DEVELOPER"
+                )
+        );
+    }
+
+    @Test
     @DisplayName("VIEWER cross-user notification is hidden as not found")
     void testGetNotificationById_ViewerCrossUserDeniedAsNotFound() {
         when(notificationRepository.findById(1L)).thenReturn(Optional.of(testNotification));

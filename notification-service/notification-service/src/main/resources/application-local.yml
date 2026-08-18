@@ -42,3 +42,9 @@ management:
     web:
       exposure:
         include: health,info
+
+security:
+  jwt:
+    public-key-location: ${JWT_PUBLIC_KEY_LOCATION}
+    issuer: ${JWT_ISSUER}
+    audience: ${JWT_AUDIENCE}
