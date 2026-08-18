@@ -60,6 +60,14 @@ public class SecurityConfig {
                                 "ADMIN"
                         )
 
+                        // ORGANIZATION-WIDE STATUS QUERY - OWNER ONLY
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/notifications/status/**"
+                        ).hasRole(
+                                "OWNER"
+                        )
+
 
                         // =========================
                         // DELETE NOTIFICATION
