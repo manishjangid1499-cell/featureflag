@@ -49,6 +49,14 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       FLAG_DB_USERNAME: "${FLAG_DB_USERNAME:?FLAG_DB_USERNAME is required}"
       FLAG_DB_PASSWORD: "${FLAG_DB_PASSWORD:?FLAG_DB_PASSWORD is required}"
+      JWT_PUBLIC_KEY_LOCATION: "file:/run/secrets/jwt-public.pem"
+      JWT_ISSUER: "${JWT_ISSUER:?JWT_ISSUER is required}"
+      JWT_AUDIENCE: "${JWT_AUDIENCE:?JWT_AUDIENCE is required}"
+    volumes:
+      - type: bind
+        source: "${JWT_PUBLIC_KEY_FILE:?JWT_PUBLIC_KEY_FILE is required}"
+        target: /run/secrets/jwt-public.pem
+        read_only: true
     depends_on:
       - redis
       - kafka
