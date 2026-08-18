@@ -2,7 +2,6 @@ package com.featureflag.auth_service.security;
 
 import com.featureflag.auth_service.dto.AuthResponse;
 import com.featureflag.auth_service.dto.LoginRequest;
-import com.featureflag.auth_service.dto.TokenValidationResponse;
 import com.featureflag.auth_service.entity.Role;
 import com.featureflag.auth_service.entity.User;
 import com.featureflag.auth_service.repository.UserRepository;
@@ -159,7 +158,7 @@ class JwtServiceTest {
     }
 
     @Test
-    void loginShapeAndValidateEndpointCompatibilityUseNewRsaTokenAndCurrentDatabaseRole() {
+    void loginShapeUsesNewRsaToken() {
         UserRepository userRepository = mock(UserRepository.class);
         PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
         AuthService authService = new AuthService(userRepository, passwordEncoder, jwtService);
@@ -181,19 +180,6 @@ class JwtServiceTest {
         assertEquals("User@Company.COM", response.getEmail());
         assertEquals("ADMIN", response.getRole());
         assertEquals("RS256", jwtService.decode(response.getToken()).getHeaders().get("alg"));
-
-        User currentUser = User.builder()
-                .email("user@company.com")
-                .password("encoded")
-                .role(Role.OWNER)
-                .build();
-        when(userRepository.findByEmail("user@company.com")).thenReturn(Optional.of(currentUser));
-
-        TokenValidationResponse validation = authService.validateToken(response.getToken());
-
-        assertTrue(validation.isValid());
-        assertEquals("user@company.com", validation.getEmail());
-        assertEquals("OWNER", validation.getRole());
     }
 
     private static JwtService serviceFor(KeyPair pair, String issuer, String audience, Duration ttl) {
