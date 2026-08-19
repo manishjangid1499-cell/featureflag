@@ -41,10 +41,7 @@ public class KafkaConfig {
         );
 
         JsonDeserializer<FlagEvent> deserializer =
-                new JsonDeserializer<>(FlagEvent.class);
-
-        deserializer.addTrustedPackages("*");
-        deserializer.setUseTypeHeaders(false);
+                new JsonDeserializer<>();
 
         return new DefaultKafkaConsumerFactory<>(
                 props,

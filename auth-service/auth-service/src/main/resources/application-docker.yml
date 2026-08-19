@@ -23,6 +23,23 @@ eureka:
     service-url:
       defaultZone: http://eureka-server:8761/eureka
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: "livenessState"
+        readiness:
+          include: "readinessState,db"
+
 security:
   jwt:
     private-key-location: ${AUTH_JWT_PRIVATE_KEY_LOCATION}

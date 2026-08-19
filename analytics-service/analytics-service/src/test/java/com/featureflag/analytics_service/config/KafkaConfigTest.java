@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 class KafkaConfigTest {
 
@@ -23,6 +24,12 @@ class KafkaConfigTest {
         properties.setBootstrapServers(List.of("kafka:29092"));
         properties.getConsumer().setGroupId("analytics-group");
         properties.getConsumer().setAutoOffsetReset("earliest");
+        properties.getConsumer().getProperties().put(JsonDeserializer.TRUSTED_PACKAGES, "*");
+        properties.getConsumer().getProperties().put(JsonDeserializer.USE_TYPE_INFO_HEADERS, "false");
+        properties.getConsumer().getProperties().put(
+                JsonDeserializer.VALUE_DEFAULT_TYPE,
+                FlagEvent.class.getName()
+        );
 
         DefaultKafkaConsumerFactory<String, FlagEvent> factory =
                 (DefaultKafkaConsumerFactory<String, FlagEvent>)
@@ -37,6 +44,8 @@ class KafkaConfigTest {
                 .containsEntry(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         assertThat(factory.getKeyDeserializer()).isInstanceOf(StringDeserializer.class);
         assertThat(factory.getValueDeserializer()).isInstanceOf(JsonDeserializer.class);
+        assertThatCode(() -> factory.getValueDeserializer().configure(configuration, false))
+                .doesNotThrowAnyException();
     }
 
     @Test
