@@ -15,6 +15,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
@@ -28,7 +30,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({
         SecurityConfig.class,
         AuthRecipientsServiceKeyFilter.class,
-        JwtAuthenticationFilter.class
+        JwtAuthenticationFilter.class,
+        AuthRecipientsSecurityTest.HealthProbeController.class
 })
 @TestPropertySource(properties = "AUTH_RECIPIENTS_SERVICE_KEY=test-recipients-key")
 class AuthRecipientsSecurityTest {
@@ -131,6 +134,20 @@ class AuthRecipientsSecurityTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void healthProbesArePublicButOtherActuatorPathsRemainProtected() throws Exception {
+        for (String path : List.of(
+                "/actuator/health",
+                "/actuator/health/liveness",
+                "/actuator/health/readiness"
+        )) {
+            mockMvc.perform(get(path)).andExpect(status().isOk());
+        }
+
+        mockMvc.perform(get("/actuator/info"))
+                .andExpect(status().isUnauthorized());
+    }
+
     private void authenticateToken(String token, Role role, boolean valid) {
         User currentUser = User.builder()
                 .email("user@company.com")
@@ -142,5 +159,18 @@ class AuthRecipientsSecurityTest {
                 .thenReturn(currentUser);
         when(jwtService.isTokenValid(token, "user@company.com"))
                 .thenReturn(valid);
+    }
+
+    @RestController
+    static class HealthProbeController {
+
+        @GetMapping({
+                "/actuator/health",
+                "/actuator/health/liveness",
+                "/actuator/health/readiness"
+        })
+        String health() {
+            return "UP";
+        }
     }
 }

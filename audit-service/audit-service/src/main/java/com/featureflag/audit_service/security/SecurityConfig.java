@@ -37,7 +37,8 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/v3/api-docs",
                                 "/v3/api-docs/**",
-                                "/actuator/**"
+                                "/actuator/health",
+                                "/actuator/health/**"
                         ).permitAll()
                         .requestMatchers(HttpMethod.GET, "/audit/**")
                         .hasAnyRole("OWNER", "ADMIN", "DEVELOPER", "VIEWER")

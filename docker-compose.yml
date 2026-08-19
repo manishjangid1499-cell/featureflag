@@ -2,6 +2,7 @@ services:
 
   mysql:
     image: mysql:8.4.11
+    restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}"
       AUTH_DB_USERNAME: "${AUTH_DB_USERNAME:?AUTH_DB_USERNAME is required}"
@@ -31,6 +32,7 @@ services:
 
   redis:
     image: redis:8.10.0
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -40,6 +42,7 @@ services:
 
   kafka:
     image: apache/kafka:4.3.1
+    restart: unless-stopped
     ports:
       - "9092:9092"
     environment:
@@ -80,19 +83,25 @@ services:
 
   eureka-server:
     image: eureka-server:latest
+    restart: unless-stopped
     build:
       context: ./eureka-server/eureka-server
       dockerfile: Dockerfile
-    container_name: eureka-server
     ports:
       - "8761:8761"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "4", "http://127.0.0.1:8761/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
 
   auth-service:
     image: auth-service:latest
+    restart: unless-stopped
     build:
       context: ./auth-service/auth-service
       dockerfile: Dockerfile
-    container_name: auth-service
     ports:
       - "8081:8081"
     environment:
@@ -115,18 +124,24 @@ services:
         source: "${JWT_PUBLIC_KEY_FILE:?JWT_PUBLIC_KEY_FILE is required}"
         target: /run/secrets/jwt-public.pem
         read_only: true
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "4", "http://127.0.0.1:8081/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
     depends_on:
       mysql:
         condition: service_healthy
       eureka-server:
-        condition: service_started
+        condition: service_healthy
 
   flag-service:
     image: flag-service:latest
+    restart: unless-stopped
     build:
       context: ./flag-service/flag-service
       dockerfile: Dockerfile
-    container_name: flag-service
     ports:
       - "8082:8082"
     environment:
@@ -141,6 +156,12 @@ services:
         source: "${JWT_PUBLIC_KEY_FILE:?JWT_PUBLIC_KEY_FILE is required}"
         target: /run/secrets/jwt-public.pem
         read_only: true
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "4", "http://127.0.0.1:8082/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
     depends_on:
       mysql:
         condition: service_healthy
@@ -151,14 +172,14 @@ services:
       kafka-init:
         condition: service_completed_successfully
       eureka-server:
-        condition: service_started
+        condition: service_healthy
 
   audit-service:
     image: audit-service:latest
+    restart: unless-stopped
     build:
       context: ./audit-service/audit-service
       dockerfile: Dockerfile
-    container_name: audit-service
     ports:
       - "8084:8084"
     environment:
@@ -173,6 +194,12 @@ services:
         source: "${JWT_PUBLIC_KEY_FILE:?JWT_PUBLIC_KEY_FILE is required}"
         target: /run/secrets/jwt-public.pem
         read_only: true
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "4", "http://127.0.0.1:8084/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
     depends_on:
       mysql:
         condition: service_healthy
@@ -181,14 +208,14 @@ services:
       kafka-init:
         condition: service_completed_successfully
       eureka-server:
-        condition: service_started
+        condition: service_healthy
 
   analytics-service:
     image: analytics-service:latest
+    restart: unless-stopped
     build:
       context: ./analytics-service/analytics-service
       dockerfile: Dockerfile
-    container_name: analytics-service
     ports:
       - "8085:8085"
     environment:
@@ -203,6 +230,12 @@ services:
         source: "${JWT_PUBLIC_KEY_FILE:?JWT_PUBLIC_KEY_FILE is required}"
         target: /run/secrets/jwt-public.pem
         read_only: true
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "4", "http://127.0.0.1:8085/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
     depends_on:
       mysql:
         condition: service_healthy
@@ -211,27 +244,36 @@ services:
       kafka-init:
         condition: service_completed_successfully
       eureka-server:
-        condition: service_started
+        condition: service_healthy
 
   api-gateway:
     image: api-gateway:latest
+    restart: unless-stopped
     build:
       context: ./api-gateway/api-gateway
       dockerfile: Dockerfile
-    container_name: api-gateway
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "4", "http://127.0.0.1:8080/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
     depends_on:
-      - auth-service
-      - flag-service
-      - eureka-server
+      auth-service:
+        condition: service_started
+      flag-service:
+        condition: service_started
+      eureka-server:
+        condition: service_healthy
 
   notification-service:
     image: notification-service:latest
+    restart: unless-stopped
     build:
       context: ./notification-service/notification-service
       dockerfile: Dockerfile
-    container_name: notification-service
     ports:
       - "8086:8086"
     environment:
@@ -249,6 +291,12 @@ services:
         source: "${JWT_PUBLIC_KEY_FILE:?JWT_PUBLIC_KEY_FILE is required}"
         target: /run/secrets/jwt-public.pem
         read_only: true
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "4", "http://127.0.0.1:8086/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
     depends_on:
       mysql:
         condition: service_healthy
@@ -257,7 +305,7 @@ services:
       kafka-init:
         condition: service_completed_successfully
       eureka-server:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   kafka-data:

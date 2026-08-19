@@ -37,10 +37,11 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health
   endpoint:
     health:
-      show-details: always
+      show-details: never
+      show-components: never
 
 security:
   jwt:

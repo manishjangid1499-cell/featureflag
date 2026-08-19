@@ -23,6 +23,8 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -40,7 +42,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(NotificationController.class)
-@Import({SecurityConfig.class, NotificationJwtSecurityTest.TestJwtConfiguration.class})
+@Import({
+        SecurityConfig.class,
+        NotificationJwtSecurityTest.TestJwtConfiguration.class,
+        NotificationJwtSecurityTest.HealthProbeController.class
+})
 class NotificationJwtSecurityTest {
 
     private static final String ISSUER = "feature-flag-auth";
@@ -145,6 +151,20 @@ class NotificationJwtSecurityTest {
         assertTrue(jwtDecoder instanceof NimbusJwtDecoder);
     }
 
+    @Test
+    void healthProbesArePublicButOtherActuatorPathsRemainProtected() throws Exception {
+        for (String path : List.of(
+                "/actuator/health",
+                "/actuator/health/liveness",
+                "/actuator/health/readiness"
+        )) {
+            mockMvc.perform(get(path)).andExpect(status().isOk());
+        }
+
+        mockMvc.perform(get("/actuator/info"))
+                .andExpect(status().isUnauthorized());
+    }
+
     private void expectUnauthorized(String token) throws Exception {
         mockMvc.perform(get("/api/notifications").header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized());
@@ -188,6 +208,19 @@ class NotificationJwtSecurityTest {
             return generator.generateKeyPair();
         } catch (Exception exception) {
             throw new IllegalStateException(exception);
+        }
+    }
+
+    @RestController
+    static class HealthProbeController {
+
+        @GetMapping({
+                "/actuator/health",
+                "/actuator/health/liveness",
+                "/actuator/health/readiness"
+        })
+        String health() {
+            return "UP";
         }
     }
 
