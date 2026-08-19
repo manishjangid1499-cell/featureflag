@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.git/
+.idea/
+*.iml
+.env
+.env.*
+!.env.example
+logs/
+coverage/
+*.log
+npm-debug.log*
+*.pem
+*.key
+
