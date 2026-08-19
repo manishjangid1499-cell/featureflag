@@ -13,7 +13,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
 
 eureka:
   instance:
@@ -52,3 +52,9 @@ security:
     audience: ${JWT_AUDIENCE}
     access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:15m}
     key-id: ${JWT_KEY_ID}
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

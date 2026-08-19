@@ -27,6 +27,9 @@ spring:
       mail:
         smtp:
           auth: true
+          connectiontimeout: ${NOTIFICATION_MAIL_CONNECTION_TIMEOUT_MS:10000}
+          timeout: ${NOTIFICATION_MAIL_READ_TIMEOUT_MS:10000}
+          writetimeout: ${NOTIFICATION_MAIL_WRITE_TIMEOUT_MS:10000}
           starttls:
             enable: true
 
@@ -59,3 +62,9 @@ security:
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION}
     issuer: ${JWT_ISSUER}
     audience: ${JWT_AUDIENCE}
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

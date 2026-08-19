@@ -138,7 +138,10 @@ management:
 
 
 springdoc:
+  api-docs:
+    enabled: false
   swagger-ui:
+    enabled: false
     path: /swagger-ui.html
 
     urls:

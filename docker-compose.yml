@@ -44,13 +44,13 @@ services:
     image: apache/kafka:4.3.1
     restart: unless-stopped
     ports:
-      - "9092:9092"
+      - "127.0.0.1:${KAFKA_EXTERNAL_PORT:-9092}:9092"
     environment:
       CLUSTER_ID: 5L6g3nShT-eMCtK--X86sw
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_LISTENERS: INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka:29092,EXTERNAL://localhost:${KAFKA_EXTERNAL_PORT:-9092}"
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
@@ -87,8 +87,8 @@ services:
     build:
       context: ./eureka-server/eureka-server
       dockerfile: Dockerfile
-    ports:
-      - "8761:8761"
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "4", "http://127.0.0.1:8761/actuator/health/readiness"]
       interval: 10s
@@ -102,8 +102,8 @@ services:
     build:
       context: ./auth-service/auth-service
       dockerfile: Dockerfile
-    ports:
-      - "8081:8081"
+    security_opt:
+      - no-new-privileges:true
     environment:
       SPRING_PROFILES_ACTIVE: docker
       AUTH_DB_USERNAME: "${AUTH_DB_USERNAME:?AUTH_DB_USERNAME is required}"
@@ -143,8 +143,8 @@ services:
     build:
       context: ./flag-service/flag-service
       dockerfile: Dockerfile
-    ports:
-      - "8082:8082"
+    security_opt:
+      - no-new-privileges:true
     environment:
       SPRING_PROFILES_ACTIVE: docker
       FLAG_DB_USERNAME: "${FLAG_DB_USERNAME:?FLAG_DB_USERNAME is required}"
@@ -181,8 +181,8 @@ services:
     build:
       context: ./audit-service/audit-service
       dockerfile: Dockerfile
-    ports:
-      - "8084:8084"
+    security_opt:
+      - no-new-privileges:true
     environment:
       SPRING_PROFILES_ACTIVE: docker
       AUDIT_DB_USERNAME: "${AUDIT_DB_USERNAME:?AUDIT_DB_USERNAME is required}"
@@ -217,8 +217,8 @@ services:
     build:
       context: ./analytics-service/analytics-service
       dockerfile: Dockerfile
-    ports:
-      - "8085:8085"
+    security_opt:
+      - no-new-privileges:true
     environment:
       SPRING_PROFILES_ACTIVE: docker
       ANALYTICS_DB_USERNAME: "${ANALYTICS_DB_USERNAME:?ANALYTICS_DB_USERNAME is required}"
@@ -253,8 +253,8 @@ services:
     build:
       context: ./api-gateway/api-gateway
       dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "4", "http://127.0.0.1:8080/actuator/health/readiness"]
       interval: 10s
@@ -275,14 +275,17 @@ services:
     build:
       context: ./notification-service/notification-service
       dockerfile: Dockerfile
-    ports:
-      - "8086:8086"
+    security_opt:
+      - no-new-privileges:true
     environment:
       SPRING_PROFILES_ACTIVE: docker
       NOTIFICATION_DB_USERNAME: "${NOTIFICATION_DB_USERNAME:?NOTIFICATION_DB_USERNAME is required}"
       NOTIFICATION_DB_PASSWORD: "${NOTIFICATION_DB_PASSWORD:?NOTIFICATION_DB_PASSWORD is required}"
       NOTIFICATION_MAIL_USERNAME: "${NOTIFICATION_MAIL_USERNAME:?NOTIFICATION_MAIL_USERNAME is required}"
       NOTIFICATION_MAIL_PASSWORD: "${NOTIFICATION_MAIL_PASSWORD:?NOTIFICATION_MAIL_PASSWORD is required}"
+      NOTIFICATION_MAIL_CONNECTION_TIMEOUT_MS: "${NOTIFICATION_MAIL_CONNECTION_TIMEOUT_MS:-10000}"
+      NOTIFICATION_MAIL_READ_TIMEOUT_MS: "${NOTIFICATION_MAIL_READ_TIMEOUT_MS:-10000}"
+      NOTIFICATION_MAIL_WRITE_TIMEOUT_MS: "${NOTIFICATION_MAIL_WRITE_TIMEOUT_MS:-10000}"
       AUTH_RECIPIENTS_SERVICE_KEY: "${AUTH_RECIPIENTS_SERVICE_KEY:?AUTH_RECIPIENTS_SERVICE_KEY is required}"
       JWT_PUBLIC_KEY_LOCATION: "file:/run/secrets/jwt-public.pem"
       JWT_ISSUER: "${JWT_ISSUER:?JWT_ISSUER is required}"
@@ -316,6 +319,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "${FRONTEND_PORT:-3000}:8080"
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--spider", "-T", "4", "http://127.0.0.1:8080/"]
       interval: 10s

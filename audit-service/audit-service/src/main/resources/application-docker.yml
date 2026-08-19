@@ -13,7 +13,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
 
   kafka:
     bootstrap-servers: kafka:29092
@@ -25,7 +25,7 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
 
       properties:
-        spring.json.trusted.packages: "*"
+        spring.json.trusted.packages: com.featureflag.audit_service.event
         spring.json.use.type.headers: false
         spring.json.value.default.type: com.featureflag.audit_service.event.FlagEvent
 
@@ -59,3 +59,9 @@ security:
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION}
     issuer: ${JWT_ISSUER}
     audience: ${JWT_AUDIENCE}
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
