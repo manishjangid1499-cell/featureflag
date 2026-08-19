@@ -6,7 +6,7 @@ spring:
     name: AUTH-SERVICE
 
   datasource:
-    url: jdbc:mysql://host.docker.internal:3306/auth_db
+    url: jdbc:mysql://mysql:3306/auth_db
     username: ${AUTH_DB_USERNAME}
     password: ${AUTH_DB_PASSWORD}
 
