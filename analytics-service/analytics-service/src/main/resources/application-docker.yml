@@ -6,7 +6,7 @@ spring:
     name: ANALYTICS-SERVICE
 
   datasource:
-    url: jdbc:mysql://host.docker.internal:3306/analytics_db
+    url: jdbc:mysql://mysql:3306/analytics_db
     username: ${ANALYTICS_DB_USERNAME}
     password: ${ANALYTICS_DB_PASSWORD}
 

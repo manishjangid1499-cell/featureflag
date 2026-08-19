@@ -6,7 +6,7 @@ spring:
     name: AUDIT-SERVICE
 
   datasource:
-    url: jdbc:mysql://host.docker.internal:3306/audit_db
+    url: jdbc:mysql://mysql:3306/audit_db
     username: ${AUDIT_DB_USERNAME}
     password: ${AUDIT_DB_PASSWORD}
 

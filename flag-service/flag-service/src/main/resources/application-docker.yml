@@ -18,7 +18,7 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
   datasource:
-    url: jdbc:mysql://host.docker.internal:3306/flag_db
+    url: jdbc:mysql://mysql:3306/flag_db
     username: ${FLAG_DB_USERNAME}
     password: ${FLAG_DB_PASSWORD}
 
