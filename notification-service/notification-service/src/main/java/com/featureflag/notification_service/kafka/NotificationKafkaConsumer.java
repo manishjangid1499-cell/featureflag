@@ -26,7 +26,7 @@ public class NotificationKafkaConsumer {
     public void consumeNotificationEvent(String message) {
 
         try {
-            log.info("Received notification event: {}", message);
+            log.info("Received notification event");
 
             NotificationEvent event = objectMapper.readValue(message, NotificationEvent.class);
 

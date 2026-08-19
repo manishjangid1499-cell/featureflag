@@ -3,6 +3,7 @@ package com.featureflag.analytics_service.config;
 import com.featureflag.analytics_service.event.FlagEvent;
 import com.featureflag.analytics_service.kafka.AnalyticsEventConsumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
@@ -10,6 +11,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -18,13 +20,18 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 
 class KafkaConfigTest {
 
+    private static final String TRUSTED_EVENT_PACKAGE = "com.featureflag.analytics_service.event";
+
     @Test
     void consumerFactoryUsesBoundKafkaConsumerProperties() {
         KafkaProperties properties = new KafkaProperties();
         properties.setBootstrapServers(List.of("kafka:29092"));
         properties.getConsumer().setGroupId("analytics-group");
         properties.getConsumer().setAutoOffsetReset("earliest");
-        properties.getConsumer().getProperties().put(JsonDeserializer.TRUSTED_PACKAGES, "*");
+        properties.getConsumer().getProperties().put(
+                JsonDeserializer.TRUSTED_PACKAGES,
+                TRUSTED_EVENT_PACKAGE
+        );
         properties.getConsumer().getProperties().put(JsonDeserializer.USE_TYPE_INFO_HEADERS, "false");
         properties.getConsumer().getProperties().put(
                 JsonDeserializer.VALUE_DEFAULT_TYPE,
@@ -41,11 +48,41 @@ class KafkaConfigTest {
                 .isEqualTo(List.of("kafka:29092"));
         assertThat(configuration)
                 .containsEntry(ConsumerConfig.GROUP_ID_CONFIG, "analytics-group")
-                .containsEntry(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+                .containsEntry(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+                .containsEntry(JsonDeserializer.TRUSTED_PACKAGES, TRUSTED_EVENT_PACKAGE)
+                .containsEntry(JsonDeserializer.USE_TYPE_INFO_HEADERS, "false")
+                .containsEntry(JsonDeserializer.VALUE_DEFAULT_TYPE, FlagEvent.class.getName());
+        assertThat(configuration.get(JsonDeserializer.TRUSTED_PACKAGES)).isNotEqualTo("*");
         assertThat(factory.getKeyDeserializer()).isInstanceOf(StringDeserializer.class);
         assertThat(factory.getValueDeserializer()).isInstanceOf(JsonDeserializer.class);
         assertThatCode(() -> factory.getValueDeserializer().configure(configuration, false))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void fixedLocalTypeDeserializesAndIgnoresForeignTypeHeader() {
+        KafkaProperties properties = kafkaProperties();
+        DefaultKafkaConsumerFactory<String, FlagEvent> factory =
+                (DefaultKafkaConsumerFactory<String, FlagEvent>)
+                        new KafkaConfig(properties).consumerFactory();
+        Map<String, Object> configuration = factory.getConfigurationProperties();
+        JsonDeserializer<FlagEvent> deserializer =
+                (JsonDeserializer<FlagEvent>) factory.getValueDeserializer();
+        deserializer.configure(configuration, false);
+
+        RecordHeaders headers = new RecordHeaders();
+        headers.add("__TypeId__", "java.lang.Runtime".getBytes(StandardCharsets.UTF_8));
+        FlagEvent event = deserializer.deserialize(
+                "feature-flag-events",
+                headers,
+                "{\"eventType\":\"UPDATED\",\"flagKey\":\"checkout\",\"timestamp\":\"2026-08-19T10:00:00Z\"}"
+                        .getBytes(StandardCharsets.UTF_8)
+        );
+
+        assertThat(event).isInstanceOf(FlagEvent.class);
+        assertThat(event.getEventType()).isEqualTo("UPDATED");
+        assertThat(event.getFlagKey()).isEqualTo("checkout");
+        assertThat(event.getTimestamp()).isEqualTo("2026-08-19T10:00:00Z");
     }
 
     @Test
@@ -56,5 +93,22 @@ class KafkaConfigTest {
 
         assertThat(listener).isNotNull();
         assertThat(listener.groupId()).isEqualTo("analytics-group");
+    }
+
+    private KafkaProperties kafkaProperties() {
+        KafkaProperties properties = new KafkaProperties();
+        properties.setBootstrapServers(List.of("kafka:29092"));
+        properties.getConsumer().setGroupId("analytics-group");
+        properties.getConsumer().setAutoOffsetReset("earliest");
+        properties.getConsumer().getProperties().put(
+                JsonDeserializer.TRUSTED_PACKAGES,
+                TRUSTED_EVENT_PACKAGE
+        );
+        properties.getConsumer().getProperties().put(JsonDeserializer.USE_TYPE_INFO_HEADERS, "false");
+        properties.getConsumer().getProperties().put(
+                JsonDeserializer.VALUE_DEFAULT_TYPE,
+                FlagEvent.class.getName()
+        );
+        return properties;
     }
 }

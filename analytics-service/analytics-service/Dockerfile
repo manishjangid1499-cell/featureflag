@@ -12,7 +12,7 @@ COPY src ./src
 RUN --mount=type=cache,target=/root/.m2,sharing=locked \
     mvn -B -ntp package -DskipTests
 
-FROM eclipse-temurin:21-jre AS runtime
+FROM eclipse-temurin:21.0.11_10-jre AS runtime
 
 RUN groupadd --gid 10001 appgroup \
     && useradd --uid 10001 --gid appgroup --no-create-home --home-dir /app --shell /usr/sbin/nologin appuser
