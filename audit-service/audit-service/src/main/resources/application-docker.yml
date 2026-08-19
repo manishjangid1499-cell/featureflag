@@ -16,7 +16,7 @@ spring:
     show-sql: true
 
   kafka:
-    bootstrap-servers: kafka:9092
+    bootstrap-servers: kafka:29092
 
     consumer:
       group-id: audit-group
