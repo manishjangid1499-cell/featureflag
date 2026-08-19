@@ -115,6 +115,7 @@ services:
       JWT_ACCESS_TOKEN_TTL: "${JWT_ACCESS_TOKEN_TTL:-15m}"
       JWT_KEY_ID: "${JWT_KEY_ID:?JWT_KEY_ID is required}"
       AUTH_RECIPIENTS_SERVICE_KEY: "${AUTH_RECIPIENTS_SERVICE_KEY:?AUTH_RECIPIENTS_SERVICE_KEY is required}"
+      FRONTEND_BASE_URL: "${FRONTEND_BASE_URL:-http://localhost:3000}"
     volumes:
       - type: bind
         source: "${AUTH_JWT_PRIVATE_KEY_FILE:?AUTH_JWT_PRIVATE_KEY_FILE is required}"
@@ -305,6 +306,24 @@ services:
       kafka-init:
         condition: service_completed_successfully
       eureka-server:
+        condition: service_healthy
+
+  frontend:
+    image: feature-flag-frontend:latest
+    restart: unless-stopped
+    build:
+      context: ./Frontend/feature-flag-ui
+      dockerfile: Dockerfile
+    ports:
+      - "${FRONTEND_PORT:-3000}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "-T", "4", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    depends_on:
+      api-gateway:
         condition: service_healthy
 
 volumes:

@@ -40,6 +40,10 @@ management:
         readiness:
           include: "readinessState,db"
 
+app:
+  invitation:
+    frontend-base-url: ${FRONTEND_BASE_URL}
+
 security:
   jwt:
     private-key-location: ${AUTH_JWT_PRIVATE_KEY_LOCATION}

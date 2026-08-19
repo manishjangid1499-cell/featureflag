@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -79,6 +80,30 @@ class InvitationServiceTest {
         assertEquals(Role.ADMIN, response.getInvitedRole());
         assertEquals(InvitationStatus.PENDING, response.getStatus());
         verify(notificationClient, times(1)).sendNotification(any(NotificationDto.class));
+    }
+
+    @Test
+    @DisplayName("Invite Member - uses configured frontend origin without sending email")
+    void testInviteMember_UsesConfiguredFrontendOrigin() {
+        ReflectionTestUtils.setField(invitationService, "frontendBaseUrl", "https://frontend.example.test");
+        InviteMemberRequest request = new InviteMemberRequest("New Admin", "newadmin@company.com", Role.ADMIN);
+
+        when(userRepository.findByEmail("newadmin@company.com")).thenReturn(Optional.empty());
+        when(invitationRepository.findByEmailAndStatus(anyString(), any())).thenReturn(Collections.emptyList());
+        when(invitationRepository.save(any(Invitation.class))).thenAnswer(i -> {
+            Invitation invitation = i.getArgument(0);
+            invitation.setId(102L);
+            return invitation;
+        });
+
+        invitationService.inviteMember(request, ownerUser);
+
+        ArgumentCaptor<NotificationDto> notificationCaptor = ArgumentCaptor.forClass(NotificationDto.class);
+        verify(notificationClient).sendNotification(notificationCaptor.capture());
+        String message = notificationCaptor.getValue().getMessage();
+
+        assertTrue(message.contains("https://frontend.example.test/accept-invitation?token="));
+        assertFalse(message.contains("localhost:5173"));
     }
 
     @Test
