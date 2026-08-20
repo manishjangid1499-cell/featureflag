@@ -3,12 +3,8 @@ package com.featureflag.flag_service.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.featureflag.flag_service.dto.FlagEvaluationResponse;
 import com.featureflag.flag_service.dto.FlagRequest;
-import com.featureflag.flag_service.dto.NotificationEvent;
 import com.featureflag.flag_service.entity.FeatureFlag;
-import com.featureflag.flag_service.event.FlagEvent;
 import com.featureflag.flag_service.exception.ResourceNotFoundException;
-import com.featureflag.flag_service.kafka.FlagEventProducer;
-import com.featureflag.flag_service.kafka.NotificationEventProducer;
 import com.featureflag.flag_service.repository.FeatureFlagRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -42,12 +38,8 @@ class FlagServiceTest {
 
     @Mock
     private ObjectMapper objectMapper;
-
     @Mock
-    private FlagEventProducer producer;
-
-    @Mock
-    private NotificationEventProducer notificationProducer;
+    private OutboxService outboxService;
 
     @InjectMocks
     private FlagService flagService;
@@ -179,8 +171,8 @@ class FlagServiceTest {
         assertNotNull(created);
         assertEquals("NEW_CHECKOUT", created.getFlagKey());
         verify(redisTemplate, times(1)).delete("all_flags");
-        verify(producer, times(1)).publishEvent(any(FlagEvent.class));
-        verify(notificationProducer, times(1)).publishNotification(any(NotificationEvent.class));
+        verify(outboxService, times(1)).enqueueFlagEvent(anyString(), anyString());
+        verify(outboxService, times(1)).enqueueNotificationEvent(anyString(), anyString());
     }
 
     @Test
@@ -235,7 +227,7 @@ class FlagServiceTest {
         assertEquals("Updated Checkout", updated.getName());
         assertFalse(updated.getEnabled());
         verify(redisTemplate, times(1)).delete("all_flags");
-        verify(producer, times(1)).publishEvent(any(FlagEvent.class));
+        verify(outboxService, times(1)).enqueueFlagEvent(anyString(), anyString());
     }
 
     @Test
@@ -249,7 +241,7 @@ class FlagServiceTest {
         assertTrue(result.contains("Successfully"));
         verify(repository, times(1)).deleteById(1L);
         verify(redisTemplate, times(1)).delete("all_flags");
-        verify(producer, times(1)).publishEvent(any(FlagEvent.class));
+        verify(outboxService, times(1)).enqueueFlagEvent(anyString(), anyString());
     }
 
     @Test

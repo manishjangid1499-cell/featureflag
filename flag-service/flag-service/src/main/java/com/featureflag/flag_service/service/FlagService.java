@@ -4,17 +4,14 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.featureflag.flag_service.dto.FlagEvaluationResponse;
 import com.featureflag.flag_service.dto.FlagRequest;
-import com.featureflag.flag_service.dto.NotificationEvent;
 import com.featureflag.flag_service.entity.FeatureFlag;
-import com.featureflag.flag_service.event.FlagEvent;
 import com.featureflag.flag_service.exception.ResourceNotFoundException;
-import com.featureflag.flag_service.kafka.FlagEventProducer;
-import com.featureflag.flag_service.kafka.NotificationEventProducer;
 import com.featureflag.flag_service.repository.FeatureFlagRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -30,8 +27,7 @@ public class FlagService {
     private final FeatureFlagRepository repository;
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
-    private final FlagEventProducer producer;
-    private final NotificationEventProducer notificationProducer;
+    private final OutboxService outboxService;
 
     private static final String ALL_FLAGS_KEY = "all_flags";
 
@@ -39,6 +35,7 @@ public class FlagService {
     // CREATE FLAG
     // =========================================================
 
+    @Transactional
     public FeatureFlag createFlag(FlagRequest request) {
 
         FeatureFlag flag = FeatureFlag.builder()
@@ -147,6 +144,7 @@ public class FlagService {
     // UPDATE FLAG
     // =========================================================
 
+    @Transactional
     public FeatureFlag updateFlag(
             Long id,
             FlagRequest request
@@ -202,6 +200,7 @@ public class FlagService {
     // DELETE FLAG
     // =========================================================
 
+    @Transactional
     public String deleteFlag(Long id) {
 
         FeatureFlag flag =
@@ -241,6 +240,7 @@ public class FlagService {
     // TOGGLE FLAG
     // =========================================================
 
+    @Transactional
     public FeatureFlag toggleFlag(Long id) {
 
         FeatureFlag flag =
@@ -392,16 +392,10 @@ public class FlagService {
             String eventType,
             String flagKey
     ) {
-        try {
-            FlagEvent event = new FlagEvent(
-                    eventType,
-                    flagKey,
-                    LocalDateTime.now().toString()
-            );
-            producer.publishEvent(event);
-        } catch (Exception e) {
-            System.err.println("Failed to publish Kafka FlagEvent: " + e.getMessage());
-        }
+        outboxService.enqueueFlagEvent(
+                eventType,
+                flagKey
+        );
     }
 
 
@@ -413,17 +407,10 @@ public class FlagService {
             String subject,
             String message
     ) {
-        try {
-            NotificationEvent event = new NotificationEvent();
-            event.setRecipient(null); // Dynamic recipient resolution in notification-service
-            event.setSubject(subject);
-            event.setMessage(message);
-            event.setType("EMAIL");
-
-            notificationProducer.publishNotification(event);
-        } catch (Exception e) {
-            System.err.println("Failed to publish Kafka NotificationEvent: " + e.getMessage());
-        }
+        outboxService.enqueueNotificationEvent(
+                subject,
+                message
+        );
     }
 
 
