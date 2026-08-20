@@ -50,8 +50,8 @@ export function AcceptInvitation() {
     e.preventDefault();
     setSubmitError("");
 
-    if (password.length < 6) {
-      setSubmitError("Password must be at least 6 characters long.");
+    if (password.length < 8) {
+      setSubmitError("Password must be at least 8 characters long.");
       return;
     }
 

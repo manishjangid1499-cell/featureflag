@@ -20,7 +20,7 @@ export function Login() {
     try {
       await login({
         email: email.trim(),
-        password: password.trim(),
+        password,
       });
       navigate("/dashboard");
     } catch (err: any) {

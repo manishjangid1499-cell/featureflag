@@ -2,7 +2,6 @@ package com.featureflag.auth_service.service;
 
 import com.featureflag.auth_service.dto.AuthResponse;
 import com.featureflag.auth_service.dto.LoginRequest;
-import com.featureflag.auth_service.dto.RegisterRequest;
 import com.featureflag.auth_service.entity.Role;
 import com.featureflag.auth_service.entity.User;
 import com.featureflag.auth_service.repository.UserRepository;
@@ -14,13 +13,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -52,42 +52,10 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("Register - Successful Registration as VIEWER")
-    void testRegister_Success() {
-        RegisterRequest request = new RegisterRequest();
-        request.setName("New User");
-        request.setEmail("newuser@company.com");
-        request.setPassword("password123");
-
-        when(userRepository.findByEmail("newuser@company.com")).thenReturn(Optional.empty());
-        when(passwordEncoder.encode("password123")).thenReturn("encoded_password");
-
-        String result = authService.register(request);
-
-        assertNotNull(result);
-        assertTrue(result.contains("Successfully"));
-        verify(userRepository, times(1)).save(any(User.class));
-    }
-
-    @Test
-    @DisplayName("Register - Duplicate Email Throws RuntimeException")
-    void testRegister_DuplicateEmail_ThrowsException() {
-        RegisterRequest request = new RegisterRequest();
-        request.setEmail("test@company.com");
-        request.setPassword("password123");
-
-        when(userRepository.findByEmail("test@company.com")).thenReturn(Optional.of(testUser));
-
-        RuntimeException exception = assertThrows(RuntimeException.class, () -> authService.register(request));
-        assertTrue(exception.getMessage().contains("already exists"));
-        verify(userRepository, never()).save(any(User.class));
-    }
-
-    @Test
-    @DisplayName("Login - Successful Authentication Returns JWT and Role")
+    @DisplayName("Login - normalizes email and returns JWT and role")
     void testLogin_Success() {
         LoginRequest request = new LoginRequest();
-        request.setEmail("test@company.com");
+        request.setEmail("  Test@Company.COM  ");
         request.setPassword("password123");
 
         when(userRepository.findByEmail("test@company.com")).thenReturn(Optional.of(testUser));
@@ -103,20 +71,25 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("Login - User Not Found Throws RuntimeException")
-    void testLogin_UserNotFound_ThrowsException() {
+    @DisplayName("Login - unknown user returns generic bad credentials")
+    void testLogin_UserNotFound_ThrowsBadCredentials() {
         LoginRequest request = new LoginRequest();
         request.setEmail("unknown@company.com");
         request.setPassword("password123");
 
         when(userRepository.findByEmail("unknown@company.com")).thenReturn(Optional.empty());
 
-        assertThrows(RuntimeException.class, () -> authService.login(request));
+        BadCredentialsException exception = assertThrows(
+                BadCredentialsException.class,
+                () -> authService.login(request)
+        );
+
+        assertEquals("Invalid email or password", exception.getMessage());
     }
 
     @Test
-    @DisplayName("Login - Incorrect Password Throws RuntimeException")
-    void testLogin_InvalidPassword_ThrowsException() {
+    @DisplayName("Login - incorrect password returns same generic bad credentials")
+    void testLogin_InvalidPassword_ThrowsBadCredentials() {
         LoginRequest request = new LoginRequest();
         request.setEmail("test@company.com");
         request.setPassword("wrongpassword");
@@ -124,13 +97,18 @@ class AuthServiceTest {
         when(userRepository.findByEmail("test@company.com")).thenReturn(Optional.of(testUser));
         when(passwordEncoder.matches("wrongpassword", "encoded_password")).thenReturn(false);
 
-        assertThrows(RuntimeException.class, () -> authService.login(request));
+        BadCredentialsException exception = assertThrows(
+                BadCredentialsException.class,
+                () -> authService.login(request)
+        );
+
+        assertEquals("Invalid email or password", exception.getMessage());
     }
 
     @Test
-    @DisplayName("Get Notification Recipients - Resolves Active OWNER and ADMIN Emails")
+    @DisplayName("Get Notification Recipients - normalizes OWNER and ADMIN emails")
     void testGetNotificationRecipients() {
-        User owner = User.builder().email("owner@company.com").role(Role.OWNER).build();
+        User owner = User.builder().email(" OWNER@Company.COM ").role(Role.OWNER).build();
         User admin = User.builder().email("admin@company.com").role(Role.ADMIN).build();
 
         when(userRepository.findByRoleIn(anyCollection())).thenReturn(List.of(owner, admin));

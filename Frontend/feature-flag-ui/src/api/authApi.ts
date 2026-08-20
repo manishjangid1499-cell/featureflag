@@ -3,17 +3,11 @@ import type {
   AcceptInvitationRequest,
   LoginRequest,
   LoginResponse,
-  RegisterRequest,
   ValidateInvitationResponse
 } from "../types/auth";
 
 export const login = async (request: LoginRequest): Promise<LoginResponse> => {
   const response = await api.post<LoginResponse>("/auth/login", request);
-  return response.data;
-};
-
-export const register = async (request: RegisterRequest): Promise<string> => {
-  const response = await api.post<string>("/auth/register", request);
   return response.data;
 };
 
