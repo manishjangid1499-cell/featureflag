@@ -88,23 +88,23 @@ public class FlagService {
                             new TypeReference<List<FeatureFlag>>() {}
                     );
                     if (cachedFlags != null && !cachedFlags.isEmpty()) {
-                        System.out.println("Fetching flags from Redis");
+                        log.debug("Feature flags cache hit");
                         return cachedFlags;
                     }
                 }
             }
         } catch (Exception e) {
-            System.err.println("Redis cache read failed, falling back to MySQL: " + e.getMessage());
+            log.warn("Redis cache read failed; falling back to database; errorType={}", e.getClass().getSimpleName());
         }
 
-        System.out.println("Fetching flags from MySQL");
+        log.debug("Feature flags cache miss; loading from database");
         List<FeatureFlag> flags = repository.findAll();
 
         try {
             String jsonToCache = objectMapper.writeValueAsString(flags);
             redisTemplate.opsForValue().set(ALL_FLAGS_KEY, jsonToCache);
         } catch (Exception e) {
-            System.err.println("Redis cache write failed: " + e.getMessage());
+            log.warn("Redis cache write failed; errorType={}", e.getClass().getSimpleName());
         }
 
         return flags;
@@ -377,9 +377,9 @@ public class FlagService {
     private void clearFlagCache() {
         try {
             redisTemplate.delete(ALL_FLAGS_KEY);
-            System.out.println("Redis cache cleared: " + ALL_FLAGS_KEY);
+            log.debug("Feature flags cache cleared");
         } catch (Exception e) {
-            System.err.println("Failed to clear Redis cache: " + e.getMessage());
+            log.warn("Failed to clear feature flags cache; errorType={}", e.getClass().getSimpleName());
         }
     }
 

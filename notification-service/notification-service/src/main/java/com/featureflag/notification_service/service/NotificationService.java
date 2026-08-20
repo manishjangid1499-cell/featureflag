@@ -70,11 +70,11 @@ public class NotificationService {
 
             notification.setStatus("SENT");
             notification.setSentAt(LocalDateTime.now());
-            log.info("Email successfully sent to {}", request.getRecipient());
+            log.info("Email successfully sent; notificationId={}", notification.getId());
 
         } catch (Exception e) {
             notification.setStatus("FAILED");
-            log.warn("Failed to send email to {}: {}", request.getRecipient(), e.getMessage());
+            log.warn("Email delivery failed; notificationId={} errorType={}", notification.getId(), e.getClass().getSimpleName());
         }
 
         return notificationRepository.save(notification);
@@ -99,15 +99,15 @@ public class NotificationService {
                         .collect(Collectors.toList());
             }
         } catch (Exception e) {
-            log.error("Failed to retrieve notification recipients from Auth Service: {}", e.getMessage());
+            log.error("Failed to retrieve notification recipients from Auth Service; errorType={}", e.getClass().getSimpleName());
         }
 
         if (recipients.isEmpty()) {
-            log.warn("No active OWNER/ADMIN recipients found in database for notification: '{}'. Skipping email dispatch.", subject);
+            log.warn("No active notification recipients found for configured roles; email dispatch skipped");
             return List.of();
         }
 
-        log.info("Dispatching notification '{}' to {} database recipient(s): {}", subject, recipients.size(), recipients);
+        log.info("Dispatching notification to {} database recipient(s)", recipients.size());
 
         List<Notification> dispatched = new ArrayList<>();
 
@@ -133,11 +133,11 @@ public class NotificationService {
 
                 notification.setStatus("SENT");
                 notification.setSentAt(LocalDateTime.now());
-                log.info("Email notification sent to database recipient: {}", recipientEmail);
+                log.info("Email notification sent; notificationId={}", notification.getId());
 
             } catch (Exception e) {
                 notification.setStatus("FAILED");
-                log.warn("Email delivery failed for recipient {}: {}", recipientEmail, e.getMessage());
+                log.warn("Email delivery failed; notificationId={} errorType={}", notification.getId(), e.getClass().getSimpleName());
             }
 
             dispatched.add(notificationRepository.save(notification));
