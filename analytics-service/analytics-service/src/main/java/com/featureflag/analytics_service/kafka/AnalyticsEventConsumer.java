@@ -20,33 +20,22 @@ public class AnalyticsEventConsumer {
             groupId = "analytics-group"
     )
     public void consume(FlagEvent event) {
+        log.info(
+                "Received feature flag event: {} - {}",
+                event.getEventType(),
+                event.getFlagKey()
+        );
 
-        try {
+        AnalyticsEvent analyticsEvent =
+                analyticsService.processEvent(
+                        event.getFlagKey(),
+                        event.getEventType()
+                );
 
-            log.info(
-                    "Received feature flag event: {} - {}",
-                    event.getEventType(),
-                    event.getFlagKey()
-            );
-
-            AnalyticsEvent analyticsEvent =
-                    analyticsService.processEvent(
-                            event.getFlagKey(),
-                            event.getEventType()
-                    );
-
-            log.info(
-                    "Analytics Updated: {} -> {}",
-                    event.getFlagKey(),
-                    analyticsEvent.getCount()
-            );
-
-        } catch (Exception e) {
-
-            log.error(
-                    "Failed to process feature flag event",
-                    e
-            );
-        }
+        log.info(
+                "Analytics updated: flagKey={} count={}",
+                event.getFlagKey(),
+                analyticsEvent.getCount()
+        );
     }
 }
