@@ -91,7 +91,7 @@ spring:
             - id: auth-service
               uri: lb://AUTH-SERVICE
               predicates:
-                - Path=/auth/**, /members/**, /test/**
+                - Path=/auth/**, /members/**
 
             - id: flag-service
               uri: lb://FLAG-SERVICE
