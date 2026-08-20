@@ -8,6 +8,7 @@ import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
@@ -16,7 +17,10 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            Converter<Jwt, ? extends AbstractAuthenticationToken> jwtAuthenticationConverter
+            Converter<Jwt, ? extends AbstractAuthenticationToken>
+                    jwtAuthenticationConverter,
+            InternalNotificationServiceKeyFilter
+                    internalNotificationServiceKeyFilter
     ) throws Exception {
 
         http
@@ -33,6 +37,17 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
 
                         // =========================
+                        // INTERNAL SERVICE-TO-SERVICE
+                        // =========================
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                InternalNotificationServiceKeyFilter.INVITATION_PATH
+                        ).hasAuthority(
+                                InternalNotificationServiceKeyFilter.AUTHORITY
+                        )
+
+                        // =========================
                         // PUBLIC
                         // =========================
 
@@ -44,7 +59,6 @@ public class SecurityConfig {
                                 "/actuator/health",
                                 "/actuator/health/**"
                         ).permitAll()
-
 
                         // =========================
                         // CREATE NOTIFICATION
@@ -67,7 +81,6 @@ public class SecurityConfig {
                                 "OWNER"
                         )
 
-
                         // =========================
                         // DELETE NOTIFICATION
                         // OWNER + ADMIN
@@ -80,7 +93,6 @@ public class SecurityConfig {
                                 "OWNER",
                                 "ADMIN"
                         )
-
 
                         // =========================
                         // READ NOTIFICATIONS
@@ -97,7 +109,6 @@ public class SecurityConfig {
                                 "VIEWER"
                         )
 
-
                         // =========================
                         // EVERYTHING ELSE
                         // =========================
@@ -105,8 +116,18 @@ public class SecurityConfig {
                         .anyRequest()
                         .authenticated()
                 )
-                .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter))
+
+                .oauth2ResourceServer(oauth2 ->
+                        oauth2.jwt(jwt ->
+                                jwt.jwtAuthenticationConverter(
+                                        jwtAuthenticationConverter
+                                )
+                        )
+                )
+
+                .addFilterBefore(
+                        internalNotificationServiceKeyFilter,
+                        BearerTokenAuthenticationFilter.class
                 );
 
         return http.build();

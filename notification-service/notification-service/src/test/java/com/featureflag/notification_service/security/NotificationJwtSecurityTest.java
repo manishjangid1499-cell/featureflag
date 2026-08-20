@@ -44,6 +44,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(NotificationController.class)
 @Import({
         SecurityConfig.class,
+        InternalNotificationServiceKeyFilter.class,
         NotificationJwtSecurityTest.TestJwtConfiguration.class,
         NotificationJwtSecurityTest.HealthProbeController.class
 })

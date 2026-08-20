@@ -1,6 +1,5 @@
 package com.featureflag.auth_service.service;
 
-import com.featureflag.auth_service.client.NotificationClient;
 import com.featureflag.auth_service.dto.*;
 import com.featureflag.auth_service.entity.Invitation;
 import com.featureflag.auth_service.entity.InvitationStatus;
@@ -19,8 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.SecureRandom;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.List;
@@ -36,7 +35,7 @@ public class InvitationService {
     private final InvitationRepository invitationRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final NotificationClient notificationClient;
+    private final InvitationNotificationDispatcher invitationNotificationDispatcher;
 
     @Value("${app.invitation.expiration-hours:48}")
     private int expirationHours;
@@ -58,24 +57,31 @@ public class InvitationService {
             throw new RuntimeException("User already exists with email: " + email);
         }
 
-        // Invalidate previous pending invitations for this email
-        List<Invitation> pendingInvitations = invitationRepository.findByEmailAndStatus(email, InvitationStatus.PENDING);
-        for (Invitation prev : pendingInvitations) {
-            prev.setStatus(InvitationStatus.REVOKED);
-            invitationRepository.save(prev);
+        // Invalidate previous pending invitations for this email.
+        List<Invitation> pendingInvitations =
+                invitationRepository.findByEmailAndStatus(email, InvitationStatus.PENDING);
+        for (Invitation previous : pendingInvitations) {
+            previous.setStatus(InvitationStatus.REVOKED);
+            invitationRepository.save(previous);
         }
 
         String rawToken = generateSecureToken();
         String tokenHash = hashToken(rawToken);
         LocalDateTime expiresAt = LocalDateTime.now().plusHours(expirationHours);
 
-        String inviterName = (currentUser.getName() != null && !currentUser.getName().isBlank())
-                ? currentUser.getName()
-                : currentUser.getEmail();
+        String inviterName =
+                currentUser.getName() != null && !currentUser.getName().isBlank()
+                        ? currentUser.getName().trim()
+                        : currentUser.getEmail();
+
+        String inviteeName =
+                request.getName() != null && !request.getName().isBlank()
+                        ? request.getName().trim()
+                        : "";
 
         Invitation invitation = Invitation.builder()
                 .email(email)
-                .fullName(request.getName() != null ? request.getName().trim() : "")
+                .fullName(inviteeName)
                 .invitedRole(request.getRole())
                 .invitedByUserId(currentUser.getId())
                 .invitedByEmail(currentUser.getEmail())
@@ -88,40 +94,26 @@ public class InvitationService {
 
         Invitation saved = invitationRepository.save(invitation);
 
-        // Send email to the newly invited member
-        String acceptUrl = frontendBaseUrl + "/accept-invitation?token=" + rawToken;
-        String subject = "You've been invited to FeatureFlag Platform";
-        String message = String.format(
-                "Hello %s,\n\n" +
-                "%s (%s) has invited you to join the FeatureFlag Platform as a %s.\n\n" +
-                "This invitation will expire in %d hours.\n\n" +
-                "To accept your invitation and set your account password, click the link below:\n" +
-                "%s\n\n" +
-                "If you did not expect this invitation, you can safely ignore this email.",
-                (request.getName() != null && !request.getName().isBlank()) ? request.getName().trim() : "there",
-                inviterName,
-                currentUser.getEmail(),
-                request.getRole().name(),
-                expirationHours,
-                acceptUrl
-        );
+        /*
+         * The raw token exists only in memory and in the email delivery request.
+         * Auth persists only tokenHash. Notification Service receives the acceptance
+         * URL after this transaction commits and must never persist the URL/body.
+         */
+        String acceptanceUrl =
+                frontendBaseUrl + "/accept-invitation?token=" + rawToken;
 
-        try {
-            NotificationDto notificationDto = NotificationDto.builder()
-                    .recipient(email)
-                    .subject(subject)
-                    .message(message)
-                    .type("EMAIL")
-                    .creatorEmail(currentUser != null ? currentUser.getEmail() : null)
-                    .build();
+        InvitationNotificationDto notificationRequest =
+                InvitationNotificationDto.builder()
+                        .recipient(email)
+                        .inviteeName(inviteeName)
+                        .inviterName(inviterName)
+                        .inviterEmail(EmailNormalizer.normalize(currentUser.getEmail()))
+                        .role(request.getRole().name())
+                        .expirationHours(expirationHours)
+                        .acceptanceUrl(acceptanceUrl)
+                        .build();
 
-            notificationClient.sendNotification(notificationDto);
-            log.info("Invitation email successfully dispatched to {}", email);
-        } catch (Exception e) {
-            log.error("Failed to send invitation email to {}: {}", email, e.getMessage());
-            // Rollback invitation so user isn't falsely told invitation succeeded
-            throw new RuntimeException("Failed to dispatch invitation email. Please check notification service/mail configuration: " + e.getMessage());
-        }
+        invitationNotificationDispatcher.dispatchAfterCommit(notificationRequest);
 
         return toResponse(saved);
     }
@@ -130,11 +122,12 @@ public class InvitationService {
         List<Invitation> list = invitationRepository.findAllByOrderByCreatedAtDesc();
         LocalDateTime now = LocalDateTime.now();
 
-        // Auto-mark expired
-        for (Invitation inv : list) {
-            if (inv.getStatus() == InvitationStatus.PENDING && now.isAfter(inv.getExpiresAt())) {
-                inv.setStatus(InvitationStatus.EXPIRED);
-                invitationRepository.save(inv);
+        // Auto-mark expired invitations.
+        for (Invitation invitation : list) {
+            if (invitation.getStatus() == InvitationStatus.PENDING
+                    && now.isAfter(invitation.getExpiresAt())) {
+                invitation.setStatus(InvitationStatus.EXPIRED);
+                invitationRepository.save(invitation);
             }
         }
 
@@ -144,7 +137,8 @@ public class InvitationService {
     @Transactional
     public InvitationResponse resendInvitation(Long id, User currentUser) {
         Invitation invitation = invitationRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Invitation not found with id: " + id));
+                .orElseThrow(() ->
+                        new RuntimeException("Invitation not found with id: " + id));
 
         validateInvitePermission(currentUser.getRole(), invitation.getInvitedRole());
 
@@ -167,7 +161,8 @@ public class InvitationService {
     @Transactional
     public String revokeInvitation(Long id, User currentUser) {
         Invitation invitation = invitationRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Invitation not found with id: " + id));
+                .orElseThrow(() ->
+                        new RuntimeException("Invitation not found with id: " + id));
 
         validateInvitePermission(currentUser.getRole(), invitation.getInvitedRole());
 
@@ -189,7 +184,8 @@ public class InvitationService {
         }
 
         String tokenHash = hashToken(rawToken.trim());
-        Invitation invitation = invitationRepository.findByTokenHash(tokenHash).orElse(null);
+        Invitation invitation =
+                invitationRepository.findByTokenHash(tokenHash).orElse(null);
 
         if (invitation == null) {
             return ValidateInvitationResponse.builder()
@@ -212,7 +208,8 @@ public class InvitationService {
                     .build();
         }
 
-        if (LocalDateTime.now().isAfter(invitation.getExpiresAt()) || invitation.getStatus() == InvitationStatus.EXPIRED) {
+        if (LocalDateTime.now().isAfter(invitation.getExpiresAt())
+                || invitation.getStatus() == InvitationStatus.EXPIRED) {
             invitation.setStatus(InvitationStatus.EXPIRED);
             invitationRepository.save(invitation);
             return ValidateInvitationResponse.builder()
@@ -242,7 +239,8 @@ public class InvitationService {
 
         String tokenHash = hashToken(request.getToken().trim());
         Invitation invitation = invitationRepository.findByTokenHash(tokenHash)
-                .orElseThrow(() -> new RuntimeException("Invalid or non-existent invitation token."));
+                .orElseThrow(() ->
+                        new RuntimeException("Invalid or non-existent invitation token."));
 
         if (invitation.getStatus() == InvitationStatus.ACCEPTED) {
             throw new RuntimeException("This invitation has already been accepted.");
@@ -252,15 +250,17 @@ public class InvitationService {
             throw new RuntimeException("This invitation has been revoked.");
         }
 
-        if (LocalDateTime.now().isAfter(invitation.getExpiresAt()) || invitation.getStatus() == InvitationStatus.EXPIRED) {
+        if (LocalDateTime.now().isAfter(invitation.getExpiresAt())
+                || invitation.getStatus() == InvitationStatus.EXPIRED) {
             invitation.setStatus(InvitationStatus.EXPIRED);
             invitationRepository.save(invitation);
-            throw new RuntimeException("This invitation has expired. Please request a new invitation.");
+            throw new RuntimeException(
+                    "This invitation has expired. Please request a new invitation."
+            );
         }
 
         String email = EmailNormalizer.normalize(invitation.getEmail());
 
-        // Create or activate user
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null) {
             user = User.builder()
@@ -281,7 +281,7 @@ public class InvitationService {
         invitation.setAcceptedAt(LocalDateTime.now());
         invitationRepository.save(invitation);
 
-        log.info("Invitation accepted and user activated successfully for {}", email);
+        log.info("Invitation accepted and user activated successfully");
         return "Account activated successfully. You can now sign in.";
     }
 
@@ -295,12 +295,16 @@ public class InvitationService {
 
         if (currentRole == Role.ADMIN) {
             if (targetRole == Role.ADMIN || targetRole == Role.OWNER) {
-                throw new ForbiddenException("You do not have permission to invite this role.");
+                throw new ForbiddenException(
+                        "You do not have permission to invite this role."
+                );
             }
             return;
         }
 
-        throw new ForbiddenException("You do not have permission to invite members.");
+        throw new ForbiddenException(
+                "You do not have permission to invite members."
+        );
     }
 
     private String generateSecureToken() {
@@ -312,32 +316,39 @@ public class InvitationService {
     private String hashToken(String token) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
+            byte[] hash =
+                    digest.digest(token.getBytes(StandardCharsets.UTF_8));
+
             StringBuilder hexString = new StringBuilder();
-            for (byte b : hash) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) hexString.append('0');
+            for (byte value : hash) {
+                String hex = Integer.toHexString(0xff & value);
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
                 hexString.append(hex);
             }
             return hexString.toString();
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("SHA-256 algorithm not available", e);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException(
+                    "SHA-256 algorithm not available",
+                    exception
+            );
         }
     }
 
-    private InvitationResponse toResponse(Invitation inv) {
+    private InvitationResponse toResponse(Invitation invitation) {
         return InvitationResponse.builder()
-                .id(inv.getId())
-                .email(inv.getEmail())
-                .fullName(inv.getFullName())
-                .invitedRole(inv.getInvitedRole())
-                .invitedByUserId(inv.getInvitedByUserId())
-                .invitedByEmail(inv.getInvitedByEmail())
-                .invitedByName(inv.getInvitedByName())
-                .status(inv.getStatus())
-                .expiresAt(inv.getExpiresAt())
-                .createdAt(inv.getCreatedAt())
-                .acceptedAt(inv.getAcceptedAt())
+                .id(invitation.getId())
+                .email(invitation.getEmail())
+                .fullName(invitation.getFullName())
+                .invitedRole(invitation.getInvitedRole())
+                .invitedByUserId(invitation.getInvitedByUserId())
+                .invitedByEmail(invitation.getInvitedByEmail())
+                .invitedByName(invitation.getInvitedByName())
+                .status(invitation.getStatus())
+                .expiresAt(invitation.getExpiresAt())
+                .createdAt(invitation.getCreatedAt())
+                .acceptedAt(invitation.getAcceptedAt())
                 .build();
     }
 }
