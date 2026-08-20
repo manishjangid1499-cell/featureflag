@@ -1,12 +1,10 @@
 package com.featureflag.auth_service.service;
 
-import com.featureflag.auth_service.dto.MemberRequest;
 import com.featureflag.auth_service.dto.MemberResponse;
 import com.featureflag.auth_service.entity.Role;
 import com.featureflag.auth_service.entity.User;
 import com.featureflag.auth_service.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -16,54 +14,6 @@ import java.util.List;
 public class MemberService {
 
     private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-
-    /**
-     * Create a new member.
-     *
-     * OWNER can create:
-     * ADMIN, DEVELOPER, VIEWER
-     *
-     * ADMIN can create:
-     * DEVELOPER, VIEWER
-     */
-    public MemberResponse createMember(
-            MemberRequest request,
-            User currentUser
-    ) {
-
-        if (userRepository
-                .findByEmail(request.getEmail())
-                .isPresent()) {
-
-            throw new RuntimeException(
-                    "User already exists with email: "
-                            + request.getEmail()
-            );
-        }
-
-        validateRoleCreationPermission(
-                currentUser.getRole(),
-                request.getRole()
-        );
-
-        User user = User.builder()
-                .name(request.getName())
-                .email(request.getEmail())
-                .password(
-                        passwordEncoder.encode(
-                                request.getPassword()
-                        )
-                )
-                .role(request.getRole())
-                .build();
-
-        User savedUser =
-                userRepository.save(user);
-
-        return toResponse(savedUser);
-    }
-
     /**
      * Get all members.
      */

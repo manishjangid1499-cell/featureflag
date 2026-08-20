@@ -3,6 +3,7 @@ package com.featureflag.auth_service.config;
 import com.featureflag.auth_service.entity.Role;
 import com.featureflag.auth_service.entity.User;
 import com.featureflag.auth_service.repository.UserRepository;
+import com.featureflag.auth_service.util.EmailNormalizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -38,7 +39,7 @@ public class OwnerBootstrapService implements ApplicationRunner {
 
         User owner = User.builder()
                 .name(properties.getName().trim())
-                .email(properties.getEmail().trim().toLowerCase())
+                .email(EmailNormalizer.normalize(properties.getEmail()))
                 .password(
                         passwordEncoder.encode(
                                 properties.getPassword()

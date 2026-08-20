@@ -2,7 +2,6 @@ package com.featureflag.auth_service.controller;
 
 import com.featureflag.auth_service.dto.AuthResponse;
 import com.featureflag.auth_service.dto.LoginRequest;
-import com.featureflag.auth_service.dto.RegisterRequest;
 import com.featureflag.auth_service.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -21,18 +20,10 @@ public class AuthController {
 
     private final AuthService authService;
 
-    @Operation(summary = "Register a new user")
-    @PostMapping("/register")
-    public String register(
-            @Valid @RequestBody RegisterRequest request) {
-
-        return authService.register(request);
-    }
-
     @Operation(summary = "Login and get JWT token")
     @PostMapping("/login")
     public AuthResponse login(
-            @RequestBody LoginRequest request) {
+            @Valid @RequestBody LoginRequest request) {
 
         return authService.login(request);
     }

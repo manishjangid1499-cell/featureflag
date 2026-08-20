@@ -2,7 +2,6 @@ package com.featureflag.auth_service.controller;
 
 import com.featureflag.auth_service.dto.InvitationResponse;
 import com.featureflag.auth_service.dto.InviteMemberRequest;
-import com.featureflag.auth_service.dto.MemberRequest;
 import com.featureflag.auth_service.dto.MemberResponse;
 import com.featureflag.auth_service.entity.Role;
 import com.featureflag.auth_service.entity.User;
@@ -66,16 +65,6 @@ public class MemberController {
         User currentUser = (User) authentication.getPrincipal();
         String message = invitationService.revokeInvitation(id, currentUser);
         return ResponseEntity.ok(message);
-    }
-
-    @Operation(summary = "Legacy create member (retained for backward compatibility)")
-    @PostMapping
-    public MemberResponse createMember(
-            @Valid @RequestBody MemberRequest request,
-            Authentication authentication
-    ) {
-        User currentUser = (User) authentication.getPrincipal();
-        return memberService.createMember(request, currentUser);
     }
 
     @Operation(summary = "Get all platform members")

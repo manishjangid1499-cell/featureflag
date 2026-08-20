@@ -2,6 +2,7 @@ package com.featureflag.auth_service.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -35,6 +36,16 @@ public class GlobalExceptionHandler {
         response.put("error", "Forbidden");
         response.put("message", ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<Map<String, Object>> handleBadCredentials(BadCredentialsException ex) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", LocalDateTime.now().toString());
+        response.put("status", HttpStatus.UNAUTHORIZED.value());
+        response.put("error", "Unauthorized");
+        response.put("message", "Invalid email or password");
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
     }
 
     @ExceptionHandler(RuntimeException.class)
@@ -73,7 +84,7 @@ public class GlobalExceptionHandler {
         response.put("timestamp", LocalDateTime.now().toString());
         response.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
         response.put("error", "Internal Server Error");
-        response.put("message", ex.getMessage() != null ? ex.getMessage() : "An unexpected error occurred");
+        response.put("message", "An unexpected error occurred");
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
 }

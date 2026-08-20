@@ -15,9 +15,10 @@ public class AcceptInvitationRequest {
     private String token;
 
     @NotBlank(message = "Password is required")
-    @Size(min = 6, message = "Password must be at least 6 characters")
+    @Size(min = 8, max = 128, message = "Password must be between 8 and 128 characters")
     private String password;
 
     @NotBlank(message = "Confirm password is required")
+    @Size(max = 128, message = "Confirm password is too long")
     private String confirmPassword;
 }

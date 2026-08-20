@@ -9,6 +9,7 @@ import com.featureflag.auth_service.entity.User;
 import com.featureflag.auth_service.exception.ForbiddenException;
 import com.featureflag.auth_service.repository.InvitationRepository;
 import com.featureflag.auth_service.repository.UserRepository;
+import com.featureflag.auth_service.util.EmailNormalizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,15 +19,19 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.Base64;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class InvitationService {
+
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final Base64.Encoder TOKEN_ENCODER = Base64.getUrlEncoder().withoutPadding();
 
     private final InvitationRepository invitationRepository;
     private final UserRepository userRepository;
@@ -47,7 +52,7 @@ public class InvitationService {
     public InvitationResponse inviteMember(InviteMemberRequest request, User currentUser) {
         validateInvitePermission(currentUser.getRole(), request.getRole());
 
-        String email = request.getEmail().trim().toLowerCase();
+        String email = EmailNormalizer.normalize(request.getEmail());
 
         if (userRepository.findByEmail(email).isPresent()) {
             throw new RuntimeException("User already exists with email: " + email);
@@ -231,8 +236,8 @@ public class InvitationService {
             throw new RuntimeException("Password and confirm password do not match.");
         }
 
-        if (request.getPassword().trim().length() < 6) {
-            throw new RuntimeException("Password must be at least 6 characters long.");
+        if (request.getPassword().length() < 8) {
+            throw new RuntimeException("Password must be at least 8 characters long.");
         }
 
         String tokenHash = hashToken(request.getToken().trim());
@@ -253,7 +258,7 @@ public class InvitationService {
             throw new RuntimeException("This invitation has expired. Please request a new invitation.");
         }
 
-        String email = invitation.getEmail().toLowerCase().trim();
+        String email = EmailNormalizer.normalize(invitation.getEmail());
 
         // Create or activate user
         User user = userRepository.findByEmail(email).orElse(null);
@@ -261,12 +266,12 @@ public class InvitationService {
             user = User.builder()
                     .name(invitation.getFullName())
                     .email(email)
-                    .password(passwordEncoder.encode(request.getPassword().trim()))
+                    .password(passwordEncoder.encode(request.getPassword()))
                     .role(invitation.getInvitedRole())
                     .build();
         } else {
             user.setName(invitation.getFullName());
-            user.setPassword(passwordEncoder.encode(request.getPassword().trim()));
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
             user.setRole(invitation.getInvitedRole());
         }
 
@@ -299,7 +304,9 @@ public class InvitationService {
     }
 
     private String generateSecureToken() {
-        return UUID.randomUUID().toString().replace("-", "") + Long.toHexString(System.currentTimeMillis());
+        byte[] tokenBytes = new byte[32];
+        SECURE_RANDOM.nextBytes(tokenBytes);
+        return TOKEN_ENCODER.encodeToString(tokenBytes);
     }
 
     private String hashToken(String token) {

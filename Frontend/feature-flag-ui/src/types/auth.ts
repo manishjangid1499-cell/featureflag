@@ -11,24 +11,10 @@ export interface LoginResponse {
   role: UserRole;
 }
 
-export interface RegisterRequest {
-  name?: string;
-  email: string;
-  password: string;
-  role?: UserRole;
-}
-
 export interface AuthUser {
   email: string;
   role: UserRole;
   token: string;
-}
-
-export interface MemberRequest {
-  name?: string;
-  email: string;
-  password?: string;
-  role: UserRole;
 }
 
 export interface MemberResponse {

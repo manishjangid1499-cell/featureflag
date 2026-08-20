@@ -171,13 +171,13 @@ class JwtServiceTest {
         request.setEmail("User@Company.COM");
         request.setPassword("password");
 
-        when(userRepository.findByEmail("User@Company.COM")).thenReturn(Optional.of(loginUser));
+        when(userRepository.findByEmail("user@company.com")).thenReturn(Optional.of(loginUser));
         when(passwordEncoder.matches("password", "encoded")).thenReturn(true);
 
         AuthResponse response = authService.login(request);
 
         assertNotNull(response.getToken());
-        assertEquals("User@Company.COM", response.getEmail());
+        assertEquals("user@company.com", response.getEmail());
         assertEquals("ADMIN", response.getRole());
         assertEquals("RS256", jwtService.decode(response.getToken()).getHeaders().get("alg"));
     }

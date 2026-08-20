@@ -2,7 +2,6 @@ import api from "./axios";
 import type {
   InviteMemberRequest,
   InvitationResponse,
-  MemberRequest,
   MemberResponse,
   UserRole
 } from "../types/auth";
@@ -34,11 +33,6 @@ export const resendInvitation = async (id: number): Promise<InvitationResponse> 
 
 export const revokeInvitation = async (id: number): Promise<string> => {
   const response = await api.post<string>(`/members/invitations/${id}/revoke`);
-  return response.data;
-};
-
-export const createMember = async (request: MemberRequest): Promise<MemberResponse> => {
-  const response = await api.post<MemberResponse>("/members", request);
   return response.data;
 };
 

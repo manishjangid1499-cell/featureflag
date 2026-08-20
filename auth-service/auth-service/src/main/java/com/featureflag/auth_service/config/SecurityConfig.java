@@ -66,7 +66,6 @@ public class SecurityConfig {
                         // =========================
 
                         .requestMatchers(
-                                "/auth/register",
                                 "/auth/login",
                                 "/auth/invitations/**",
                                 "/swagger-ui/**",

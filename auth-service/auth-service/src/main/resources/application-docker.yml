@@ -41,6 +41,12 @@ management:
           include: "readinessState,db"
 
 app:
+  bootstrap:
+    owner:
+      enabled: ${BOOTSTRAP_OWNER_ENABLED:false}
+      name: ${BOOTSTRAP_OWNER_NAME:}
+      email: ${BOOTSTRAP_OWNER_EMAIL:}
+      password: ${BOOTSTRAP_OWNER_PASSWORD:}
   invitation:
     frontend-base-url: ${FRONTEND_BASE_URL}
 
