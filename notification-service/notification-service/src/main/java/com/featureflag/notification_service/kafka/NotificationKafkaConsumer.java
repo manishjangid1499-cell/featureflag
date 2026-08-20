@@ -1,5 +1,6 @@
 package com.featureflag.notification_service.kafka;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.featureflag.notification_service.dto.NotificationEvent;
 import com.featureflag.notification_service.dto.NotificationRequest;
@@ -23,37 +24,51 @@ public class NotificationKafkaConsumer {
             topics = "notification-events",
             groupId = "notification-service-group"
     )
-    public void consumeNotificationEvent(String message) {
+    public void consumeNotificationEvent(String message)
+            throws JsonProcessingException {
 
-        try {
-            log.info("Received notification event");
+        log.info("Received notification event");
 
-            NotificationEvent event = objectMapper.readValue(message, NotificationEvent.class);
-
-            if (event.getRecipient() != null && !event.getRecipient().isBlank()) {
-                // Direct notification for a specific single recipient
-                NotificationRequest request = new NotificationRequest();
-                request.setRecipient(event.getRecipient());
-                request.setCreatorEmail(event.getCreatorEmail());
-                request.setSubject(event.getSubject());
-                request.setMessage(event.getMessage());
-                request.setType(event.getType() != null ? event.getType() : "EMAIL");
-
-                notificationService.createNotification(request);
-            } else {
-                // Dynamic broadcast to active OWNER and ADMIN database recipients
-                notificationService.sendToRoleRecipients(
-                        event.getSubject(),
-                        event.getMessage(),
-                        event.getType() != null ? event.getType() : "EMAIL",
-                        List.of("OWNER", "ADMIN")
+        NotificationEvent event =
+                objectMapper.readValue(
+                        message,
+                        NotificationEvent.class
                 );
-            }
 
-            log.info("Notification event processed successfully");
+        if (event.getRecipient() != null
+                && !event.getRecipient().isBlank()) {
 
-        } catch (Exception e) {
-            log.error("Failed to process notification event", e);
+            NotificationRequest request =
+                    new NotificationRequest();
+
+            request.setRecipient(event.getRecipient());
+            request.setCreatorEmail(
+                    event.getCreatorEmail()
+            );
+            request.setSubject(event.getSubject());
+            request.setMessage(event.getMessage());
+            request.setType(
+                    event.getType() != null
+                            ? event.getType()
+                            : "EMAIL"
+            );
+
+            notificationService.createNotification(
+                    request
+            );
+        } else {
+            notificationService.sendToRoleRecipients(
+                    event.getSubject(),
+                    event.getMessage(),
+                    event.getType() != null
+                            ? event.getType()
+                            : "EMAIL",
+                    List.of("OWNER", "ADMIN")
+            );
         }
+
+        log.info(
+                "Notification event processed successfully"
+        );
     }
 }
