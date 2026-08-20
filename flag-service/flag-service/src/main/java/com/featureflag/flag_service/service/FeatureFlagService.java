@@ -3,6 +3,7 @@ package com.featureflag.flag_service.service;
 import com.featureflag.flag_service.entity.FeatureFlag;
 import com.featureflag.flag_service.repository.FeatureFlagRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import com.featureflag.flag_service.dto.FlagEvaluationResponse;
@@ -11,6 +12,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class FeatureFlagService {
 
     private final FeatureFlagRepository repository;
@@ -25,12 +27,12 @@ public class FeatureFlagService {
 
         if (cachedFlags != null) {
 
-            System.out.println("Fetching flags from Redis");
+            log.debug("Feature flags cache hit");
 
             return cachedFlags;
         }
 
-        System.out.println("Fetching flags from MySQL");
+        log.debug("Feature flags cache miss; loading from database");
 
         List<FeatureFlag> flags = repository.findAll();
 
