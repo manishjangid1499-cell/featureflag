@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class FlagEvent {
 
+    private String eventId;
     private String eventType;
     private String flagKey;
     private String timestamp;
