@@ -151,6 +151,7 @@ class AuditServiceTest {
                         "event-1",
                         "FLAG_UPDATED",
                         "DARK_MODE",
+                        "DEV",
                         LocalDateTime.now().toString()
                 );
 

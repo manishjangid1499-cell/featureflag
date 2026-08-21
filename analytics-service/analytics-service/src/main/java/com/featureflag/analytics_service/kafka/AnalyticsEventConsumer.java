@@ -54,6 +54,7 @@ public class AnalyticsEventConsumer {
         AnalyticsEvent analyticsEvent =
                 analyticsService.processEvent(
                         event.getFlagKey(),
+                        event.getEnvironment(),
                         event.getEventType()
                 );
 

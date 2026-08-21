@@ -27,7 +27,8 @@ public class OutboxService {
 
     public String enqueueFlagEvent(
             String eventType,
-            String flagKey
+            String flagKey,
+            String environment
     ) {
         String eventId = UUID.randomUUID().toString();
 
@@ -35,6 +36,7 @@ public class OutboxService {
                 eventId,
                 eventType,
                 flagKey,
+                environment,
                 LocalDateTime.now().toString()
         );
 

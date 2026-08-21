@@ -19,6 +19,7 @@ public class AuditLog {
     private String eventType;
 
     private String flagKey;
+    private String environment;
 
     private String timestamp;
 }

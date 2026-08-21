@@ -12,5 +12,6 @@ public class FlagEvent {
     private String eventId;
     private String eventType;
     private String flagKey;
+    private String environment;
     private String timestamp;
 }

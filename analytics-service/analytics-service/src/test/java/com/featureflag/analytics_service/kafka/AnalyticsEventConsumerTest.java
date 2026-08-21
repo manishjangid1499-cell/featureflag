@@ -37,6 +37,7 @@ class AnalyticsEventConsumerTest {
         when(
                 analyticsService.processEvent(
                         "checkout",
+                        "DEV",
                         "UPDATED"
                 )
         ).thenReturn(
@@ -51,6 +52,7 @@ class AnalyticsEventConsumerTest {
 
         verify(analyticsService).processEvent(
                 "checkout",
+                "DEV",
                 "UPDATED"
         );
 
@@ -72,7 +74,7 @@ class AnalyticsEventConsumerTest {
         verify(
                 analyticsService,
                 never()
-        ).processEvent(any(), any());
+        ).processEvent(any(), any(), any());
 
         verify(
                 processedEventRepository,
@@ -85,6 +87,7 @@ class AnalyticsEventConsumerTest {
         when(
                 analyticsService.processEvent(
                         "checkout",
+                        "DEV",
                         "UPDATED"
                 )
         ).thenThrow(
@@ -123,7 +126,7 @@ class AnalyticsEventConsumerTest {
         verify(
                 analyticsService,
                 never()
-        ).processEvent(any(), any());
+        ).processEvent(any(), any(), any());
     }
 
     private FlagEvent event() {
@@ -131,6 +134,7 @@ class AnalyticsEventConsumerTest {
         event.setEventId("event-1");
         event.setEventType("UPDATED");
         event.setFlagKey("checkout");
+        event.setEnvironment("DEV");
         event.setTimestamp(
                 "2026-08-20T10:00:00Z"
         );
