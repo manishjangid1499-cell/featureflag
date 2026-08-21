@@ -75,16 +75,46 @@ public class FlagController {
     // GET FLAG BY KEY
     // =========================================================
 
-    @Operation(summary = "Get feature flag by key", description = "Returns a feature flag using its flag key")
+    @Operation(
+            summary = "Get feature flag by key and environment",
+            description = "Returns a feature flag using its flag key and environment"
+    )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Flag found"),
-            @ApiResponse(responseCode = "404", description = "Flag not found")
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Flag found"
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Invalid or unsupported environment"
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Flag not found"
+            )
     })
     @GetMapping("/{key}")
     public ResponseEntity<FeatureFlag> getFlagByKey(
-            @Parameter(description = "Feature flag key", example = "NEW_CHECKOUT")
-            @PathVariable String key) {
-        FeatureFlag flag = flagService.getByKey(key);
+
+            @Parameter(
+                    description = "Feature flag key",
+                    example = "NEW_CHECKOUT"
+            )
+            @PathVariable String key,
+
+            @Parameter(
+                    description = "Environment",
+                    example = "DEV"
+            )
+            @RequestParam String environment
+    ) {
+
+        FeatureFlag flag =
+                flagService.getByKey(
+                        key,
+                        environment
+                );
+
         return ResponseEntity.ok(flag);
     }
 

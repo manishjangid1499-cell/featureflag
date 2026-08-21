@@ -8,8 +8,6 @@ import java.util.Optional;
 
 public interface FeatureFlagRepository extends JpaRepository<FeatureFlag, Long> {
 
-    Optional<FeatureFlag> findByFlagKey(String flagKey);
-
     Optional<FeatureFlag> findByFlagKeyAndEnvironment(
             String flagKey,
             String environment
