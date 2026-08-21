@@ -129,6 +129,50 @@ class AnalyticsEventConsumerTest {
         ).processEvent(any(), any(), any());
     }
 
+    @Test
+    void missingEventTypeIsRejectedBeforeWrites() {
+        FlagEvent event = event();
+        event.setEventType(null);
+        assertRejectedBeforeWrites(event);
+    }
+
+    @Test
+    void blankFlagKeyIsRejectedBeforeWrites() {
+        FlagEvent event = event();
+        event.setFlagKey(" ");
+        assertRejectedBeforeWrites(event);
+    }
+
+    @Test
+    void missingEnvironmentIsRejectedBeforeWrites() {
+        FlagEvent event = event();
+        event.setEnvironment(null);
+        assertRejectedBeforeWrites(event);
+    }
+
+    private void assertRejectedBeforeWrites(
+            FlagEvent event
+    ) {
+        assertThatThrownBy(
+                () -> consumer.consume(event)
+        )
+                .isInstanceOf(
+                        IllegalArgumentException.class
+                );
+        verify(
+                analyticsService,
+                never()
+        ).processEvent(
+                any(),
+                any(),
+                any()
+        );
+        verify(
+                processedEventRepository,
+                never()
+        ).save(any(ProcessedEvent.class));
+    }
+
     private FlagEvent event() {
         FlagEvent event = new FlagEvent();
         event.setEventId("event-1");

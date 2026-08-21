@@ -34,6 +34,19 @@ public class AnalyticsEventConsumer {
         String eventId =
                 requireEventId(event.getEventId());
 
+        requireField(
+                event.getEventType(),
+                "eventType"
+        );
+        requireField(
+                event.getFlagKey(),
+                "flagKey"
+        );
+        requireField(
+                event.getEnvironment(),
+                "environment"
+        );
+
         if (processedEventRepository.existsById(eventId)) {
             log.info(
                     "Skipping duplicate analytics event; "
@@ -73,6 +86,20 @@ public class AnalyticsEventConsumer {
                 event.getFlagKey(),
                 analyticsEvent.getCount()
         );
+    }
+
+    private String requireField(
+            String value,
+            String fieldName
+    ) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Kafka "
+                            + fieldName
+                            + " is required"
+            );
+        }
+        return value;
     }
 
     private String requireEventId(String eventId) {

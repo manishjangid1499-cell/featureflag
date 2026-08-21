@@ -34,6 +34,23 @@ public class AuditEventConsumer {
         String eventId =
                 requireEventId(event.getEventId());
 
+        requireField(
+                event.getEventType(),
+                "eventType"
+        );
+        requireField(
+                event.getFlagKey(),
+                "flagKey"
+        );
+        requireField(
+                event.getEnvironment(),
+                "environment"
+        );
+        requireField(
+                event.getTimestamp(),
+                "timestamp"
+        );
+
         if (processedEventRepository.existsById(eventId)) {
             log.info(
                     "Skipping duplicate audit event; eventId={}",
@@ -66,6 +83,20 @@ public class AuditEventConsumer {
                 event.getEventType(),
                 event.getFlagKey()
         );
+    }
+
+    private String requireField(
+            String value,
+            String fieldName
+    ) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Kafka "
+                            + fieldName
+                            + " is required"
+            );
+        }
+        return value;
     }
 
     private String requireEventId(String eventId) {
