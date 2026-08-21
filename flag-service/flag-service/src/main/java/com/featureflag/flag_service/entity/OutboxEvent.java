@@ -36,6 +36,7 @@ public class OutboxEvent {
 
     public static final String STATUS_PENDING = "PENDING";
     public static final String STATUS_PUBLISHED = "PUBLISHED";
+    public static final String STATUS_DEAD = "DEAD";
 
     @Id
     @Column(length = 36, nullable = false, updatable = false)
