@@ -99,7 +99,14 @@ public class NotificationService {
                         .collect(Collectors.toList());
             }
         } catch (Exception e) {
-            log.error("Failed to retrieve notification recipients from Auth Service; errorType={}", e.getClass().getSimpleName());
+            log.error(
+                    "Failed to retrieve notification recipients from Auth Service; errorType={}",
+                    e.getClass().getSimpleName()
+            );
+            throw new IllegalStateException(
+                    "Failed to retrieve notification recipients from Auth Service",
+                    e
+            );
         }
 
         if (recipients.isEmpty()) {

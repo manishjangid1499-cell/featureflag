@@ -187,6 +187,53 @@ class NotificationKafkaConsumerTest {
         ).save(any(ProcessedEvent.class));
     }
 
+    @Test
+    void roleRecipientLookupFailurePropagatesWithoutMarker() {
+        NotificationService notificationService =
+                mock(NotificationService.class);
+        ProcessedEventRepository processedRepository =
+                mock(ProcessedEventRepository.class);
+        IllegalStateException lookupFailure =
+                new IllegalStateException(
+                        "Failed to retrieve notification recipients from Auth Service"
+                );
+        doThrow(lookupFailure)
+                .when(notificationService)
+                .sendToRoleRecipients(
+                        "Flag changed",
+                        "A flag changed",
+                        "EMAIL",
+                        java.util.List.of(
+                                "OWNER",
+                                "ADMIN"
+                        )
+                );
+        NotificationKafkaConsumer consumer =
+                consumer(
+                        notificationService,
+                        processedRepository
+                );
+        assertThatThrownBy(
+                () -> consumer.consumeNotificationEvent(
+                        """
+                        {
+                          "eventId": "event-role-1",
+                          "subject": "Flag changed",
+                          "message": "A flag changed",
+                          "type": "EMAIL"
+                        }
+                        """
+                )
+        )
+                .isSameAs(lookupFailure);
+        verify(
+                processedRepository,
+                never()
+        ).save(
+                any(ProcessedEvent.class)
+        );
+    }
+
     private NotificationKafkaConsumer consumer(
             NotificationService notificationService,
             ProcessedEventRepository processedRepository
