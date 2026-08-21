@@ -167,6 +167,54 @@ class NotificationServiceTest {
     }
 
     @Test
+    @DisplayName("Send To Role Recipients - Auth lookup failure propagates for Kafka retry")
+    void testSendToRoleRecipients_AuthLookupFailurePropagates() {
+        RuntimeException authFailure =
+                new RuntimeException(
+                        "auth service unavailable"
+                );
+        when(
+                authRecipientsClient
+                        .getNotificationRecipients(
+                                List.of(
+                                        "OWNER",
+                                        "ADMIN"
+                                )
+                        )
+        ).thenThrow(authFailure);
+        IllegalStateException exception =
+                assertThrows(
+                        IllegalStateException.class,
+                        () -> notificationService
+                                .sendToRoleRecipients(
+                                        "Flag Updated",
+                                        "Flag changed",
+                                        "EMAIL",
+                                        List.of(
+                                                "OWNER",
+                                                "ADMIN"
+                                        )
+                                )
+                );
+        assertSame(
+                authFailure,
+                exception.getCause()
+        );
+        verify(
+                mailSender,
+                never()
+        ).send(
+                any(SimpleMailMessage.class)
+        );
+        verify(
+                notificationRepository,
+                never()
+        ).save(
+                any(Notification.class)
+        );
+    }
+
+    @Test
     @DisplayName("Send To Role Recipients - Empty recipient list skips mail delivery")
     void testSendToRoleRecipients_EmptyList() {
         when(authRecipientsClient.getNotificationRecipients(anyList())).thenReturn(List.of());
