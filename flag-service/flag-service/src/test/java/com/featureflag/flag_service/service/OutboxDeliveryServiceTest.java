@@ -223,6 +223,37 @@ class OutboxDeliveryServiceTest {
     }
 
     @Test
+    void alreadyExhaustedPendingEventIsMarkedDeadWithoutSending() {
+        OutboxEvent event = pendingEvent();
+        event.setAttempts(10);
+        when(
+                repository.findByIdForUpdate(
+                        event.getId()
+                )
+        ).thenReturn(
+                Optional.of(event)
+        );
+        service.publishById(
+                event.getId()
+        );
+        assertThat(event.getStatus())
+                .isEqualTo(
+                        OutboxEvent.STATUS_DEAD
+                );
+        assertThat(event.getAttempts())
+                .isEqualTo(10);
+        assertThat(event.getPublishedAt())
+                .isNull();
+        verify(
+                kafkaTemplate,
+                never()
+        ).send(
+                event.getTopic(),
+                event.getMessageKey(),
+                event.getPayload()
+        );
+    }
+    @Test
     void alreadyPublishedEventIsNotSentAgain() {
         OutboxEvent event = pendingEvent();
         event.setStatus(
