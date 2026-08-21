@@ -50,27 +50,27 @@ public class AnalyticsService {
      */
     public AnalyticsEvent processEvent(
             String flagKey,
+            String environment,
             String eventType
     ) {
-
         AnalyticsEvent analyticsEvent =
                 analyticsEventRepository
-                        .findByFlagKeyAndEventType(
+                        .findByFlagKeyAndEnvironmentAndEventType(
                                 flagKey,
+                                environment,
                                 eventType
                         )
                         .orElse(
                                 AnalyticsEvent.builder()
                                         .flagKey(flagKey)
+                                        .environment(environment)
                                         .eventType(eventType)
                                         .count(0L)
                                         .build()
                         );
-
         analyticsEvent.setCount(
                 analyticsEvent.getCount() + 1
         );
-
         return analyticsEventRepository.save(
                 analyticsEvent
         );

@@ -68,7 +68,8 @@ public class FlagService {
         // Publish event for Audit + Analytics
         publishFlagEvent(
                 "FLAG_CREATED",
-                savedFlag.getFlagKey()
+                savedFlag.getFlagKey(),
+                savedFlag.getEnvironment()
         );
 
         // Publish notification event (recipients resolved dynamically by notification-service)
@@ -209,7 +210,8 @@ public class FlagService {
         // Publish event for Audit + Analytics
         publishFlagEvent(
                 "FLAG_UPDATED",
-                updatedFlag.getFlagKey()
+                updatedFlag.getFlagKey(),
+                updatedFlag.getEnvironment()
         );
 
         // Publish notification
@@ -249,7 +251,8 @@ public class FlagService {
         // Publish event for Audit + Analytics
         publishFlagEvent(
                 "FLAG_DELETED",
-                flagKey
+                flagKey,
+                environment
         );
 
         // Publish notification
@@ -289,7 +292,8 @@ public class FlagService {
         // Publish event for Audit + Analytics
         publishFlagEvent(
                 "FLAG_TOGGLED",
-                updatedFlag.getFlagKey()
+                updatedFlag.getFlagKey(),
+                updatedFlag.getEnvironment()
         );
 
         String status = Boolean.TRUE.equals(updatedFlag.getEnabled()) ? "ENABLED" : "DISABLED";
@@ -424,11 +428,13 @@ public class FlagService {
 
     private void publishFlagEvent(
             String eventType,
-            String flagKey
+            String flagKey,
+            String environment
     ) {
         outboxService.enqueueFlagEvent(
                 eventType,
-                flagKey
+                flagKey,
+                environment
         );
     }
 

@@ -18,6 +18,8 @@ public class AnalyticsEvent {
 
     private String flagKey;
 
+    private String environment;
+
     private String eventType;
 
     private Long count;

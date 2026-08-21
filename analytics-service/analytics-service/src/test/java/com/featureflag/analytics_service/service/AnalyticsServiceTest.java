@@ -33,6 +33,7 @@ class AnalyticsServiceTest {
         testEvent = AnalyticsEvent.builder()
                 .id(1L)
                 .flagKey("NEW_CHECKOUT")
+                .environment("DEV")
                 .eventType("FLAG_EVALUATED")
                 .count(5L)
                 .build();
@@ -84,27 +85,77 @@ class AnalyticsServiceTest {
     @Test
     @DisplayName("Process Event - New Event Initializes Count to 1")
     void testProcessEvent_NewEvent() {
-        when(repository.findByFlagKeyAndEventType("DARK_MODE", "FLAG_CREATED")).thenReturn(Optional.empty());
+        when(
+                repository.findByFlagKeyAndEnvironmentAndEventType(
+                        "DARK_MODE",
+                        "DEV",
+                        "FLAG_CREATED"
+                )
+        ).thenReturn(Optional.empty());
         when(repository.save(any(AnalyticsEvent.class))).thenAnswer(i -> i.getArgument(0));
 
-        AnalyticsEvent created = service.processEvent("DARK_MODE", "FLAG_CREATED");
+        AnalyticsEvent created =
+                service.processEvent(
+                        "DARK_MODE",
+                        "DEV",
+                        "FLAG_CREATED"
+                );
 
         assertNotNull(created);
         assertEquals(1L, created.getCount());
         assertEquals("DARK_MODE", created.getFlagKey());
+        assertEquals("DEV", created.getEnvironment());
         assertEquals("FLAG_CREATED", created.getEventType());
     }
 
     @Test
     @DisplayName("Process Event - Existing Event Increments Count from 5 to 6")
     void testProcessEvent_ExistingEvent() {
-        when(repository.findByFlagKeyAndEventType("NEW_CHECKOUT", "FLAG_EVALUATED")).thenReturn(Optional.of(testEvent));
+        when(
+                repository.findByFlagKeyAndEnvironmentAndEventType(
+                        "NEW_CHECKOUT",
+                        "DEV",
+                        "FLAG_EVALUATED"
+                )
+        ).thenReturn(Optional.of(testEvent));
         when(repository.save(any(AnalyticsEvent.class))).thenAnswer(i -> i.getArgument(0));
 
-        AnalyticsEvent updated = service.processEvent("NEW_CHECKOUT", "FLAG_EVALUATED");
+        AnalyticsEvent updated =
+                service.processEvent(
+                        "NEW_CHECKOUT",
+                        "DEV",
+                        "FLAG_EVALUATED"
+                );
 
         assertNotNull(updated);
         assertEquals(6L, updated.getCount());
+        assertEquals("DEV", updated.getEnvironment());
+    }
+
+    @Test
+    @DisplayName("Process Event - Same Flag Uses Separate Environment Aggregate")
+    void testProcessEvent_SameFlagDifferentEnvironment() {
+        when(
+                repository.findByFlagKeyAndEnvironmentAndEventType(
+                        "NEW_CHECKOUT",
+                        "PROD",
+                        "FLAG_EVALUATED"
+                )
+        ).thenReturn(Optional.empty());
+        when(repository.save(any(AnalyticsEvent.class)))
+                .thenAnswer(i -> i.getArgument(0));
+        AnalyticsEvent created =
+                service.processEvent(
+                        "NEW_CHECKOUT",
+                        "PROD",
+                        "FLAG_EVALUATED"
+                );
+        assertNotNull(created);
+        assertNotSame(testEvent, created);
+        assertEquals("NEW_CHECKOUT", created.getFlagKey());
+        assertEquals("PROD", created.getEnvironment());
+        assertEquals("FLAG_EVALUATED", created.getEventType());
+        assertEquals(1L, created.getCount());
     }
 
     @Test

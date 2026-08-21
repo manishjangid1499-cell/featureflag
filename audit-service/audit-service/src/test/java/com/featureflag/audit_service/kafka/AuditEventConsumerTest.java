@@ -49,6 +49,8 @@ class AuditEventConsumerTest {
                 .isEqualTo("UPDATED");
         assertThat(auditCaptor.getValue().getFlagKey())
                 .isEqualTo("checkout");
+        assertThat(auditCaptor.getValue().getEnvironment())
+                .isEqualTo("DEV");
 
         ArgumentCaptor<ProcessedEvent> markerCaptor =
                 ArgumentCaptor.forClass(
@@ -134,6 +136,7 @@ class AuditEventConsumerTest {
         event.setEventId("event-1");
         event.setEventType("UPDATED");
         event.setFlagKey("checkout");
+        event.setEnvironment("DEV");
         event.setTimestamp(
                 "2026-08-20T10:00:00Z"
         );

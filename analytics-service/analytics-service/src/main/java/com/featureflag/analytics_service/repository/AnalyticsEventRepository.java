@@ -8,8 +8,9 @@ import java.util.Optional;
 
 public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEvent, Long> {
 
-    Optional<AnalyticsEvent> findByFlagKeyAndEventType(
+    Optional<AnalyticsEvent> findByFlagKeyAndEnvironmentAndEventType(
             String flagKey,
+            String environment,
             String eventType
     );
 

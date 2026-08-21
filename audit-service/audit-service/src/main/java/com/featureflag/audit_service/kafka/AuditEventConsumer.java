@@ -45,6 +45,7 @@ public class AuditEventConsumer {
         AuditLog auditLog = AuditLog.builder()
                 .eventType(event.getEventType())
                 .flagKey(event.getFlagKey())
+                .environment(event.getEnvironment())
                 .timestamp(event.getTimestamp())
                 .build();
 

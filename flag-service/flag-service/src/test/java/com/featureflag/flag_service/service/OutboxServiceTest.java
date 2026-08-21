@@ -32,7 +32,8 @@ class OutboxServiceTest {
         String eventId =
                 outboxService.enqueueFlagEvent(
                         "FLAG_UPDATED",
-                        "checkout"
+                        "checkout",
+                        "DEV"
                 );
 
         ArgumentCaptor<OutboxEvent> captor =
@@ -75,6 +76,9 @@ class OutboxServiceTest {
         assertThat(
                 payload.get("flagKey").asText()
         ).isEqualTo("checkout");
+        assertThat(
+                payload.get("environment").asText()
+        ).isEqualTo("DEV");
     }
 
     @Test

@@ -213,7 +213,12 @@ class FlagServiceTest {
         assertNotNull(created);
         assertEquals("NEW_CHECKOUT", created.getFlagKey());
         verify(redisTemplate, times(1)).delete("all_flags");
-        verify(outboxService, times(1)).enqueueFlagEvent(anyString(), anyString());
+        verify(outboxService, times(1))
+                .enqueueFlagEvent(
+                        "FLAG_CREATED",
+                        "NEW_CHECKOUT",
+                        "DEV"
+                );
         verify(outboxService, times(1)).enqueueNotificationEvent(anyString(), anyString());
     }
 
@@ -410,7 +415,12 @@ class FlagServiceTest {
         assertEquals("Updated Checkout", updated.getName());
         assertFalse(updated.getEnabled());
         verify(redisTemplate, times(1)).delete("all_flags");
-        verify(outboxService, times(1)).enqueueFlagEvent(anyString(), anyString());
+        verify(outboxService, times(1))
+                .enqueueFlagEvent(
+                        "FLAG_UPDATED",
+                        "NEW_CHECKOUT",
+                        "DEV"
+                );
     }
 
     @Test
@@ -508,7 +518,12 @@ class FlagServiceTest {
         assertTrue(result.contains("Successfully"));
         verify(repository, times(1)).deleteById(1L);
         verify(redisTemplate, times(1)).delete("all_flags");
-        verify(outboxService, times(1)).enqueueFlagEvent(anyString(), anyString());
+        verify(outboxService, times(1))
+                .enqueueFlagEvent(
+                        "FLAG_DELETED",
+                        "NEW_CHECKOUT",
+                        "DEV"
+                );
     }
 
     @Test
@@ -523,5 +538,11 @@ class FlagServiceTest {
         assertNotNull(toggled);
         assertFalse(toggled.getEnabled());
         verify(redisTemplate, times(1)).delete("all_flags");
+        verify(outboxService, times(1))
+                .enqueueFlagEvent(
+                        "FLAG_TOGGLED",
+                        "NEW_CHECKOUT",
+                        "DEV"
+                );
     }
 }
