@@ -18,6 +18,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +32,8 @@ public class FlagService {
     private final OutboxService outboxService;
 
     private static final String ALL_FLAGS_KEY = "all_flags";
+    private static final Set<String> SUPPORTED_ENVIRONMENTS =
+            Set.of("DEV", "QA", "STAGING", "PROD");
 
     // =========================================================
     // CREATE FLAG
@@ -37,13 +41,19 @@ public class FlagService {
 
     @Transactional
     public FeatureFlag createFlag(FlagRequest request) {
+        String environment =
+                normalizeEnvironment(request.getEnvironment());
+        validateSchedule(
+                request.getStartDate(),
+                request.getEndDate()
+        );
 
         FeatureFlag flag = FeatureFlag.builder()
                 .name(request.getName())
                 .flagKey(request.getFlagKey())
                 .enabled(request.getEnabled() != null ? request.getEnabled() : false)
                 .description(request.getDescription())
-                .environment(request.getEnvironment())
+                .environment(environment)
                 .rolloutPercentage(request.getRolloutPercentage() != null ? request.getRolloutPercentage() : 0)
                 .startDate(request.getStartDate())
                 .endDate(request.getEndDate())
@@ -115,12 +125,23 @@ public class FlagService {
     // GET FLAG BY KEY
     // =========================================================
 
-    public FeatureFlag getByKey(String key) {
-
-        return repository.findByFlagKey(key)
+    public FeatureFlag getByKey(
+            String key,
+            String environment
+    ) {
+        String normalizedEnvironment =
+                normalizeEnvironment(environment);
+        return repository
+                .findByFlagKeyAndEnvironment(
+                        key,
+                        normalizedEnvironment
+                )
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
-                                "Flag not found with key: " + key
+                                "Flag not found with key: "
+                                        + key
+                                        + " in environment: "
+                                        + normalizedEnvironment
                         )
                 );
     }
@@ -149,6 +170,12 @@ public class FlagService {
             Long id,
             FlagRequest request
     ) {
+        String environment =
+                normalizeEnvironment(request.getEnvironment());
+        validateSchedule(
+                request.getStartDate(),
+                request.getEndDate()
+        );
 
         FeatureFlag flag =
                 repository.findById(id)
@@ -164,7 +191,7 @@ public class FlagService {
             flag.setEnabled(request.getEnabled());
         }
         flag.setDescription(request.getDescription());
-        flag.setEnvironment(request.getEnvironment());
+        flag.setEnvironment(environment);
         if (request.getRolloutPercentage() != null) {
             flag.setRolloutPercentage(request.getRolloutPercentage());
         }
@@ -288,19 +315,26 @@ public class FlagService {
             String userId,
             String environment
     ) {
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException(
+                    "userId must not be blank"
+            );
+        }
+        String normalizedEnvironment =
+                normalizeEnvironment(environment);
 
         FeatureFlag flag =
                 repository
                         .findByFlagKeyAndEnvironment(
                                 flagKey,
-                                environment
+                                normalizedEnvironment
                         )
                         .orElseThrow(() ->
                                 new ResourceNotFoundException(
                                         "Flag not found: "
                                                 + flagKey
                                                 + " in environment "
-                                                + environment
+                                                + normalizedEnvironment
                                 )
                         );
 
@@ -414,6 +448,42 @@ public class FlagService {
     }
 
 
+    // =========================================================
+    // ENVIRONMENT VALIDATION
+    // =========================================================
+    private String normalizeEnvironment(String environment) {
+        if (environment == null || environment.isBlank()) {
+            throw new IllegalArgumentException(
+                    "environment must not be blank"
+            );
+        }
+        String normalized =
+                environment
+                        .trim()
+                        .toUpperCase(Locale.ROOT);
+        if (!SUPPORTED_ENVIRONMENTS.contains(normalized)) {
+            throw new IllegalArgumentException(
+                    "Unsupported environment: "
+                            + environment
+            );
+        }
+        return normalized;
+    }
+    // =========================================================
+    // SCHEDULE VALIDATION
+    // =========================================================
+    private void validateSchedule(
+            LocalDateTime startDate,
+            LocalDateTime endDate
+    ) {
+        if (startDate != null
+                && endDate != null
+                && endDate.isBefore(startDate)) {
+            throw new IllegalArgumentException(
+                    "endDate must not be before startDate"
+            );
+        }
+    }
     // =========================================================
     // ROLLOUT BUCKET
     // =========================================================

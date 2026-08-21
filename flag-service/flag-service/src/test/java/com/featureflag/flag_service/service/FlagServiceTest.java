@@ -155,6 +155,48 @@ class FlagServiceTest {
     }
 
     @Test
+    @DisplayName("Evaluate Flag - Blank userId is rejected")
+    void testEvaluateFlag_BlankUserIdRejected() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> flagService.evaluateFlag(
+                        "NEW_CHECKOUT",
+                        "   ",
+                        "DEV"
+                )
+        );
+        verify(
+                repository,
+                never()
+        ).findByFlagKeyAndEnvironment(
+                anyString(),
+                anyString()
+        );
+    }
+    @Test
+    @DisplayName("Evaluate Flag - Environment is normalized")
+    void testEvaluateFlag_NormalizesEnvironment() {
+        when(
+                repository.findByFlagKeyAndEnvironment(
+                        "NEW_CHECKOUT",
+                        "DEV"
+                )
+        ).thenReturn(Optional.of(testFlag));
+        FlagEvaluationResponse response =
+                flagService.evaluateFlag(
+                        "NEW_CHECKOUT",
+                        "user123",
+                        " dev "
+                );
+        assertNotNull(response);
+        verify(repository)
+                .findByFlagKeyAndEnvironment(
+                        "NEW_CHECKOUT",
+                        "DEV"
+                );
+    }
+
+    @Test
     @DisplayName("Create Flag - Saves flag, invalidates Redis cache, publishes events")
     void testCreateFlag_Success() {
         FlagRequest request = new FlagRequest();
@@ -176,6 +218,89 @@ class FlagServiceTest {
     }
 
     @Test
+    @DisplayName("Create Flag - Environment is normalized")
+    void testCreateFlag_NormalizesEnvironment() {
+        FlagRequest request =
+                new FlagRequest();
+        request.setName("New Checkout Flow");
+        request.setFlagKey("NEW_CHECKOUT");
+        request.setEnvironment(" dev ");
+        request.setEnabled(true);
+        request.setRolloutPercentage(100);
+        when(
+                repository.save(any(FeatureFlag.class))
+        ).thenAnswer(
+                invocation ->
+                        invocation.getArgument(0)
+        );
+        FeatureFlag created =
+                flagService.createFlag(request);
+        assertEquals(
+                "DEV",
+                created.getEnvironment()
+        );
+        verify(repository).save(
+                argThat(
+                        flag ->
+                                "DEV".equals(
+                                        flag.getEnvironment()
+                                )
+                )
+        );
+    }    @Test
+    @DisplayName("Create Flag - Unsupported environment is rejected")
+    void testCreateFlag_UnsupportedEnvironmentRejected() {
+        FlagRequest request =
+                new FlagRequest();
+        request.setName("New Checkout Flow");
+        request.setFlagKey("NEW_CHECKOUT");
+        request.setEnvironment("LOCAL");
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> flagService.createFlag(request)
+        );
+        verify(
+                repository,
+                never()
+        ).save(any(FeatureFlag.class));
+    }
+    @Test
+    @DisplayName("Create Flag - Invalid schedule is rejected")
+    void testCreateFlag_InvalidScheduleRejected() {
+        FlagRequest request =
+                new FlagRequest();
+        request.setName("New Checkout Flow");
+        request.setFlagKey("NEW_CHECKOUT");
+        request.setEnvironment("DEV");
+        request.setStartDate(
+                LocalDateTime.of(
+                        2026,
+                        8,
+                        22,
+                        10,
+                        0
+                )
+        );
+        request.setEndDate(
+                LocalDateTime.of(
+                        2026,
+                        8,
+                        21,
+                        10,
+                        0
+                )
+        );
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> flagService.createFlag(request)
+        );
+        verify(
+                repository,
+                never()
+        ).save(any(FeatureFlag.class));
+    }
+
+    @Test
     @DisplayName("Get All Flags - Reads from MySQL and caches to Redis when cache miss")
     void testGetAllFlags_CacheMiss_FetchesFromDb() {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
@@ -190,22 +315,80 @@ class FlagServiceTest {
     }
 
     @Test
-    @DisplayName("Get Flag By Key - Success")
+    @DisplayName("Get Flag By Key And Environment - Success")
     void testGetByKey_Success() {
-        when(repository.findByFlagKey("NEW_CHECKOUT")).thenReturn(Optional.of(testFlag));
-
-        FeatureFlag found = flagService.getByKey("NEW_CHECKOUT");
-
+        when(
+                repository.findByFlagKeyAndEnvironment(
+                        "NEW_CHECKOUT",
+                        "DEV"
+                )
+        ).thenReturn(Optional.of(testFlag));
+        FeatureFlag found =
+                flagService.getByKey(
+                        "NEW_CHECKOUT",
+                        "DEV"
+                );
         assertNotNull(found);
-        assertEquals("NEW_CHECKOUT", found.getFlagKey());
+        assertEquals(
+                "NEW_CHECKOUT",
+                found.getFlagKey()
+        );
     }
-
     @Test
-    @DisplayName("Get Flag By Key - Not Found Throws ResourceNotFoundException")
+    @DisplayName("Get Flag By Key And Environment - Not found")
     void testGetByKey_NotFound() {
-        when(repository.findByFlagKey("UNKNOWN_KEY")).thenReturn(Optional.empty());
-
-        assertThrows(ResourceNotFoundException.class, () -> flagService.getByKey("UNKNOWN_KEY"));
+        when(
+                repository.findByFlagKeyAndEnvironment(
+                        "UNKNOWN_KEY",
+                        "DEV"
+                )
+        ).thenReturn(Optional.empty());
+        assertThrows(
+                ResourceNotFoundException.class,
+                () -> flagService.getByKey(
+                        "UNKNOWN_KEY",
+                        "DEV"
+                )
+        );
+    }
+    @Test
+    @DisplayName("Get Flag By Key - Environment is normalized")
+    void testGetByKey_NormalizesEnvironment() {
+        when(
+                repository.findByFlagKeyAndEnvironment(
+                        "NEW_CHECKOUT",
+                        "DEV"
+                )
+        ).thenReturn(Optional.of(testFlag));
+        FeatureFlag found =
+                flagService.getByKey(
+                        "NEW_CHECKOUT",
+                        " dev "
+                );
+        assertNotNull(found);
+        verify(repository)
+                .findByFlagKeyAndEnvironment(
+                        "NEW_CHECKOUT",
+                        "DEV"
+                );
+    }
+    @Test
+    @DisplayName("Get Flag By Key - Unsupported environment is rejected")
+    void testGetByKey_UnsupportedEnvironmentRejected() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> flagService.getByKey(
+                        "NEW_CHECKOUT",
+                        "LOCAL"
+                )
+        );
+        verify(
+                repository,
+                never()
+        ).findByFlagKeyAndEnvironment(
+                anyString(),
+                anyString()
+        );
     }
 
     @Test
@@ -228,6 +411,90 @@ class FlagServiceTest {
         assertFalse(updated.getEnabled());
         verify(redisTemplate, times(1)).delete("all_flags");
         verify(outboxService, times(1)).enqueueFlagEvent(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Update Flag - Environment is normalized")
+    void testUpdateFlag_NormalizesEnvironment() {
+        FlagRequest request =
+                new FlagRequest();
+        request.setName("Updated Checkout");
+        request.setFlagKey("NEW_CHECKOUT");
+        request.setEnvironment(" qa ");
+        when(
+                repository.findById(1L)
+        ).thenReturn(Optional.of(testFlag));
+        when(
+                repository.save(
+                        any(FeatureFlag.class)
+                )
+        ).thenAnswer(
+                invocation ->
+                        invocation.getArgument(0)
+        );
+        FeatureFlag updated =
+                flagService.updateFlag(
+                        1L,
+                        request
+                );
+        assertEquals(
+                "QA",
+                updated.getEnvironment()
+        );
+    }
+    @Test
+    @DisplayName("Update Flag - Unsupported environment is rejected")
+    void testUpdateFlag_UnsupportedEnvironmentRejected() {
+        FlagRequest request =
+                new FlagRequest();
+        request.setEnvironment("LOCAL");
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> flagService.updateFlag(
+                        1L,
+                        request
+                )
+        );
+        verify(
+                repository,
+                never()
+        ).findById(anyLong());
+    }
+    @Test
+    @DisplayName("Update Flag - Invalid schedule is rejected")
+    void testUpdateFlag_InvalidScheduleRejected() {
+        FlagRequest request =
+                new FlagRequest();
+        request.setEnvironment("DEV");
+        request.setStartDate(
+                LocalDateTime.of(
+                        2026,
+                        8,
+                        22,
+                        10,
+                        0
+                )
+        );
+        request.setEndDate(
+                LocalDateTime.of(
+                        2026,
+                        8,
+                        21,
+                        10,
+                        0
+                )
+        );
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> flagService.updateFlag(
+                        1L,
+                        request
+                )
+        );
+        verify(
+                repository,
+                never()
+        ).findById(anyLong());
     }
 
     @Test
