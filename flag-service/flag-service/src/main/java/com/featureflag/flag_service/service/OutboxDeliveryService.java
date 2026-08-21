@@ -62,6 +62,22 @@ public class OutboxDeliveryService {
             return;
         }
 
+        if (event.getAttempts() >= maxAttempts) {
+            event.setStatus(
+                    OutboxEvent.STATUS_DEAD
+            );
+            log.error(
+                    "Outbox event already exhausted retries; "
+                            + "eventId={} topic={} attempts={} "
+                            + "maxAttempts={}",
+                    event.getId(),
+                    event.getTopic(),
+                    event.getAttempts(),
+                    maxAttempts
+            );
+            return;
+        }
+
         LocalDateTime now = LocalDateTime.now();
 
         if (event.getNextAttemptAt() != null
