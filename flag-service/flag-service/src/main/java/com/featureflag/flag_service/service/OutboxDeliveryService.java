@@ -21,6 +21,7 @@ public class OutboxDeliveryService {
     private final OutboxEventRepository outboxEventRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final long sendTimeoutSeconds;
+    private final int maxAttempts;
 
     public OutboxDeliveryService(
             OutboxEventRepository outboxEventRepository,
@@ -28,12 +29,23 @@ public class OutboxDeliveryService {
             @Value(
                     "${outbox.publisher.send-timeout-seconds:10}"
             )
-            long sendTimeoutSeconds
+            long sendTimeoutSeconds,
+            @Value(
+                    "${outbox.publisher.max-attempts:10}"
+            )
+            int maxAttempts
     ) {
+        if (maxAttempts < 1) {
+            throw new IllegalArgumentException(
+                    "outbox.publisher.max-attempts must be at least 1"
+            );
+        }
+
         this.outboxEventRepository =
                 outboxEventRepository;
         this.kafkaTemplate = kafkaTemplate;
         this.sendTimeoutSeconds = sendTimeoutSeconds;
+        this.maxAttempts = maxAttempts;
     }
 
     @Transactional
@@ -95,19 +107,31 @@ public class OutboxDeliveryService {
     ) {
         int attempts = event.getAttempts() + 1;
         event.setAttempts(attempts);
-
+        event.setLastErrorType(
+                exception.getClass().getSimpleName()
+        );
+        if (attempts >= maxAttempts) {
+            event.setStatus(
+                    OutboxEvent.STATUS_DEAD
+            );
+            log.error(
+                    "Outbox event exhausted retries; eventId={} "
+                            + "topic={} attempts={} maxAttempts={} "
+                            + "errorType={}",
+                    event.getId(),
+                    event.getTopic(),
+                    attempts,
+                    maxAttempts,
+                    event.getLastErrorType()
+            );
+            return;
+        }
         long delaySeconds =
                 calculateRetryDelaySeconds(attempts);
-
         event.setNextAttemptAt(
                 LocalDateTime.now()
                         .plusSeconds(delaySeconds)
         );
-
-        event.setLastErrorType(
-                exception.getClass().getSimpleName()
-        );
-
         log.warn(
                 "Outbox publish failed; eventId={} topic={} "
                         + "attempt={} nextRetrySeconds={} "

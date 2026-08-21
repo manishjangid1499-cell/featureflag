@@ -28,7 +28,8 @@ class OutboxDeliveryServiceTest {
             new OutboxDeliveryService(
                     repository,
                     kafkaTemplate,
-                    1L
+                    1L,
+                    10
             );
 
     @Test
@@ -107,6 +108,118 @@ class OutboxDeliveryServiceTest {
                 .isAfter(before);
         assertThat(event.getLastErrorType())
                 .isNotBlank();
+    }
+
+    @Test
+    void failedKafkaAckAtMaxAttemptsMarksEventDead() {
+        OutboxEvent event = pendingEvent();
+        // Nine previous failed deliveries.
+        // This failure is the tenth and should be terminal.
+        event.setAttempts(9);
+        when(
+                repository.findByIdForUpdate(
+                        event.getId()
+                )
+        ).thenReturn(
+                Optional.of(event)
+        );
+        CompletableFuture<SendResult<String, String>>
+                future =
+                new CompletableFuture<>();
+        future.completeExceptionally(
+                new RuntimeException(
+                        "broker unavailable"
+                )
+        );
+        when(
+                kafkaTemplate.send(
+                        event.getTopic(),
+                        event.getMessageKey(),
+                        event.getPayload()
+                )
+        ).thenReturn(future);
+        service.publishById(
+                event.getId()
+        );
+        assertThat(event.getStatus())
+                .isEqualTo(
+                        OutboxEvent.STATUS_DEAD
+                );
+        assertThat(event.getAttempts())
+                .isEqualTo(10);
+        assertThat(event.getPublishedAt())
+                .isNull();
+        assertThat(event.getLastErrorType())
+                .isNotBlank();
+    }
+
+    @Test
+    void deadEventIsNotSentAgain() {
+        OutboxEvent event = pendingEvent();
+        event.setStatus(
+                OutboxEvent.STATUS_DEAD
+        );
+        when(
+                repository.findByIdForUpdate(
+                        event.getId()
+                )
+        ).thenReturn(
+                Optional.of(event)
+        );
+        service.publishById(
+                event.getId()
+        );
+        verify(
+                kafkaTemplate,
+                never()
+        ).send(
+                event.getTopic(),
+                event.getMessageKey(),
+                event.getPayload()
+        );
+    }
+    @Test
+    void configuredMaxAttemptsControlsDeadTransition() {
+        OutboxDeliveryService threeAttemptService =
+                new OutboxDeliveryService(
+                        repository,
+                        kafkaTemplate,
+                        1L,
+                        3
+                );
+        OutboxEvent event = pendingEvent();
+        event.setAttempts(2);
+        when(
+                repository.findByIdForUpdate(
+                        event.getId()
+                )
+        ).thenReturn(
+                Optional.of(event)
+        );
+        CompletableFuture<SendResult<String, String>>
+                future =
+                new CompletableFuture<>();
+        future.completeExceptionally(
+                new RuntimeException(
+                        "broker unavailable"
+                )
+        );
+        when(
+                kafkaTemplate.send(
+                        event.getTopic(),
+                        event.getMessageKey(),
+                        event.getPayload()
+                )
+        ).thenReturn(future);
+        threeAttemptService.publishById(
+                event.getId()
+        );
+        assertThat(event.getStatus())
+                .isEqualTo(
+                        OutboxEvent.STATUS_DEAD
+                );
+        assertThat(event.getAttempts())
+                .isEqualTo(3);
     }
 
     @Test
