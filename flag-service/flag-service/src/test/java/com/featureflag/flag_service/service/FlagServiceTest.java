@@ -15,7 +15,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -48,6 +51,8 @@ class FlagServiceTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+
         testFlag = FeatureFlag.builder()
                 .id(1L)
                 .name("New Checkout Flow")
@@ -194,6 +199,271 @@ class FlagServiceTest {
                         "NEW_CHECKOUT",
                         "DEV"
                 );
+    }
+
+    @Test
+    @DisplayName("Evaluate Flag - Cache hit uses Redis configuration without MySQL")
+    void testEvaluateFlag_CacheHit_UsesRedisWithoutDb()
+            throws Exception {
+        String cacheKey =
+                "flag:config:DEV:NEW_CHECKOUT";
+        String cachedJson =
+                "{\"flagKey\":\"NEW_CHECKOUT\"}";
+        when(
+                redisTemplate.opsForValue()
+        ).thenReturn(valueOperations);
+        when(
+                valueOperations.get(cacheKey)
+        ).thenReturn(cachedJson);
+        when(
+                objectMapper.readValue(
+                        cachedJson,
+                        FeatureFlag.class
+                )
+        ).thenReturn(testFlag);
+        FlagEvaluationResponse response =
+                flagService.evaluateFlag(
+                        "NEW_CHECKOUT",
+                        "user123",
+                        "DEV"
+                );
+        assertNotNull(response);
+        verify(valueOperations)
+                .get(cacheKey);
+        verify(objectMapper)
+                .readValue(
+                        cachedJson,
+                        FeatureFlag.class
+                );
+        verify(
+                repository,
+                never()
+        ).findByFlagKeyAndEnvironment(
+                anyString(),
+                anyString()
+        );
+    }
+    @Test
+    @DisplayName("Evaluate Flag - Cache miss loads MySQL and caches configuration with TTL")
+    void testEvaluateFlag_CacheMiss_LoadsDbAndCachesWithTtl()
+            throws Exception {
+        String cacheKey =
+                "flag:config:DEV:NEW_CHECKOUT";
+        String cachedJson =
+                "{\"flagKey\":\"NEW_CHECKOUT\"}";
+        when(
+                redisTemplate.opsForValue()
+        ).thenReturn(valueOperations);
+        when(
+                valueOperations.get(cacheKey)
+        ).thenReturn(null);
+        when(
+                repository.findByFlagKeyAndEnvironment(
+                        "NEW_CHECKOUT",
+                        "DEV"
+                )
+        ).thenReturn(Optional.of(testFlag));
+        when(
+                objectMapper.writeValueAsString(testFlag)
+        ).thenReturn(cachedJson);
+        FlagEvaluationResponse response =
+                flagService.evaluateFlag(
+                        "NEW_CHECKOUT",
+                        "user123",
+                        "DEV"
+                );
+        assertNotNull(response);
+        verify(valueOperations)
+                .get(cacheKey);
+        verify(repository)
+                .findByFlagKeyAndEnvironment(
+                        "NEW_CHECKOUT",
+                        "DEV"
+                );
+        verify(objectMapper)
+                .writeValueAsString(testFlag);
+        verify(valueOperations)
+                .set(
+                        cacheKey,
+                        cachedJson,
+                        Duration.ofMinutes(5)
+                );
+    }
+    @Test
+    @DisplayName("Evaluate Flag - Redis read failure falls back to MySQL")
+    void testEvaluateFlag_RedisReadFailure_FallsBackToDb()
+            throws Exception {
+        String cacheKey =
+                "flag:config:DEV:NEW_CHECKOUT";
+        String cachedJson =
+                "{\"flagKey\":\"NEW_CHECKOUT\"}";
+        when(
+                redisTemplate.opsForValue()
+        ).thenReturn(valueOperations);
+        when(
+                valueOperations.get(cacheKey)
+        ).thenThrow(
+                new RuntimeException(
+                        "Redis unavailable"
+                )
+        );
+        when(
+                repository.findByFlagKeyAndEnvironment(
+                        "NEW_CHECKOUT",
+                        "DEV"
+                )
+        ).thenReturn(Optional.of(testFlag));
+        when(
+                objectMapper.writeValueAsString(testFlag)
+        ).thenReturn(cachedJson);
+        FlagEvaluationResponse response =
+                flagService.evaluateFlag(
+                        "NEW_CHECKOUT",
+                        "user123",
+                        "DEV"
+                );
+        assertNotNull(response);
+        verify(valueOperations)
+                .get(cacheKey);
+        verify(repository)
+                .findByFlagKeyAndEnvironment(
+                        "NEW_CHECKOUT",
+                        "DEV"
+                );
+    }
+
+    @Test
+    @DisplayName("Create Flag - Invalidates evaluation configuration cache")
+    void testCreateFlag_InvalidatesEvaluationConfigCache() {
+        FlagRequest request = new FlagRequest();
+        request.setName("New Checkout Flow");
+        request.setFlagKey("NEW_CHECKOUT");
+        request.setEnvironment("DEV");
+        request.setEnabled(true);
+        request.setRolloutPercentage(100);
+        when(
+                repository.save(
+                        any(FeatureFlag.class)
+                )
+        ).thenReturn(testFlag);
+        flagService.createFlag(request);
+        verify(redisTemplate)
+                .delete(
+                        "flag:config:DEV:NEW_CHECKOUT"
+                );
+    }
+    @Test
+    @DisplayName("Update Flag - Invalidates old and new evaluation configuration identities")
+    void testUpdateFlag_InvalidatesOldAndNewEvaluationCacheKeys() {
+        FlagRequest request = new FlagRequest();
+        request.setName("Updated Checkout");
+        request.setFlagKey("NEW_CHECKOUT_V2");
+        request.setEnvironment("PROD");
+        request.setEnabled(false);
+        request.setRolloutPercentage(50);
+        when(
+                repository.findById(1L)
+        ).thenReturn(
+                Optional.of(testFlag)
+        );
+        when(
+                repository.save(
+                        any(FeatureFlag.class)
+                )
+        ).thenAnswer(
+                invocation ->
+                        invocation.getArgument(0)
+        );
+        flagService.updateFlag(
+                1L,
+                request
+        );
+        verify(redisTemplate)
+                .delete(
+                        "flag:config:DEV:NEW_CHECKOUT"
+                );
+        verify(redisTemplate)
+                .delete(
+                        "flag:config:PROD:NEW_CHECKOUT_V2"
+                );
+    }
+    @Test
+    @DisplayName("Delete Flag - Invalidates evaluation configuration cache")
+    void testDeleteFlag_InvalidatesEvaluationConfigCache() {
+        when(
+                repository.findById(1L)
+        ).thenReturn(
+                Optional.of(testFlag)
+        );
+        flagService.deleteFlag(1L);
+        verify(redisTemplate)
+                .delete(
+                        "flag:config:DEV:NEW_CHECKOUT"
+                );
+    }
+    @Test
+    @DisplayName("Toggle Flag - Invalidates evaluation configuration cache")
+    void testToggleFlag_InvalidatesEvaluationConfigCache() {
+        when(
+                repository.findById(1L)
+        ).thenReturn(
+                Optional.of(testFlag)
+        );
+        when(
+                repository.save(
+                        any(FeatureFlag.class)
+                )
+        ).thenAnswer(
+                invocation ->
+                        invocation.getArgument(0)
+        );
+        flagService.toggleFlag(1L);
+        verify(redisTemplate)
+                .delete(
+                        "flag:config:DEV:NEW_CHECKOUT"
+                );
+    }
+    @Test
+    @DisplayName("Create Flag - Evaluation cache invalidation is deferred until transaction commit")
+    void testCreateFlag_EvaluationCacheInvalidationDeferredUntilAfterCommit() {
+        FlagRequest request = new FlagRequest();
+        request.setName("New Checkout Flow");
+        request.setFlagKey("NEW_CHECKOUT");
+        request.setEnvironment("DEV");
+        request.setEnabled(true);
+        request.setRolloutPercentage(100);
+        when(
+                repository.save(
+                        any(FeatureFlag.class)
+                )
+        ).thenReturn(testFlag);
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            flagService.createFlag(request);
+            verify(
+                    redisTemplate,
+                    never()
+            ).delete(
+                    "flag:config:DEV:NEW_CHECKOUT"
+            );
+            List<TransactionSynchronization> synchronizations =
+                    TransactionSynchronizationManager
+                            .getSynchronizations();
+            assertFalse(
+                    synchronizations.isEmpty(),
+                    "Expected evaluation cache invalidation to be registered for afterCommit"
+            );
+            synchronizations.forEach(
+                    TransactionSynchronization::afterCommit
+            );
+            verify(redisTemplate)
+                    .delete(
+                            "flag:config:DEV:NEW_CHECKOUT"
+                    );
+        } finally {
+            TransactionSynchronizationManager
+                    .clearSynchronization();
+        }
     }
 
     @Test

@@ -12,10 +12,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -32,6 +35,8 @@ public class FlagService {
     private final OutboxService outboxService;
 
     private static final String ALL_FLAGS_KEY = "all_flags";
+    private static final String FLAG_CONFIG_CACHE_PREFIX = "flag:config:";
+    private static final Duration FLAG_CONFIG_CACHE_TTL = Duration.ofMinutes(5);
     private static final Set<String> SUPPORTED_ENVIRONMENTS =
             Set.of("DEV", "QA", "STAGING", "PROD");
 
@@ -64,6 +69,11 @@ public class FlagService {
 
         // Invalidate Redis cache
         clearFlagCache();
+
+        invalidateFlagConfigCacheAfterCommit(
+                savedFlag.getEnvironment(),
+                savedFlag.getFlagKey()
+        );
 
         // Publish event for Audit + Analytics
         publishFlagEvent(
@@ -186,6 +196,10 @@ public class FlagService {
                                  )
                         );
 
+        String oldFlagKey =
+                flag.getFlagKey();
+        String oldEnvironment =
+                flag.getEnvironment();
         flag.setName(request.getName());
         flag.setFlagKey(request.getFlagKey());
         if (request.getEnabled() != null) {
@@ -206,6 +220,20 @@ public class FlagService {
 
         // Invalidate Redis cache
         clearFlagCache();
+
+        invalidateFlagConfigCacheAfterCommit(
+                oldEnvironment,
+                oldFlagKey
+        );
+
+        if (!oldEnvironment.equals(updatedFlag.getEnvironment())
+                || !oldFlagKey.equals(updatedFlag.getFlagKey())) {
+
+            invalidateFlagConfigCacheAfterCommit(
+                    updatedFlag.getEnvironment(),
+                    updatedFlag.getFlagKey()
+            );
+        }
 
         // Publish event for Audit + Analytics
         publishFlagEvent(
@@ -248,6 +276,11 @@ public class FlagService {
         // Invalidate Redis cache
         clearFlagCache();
 
+        invalidateFlagConfigCacheAfterCommit(
+                environment,
+                flagKey
+        );
+
         // Publish event for Audit + Analytics
         publishFlagEvent(
                 "FLAG_DELETED",
@@ -289,6 +322,11 @@ public class FlagService {
         // Invalidate Redis cache
         clearFlagCache();
 
+        invalidateFlagConfigCacheAfterCommit(
+                updatedFlag.getEnvironment(),
+                updatedFlag.getFlagKey()
+        );
+
         // Publish event for Audit + Analytics
         publishFlagEvent(
                 "FLAG_TOGGLED",
@@ -328,19 +366,10 @@ public class FlagService {
                 normalizeEnvironment(environment);
 
         FeatureFlag flag =
-                repository
-                        .findByFlagKeyAndEnvironment(
-                                flagKey,
-                                normalizedEnvironment
-                        )
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Flag not found: "
-                                                + flagKey
-                                                + " in environment "
-                                                + normalizedEnvironment
-                                )
-                        );
+                getFlagForEvaluation(
+                        flagKey,
+                        normalizedEnvironment
+                );
 
         LocalDateTime now = LocalDateTime.now();
 
@@ -408,9 +437,142 @@ public class FlagService {
     }
 
 
+    private FeatureFlag getFlagForEvaluation(
+            String flagKey,
+            String environment
+    ) {
+        String cacheKey =
+                buildFlagConfigCacheKey(
+                        environment,
+                        flagKey
+                );
+        try {
+            Object cachedObj =
+                    redisTemplate
+                            .opsForValue()
+                            .get(cacheKey);
+            if (cachedObj != null) {
+                String cachedJson =
+                        cachedObj.toString();
+                if (!cachedJson.isBlank()) {
+                    FeatureFlag cachedFlag =
+                            objectMapper.readValue(
+                                    cachedJson,
+                                    FeatureFlag.class
+                            );
+                    if (cachedFlag != null) {
+                        log.debug(
+                                "Evaluation config cache hit; flagKey={} environment={}",
+                                flagKey,
+                                environment
+                        );
+                        return cachedFlag;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn(
+                    "Evaluation config cache read failed; falling back to database; flagKey={} environment={} errorType={}",
+                    flagKey,
+                    environment,
+                    e.getClass().getSimpleName()
+            );
+        }
+        FeatureFlag flag =
+                repository
+                        .findByFlagKeyAndEnvironment(
+                                flagKey,
+                                environment
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Flag not found: "
+                                                + flagKey
+                                                + " in environment "
+                                                + environment
+                                )
+                        );
+        try {
+            String jsonToCache =
+                    objectMapper.writeValueAsString(
+                            flag
+                    );
+            redisTemplate
+                    .opsForValue()
+                    .set(
+                            cacheKey,
+                            jsonToCache,
+                            FLAG_CONFIG_CACHE_TTL
+                    );
+        } catch (Exception e) {
+            log.warn(
+                    "Evaluation config cache write failed; flagKey={} environment={} errorType={}",
+                    flagKey,
+                    environment,
+                    e.getClass().getSimpleName()
+            );
+        }
+        return flag;
+    }
+    private String buildFlagConfigCacheKey(
+            String environment,
+            String flagKey
+    ) {
+        return FLAG_CONFIG_CACHE_PREFIX
+                + environment
+                + ":"
+                + flagKey;
+    }
+
     // =========================================================
     // REDIS CACHE HELPERS
     // =========================================================
+
+    private void invalidateFlagConfigCacheAfterCommit(
+            String environment,
+            String flagKey
+    ) {
+        String cacheKey =
+                buildFlagConfigCacheKey(
+                        environment,
+                        flagKey
+                );
+        Runnable invalidation =
+                () -> deleteFlagConfigCacheKey(
+                        cacheKey
+                );
+        if (TransactionSynchronizationManager
+                .isSynchronizationActive()) {
+            TransactionSynchronizationManager
+                    .registerSynchronization(
+                            new TransactionSynchronization() {
+                                @Override
+                                public void afterCommit() {
+                                    invalidation.run();
+                                }
+                            }
+                    );
+            return;
+        }
+        invalidation.run();
+    }
+    private void deleteFlagConfigCacheKey(
+            String cacheKey
+    ) {
+        try {
+            redisTemplate.delete(cacheKey);
+            log.debug(
+                    "Evaluation config cache cleared; cacheKey={}",
+                    cacheKey
+            );
+        } catch (Exception e) {
+            log.warn(
+                    "Failed to clear evaluation config cache; cacheKey={} errorType={}",
+                    cacheKey,
+                    e.getClass().getSimpleName()
+            );
+        }
+    }
 
     private void clearFlagCache() {
         try {
