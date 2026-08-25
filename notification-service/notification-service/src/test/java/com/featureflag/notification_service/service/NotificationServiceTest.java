@@ -237,6 +237,41 @@ class NotificationServiceTest {
     }
 
     @Test
+    @DisplayName("Resolve Role Recipients - Normalizes without saving or sending")
+    void testResolveRoleRecipientEmails_NormalizesWithoutDelivery() {
+        when(
+                authRecipientsClient.getNotificationRecipients(
+                        List.of("OWNER", "ADMIN")
+                )
+        ).thenReturn(
+                java.util.Arrays.asList(
+                        " owner@company.com ",
+                        null,
+                        "   ",
+                        "owner@company.com",
+                        "admin@company.com"
+                )
+        );
+
+        List<String> recipients =
+                notificationService.resolveRoleRecipientEmails(
+                        List.of("OWNER", "ADMIN")
+                );
+
+        assertEquals(
+                List.of(
+                        "owner@company.com",
+                        "admin@company.com"
+                ),
+                recipients
+        );
+        verifyNoInteractions(
+                notificationRepository,
+                mailSender
+        );
+    }
+
+    @Test
     @DisplayName("Get Notification By ID - Success")
     void testGetNotificationById_Success() {
         when(notificationRepository.findById(1L)).thenReturn(Optional.of(testNotification));

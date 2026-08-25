@@ -86,28 +86,8 @@ public class NotificationService {
             String type,
             List<String> targetRoles
     ) {
-        List<String> recipients = new ArrayList<>();
-
-        try {
-            List<String> fetched = authRecipientsClient.getNotificationRecipients(targetRoles);
-            if (fetched != null) {
-                recipients = fetched.stream()
-                        .filter(Objects::nonNull)
-                        .map(String::trim)
-                        .filter(email -> !email.isBlank())
-                        .distinct()
-                        .collect(Collectors.toList());
-            }
-        } catch (Exception e) {
-            log.error(
-                    "Failed to retrieve notification recipients from Auth Service; errorType={}",
-                    e.getClass().getSimpleName()
-            );
-            throw new IllegalStateException(
-                    "Failed to retrieve notification recipients from Auth Service",
-                    e
-            );
-        }
+        List<String> recipients =
+                resolveRoleRecipientEmails(targetRoles);
 
         if (recipients.isEmpty()) {
             log.warn("No active notification recipients found for configured roles; email dispatch skipped");
@@ -151,6 +131,35 @@ public class NotificationService {
         }
 
         return dispatched;
+    }
+
+    public List<String> resolveRoleRecipientEmails(
+            List<String> targetRoles
+    ) {
+        List<String> recipients = new ArrayList<>();
+
+        try {
+            List<String> fetched = authRecipientsClient.getNotificationRecipients(targetRoles);
+            if (fetched != null) {
+                recipients = fetched.stream()
+                        .filter(Objects::nonNull)
+                        .map(String::trim)
+                        .filter(email -> !email.isBlank())
+                        .distinct()
+                        .collect(Collectors.toList());
+            }
+        } catch (Exception e) {
+            log.error(
+                    "Failed to retrieve notification recipients from Auth Service; errorType={}",
+                    e.getClass().getSimpleName()
+            );
+            throw new IllegalStateException(
+                    "Failed to retrieve notification recipients from Auth Service",
+                    e
+            );
+        }
+
+        return recipients;
     }
 
     public List<Notification> getNotificationsForUser(String userEmail, String userRole) {
