@@ -48,12 +48,12 @@ public class InvitationNotificationDispatcher {
                     notificationInternalServiceKey,
                     request
             );
-            log.info("Invitation notification handoff accepted by Notification Service");
+            log.info("Invitation email delivery confirmed by Notification Service");
         } catch (Exception exception) {
             // The invitation has already committed at this point. Do not expose the
             // raw acceptance URL or exception message in logs.
             log.error(
-                    "Invitation notification handoff failed after commit; errorType={}",
+                    "Invitation email delivery failed after invitation commit; errorType={}",
                     exception.getClass().getSimpleName()
             );
         }

@@ -22,6 +22,6 @@ public class InternalNotificationController {
             @Valid @RequestBody InvitationEmailRequest request
     ) {
         invitationEmailService.sendInvitationEmail(request);
-        return ResponseEntity.accepted().build();
+        return ResponseEntity.noContent().build();
     }
 }

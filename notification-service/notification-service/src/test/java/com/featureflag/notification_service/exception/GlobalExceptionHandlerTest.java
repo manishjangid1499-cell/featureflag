@@ -15,6 +15,23 @@ class GlobalExceptionHandlerTest {
             new GlobalExceptionHandler();
 
     @Test
+    void invitationDeliveryFailureMapsToSafeHttp502() {
+        ResponseEntity<Map<String, Object>> response =
+                handler.handleInvitationDelivery(
+                        new InvitationDeliveryException()
+                );
+
+        assertEquals(HttpStatus.BAD_GATEWAY, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(502, response.getBody().get("status"));
+        assertEquals("Bad Gateway", response.getBody().get("error"));
+        assertEquals(
+                "Invitation email delivery failed",
+                response.getBody().get("message")
+        );
+    }
+
+    @Test
     void notificationConflictMapsToHttp409() {
         ResponseEntity<Map<String, Object>> response =
                 handler.handleNotificationConflict(
