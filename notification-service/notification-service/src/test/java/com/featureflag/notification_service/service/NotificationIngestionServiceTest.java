@@ -4,10 +4,14 @@ import com.featureflag.notification_service.dto.NotificationEvent;
 import com.featureflag.notification_service.entity.DeliveryMode;
 import com.featureflag.notification_service.entity.Notification;
 import com.featureflag.notification_service.entity.ProcessedEvent;
+import com.featureflag.notification_service.exception.UnsupportedNotificationChannelException;
 import com.featureflag.notification_service.repository.NotificationRepository;
 import com.featureflag.notification_service.repository.ProcessedEventRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -192,6 +196,40 @@ class NotificationIngestionServiceTest {
         verify(notificationRepository).saveAll(any());
     }
 
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {
+            "SMS",
+            "PUSH",
+            "FAX",
+            "email",
+            "Email",
+            "",
+            "   "
+    })
+    void unsupportedTypeCreatesNeitherJobsNorMarker(
+            String type
+    ) {
+        NotificationEvent event = directEvent();
+        event.setType(type);
+
+        assertThatThrownBy(
+                () -> ingestionService
+                        .ingestDirectNotificationEvent(
+                                "event-unsupported-1",
+                                event
+                        )
+        ).isInstanceOf(
+                UnsupportedNotificationChannelException.class
+        );
+
+        verify(processedEventRepository)
+                .existsById("event-unsupported-1");
+        verify(notificationRepository, never()).saveAll(any());
+        verify(processedEventRepository, never())
+                .save(any(ProcessedEvent.class));
+    }
+
     private void assertDurablePendingState(
             Notification notification
     ) {
@@ -250,7 +288,7 @@ class NotificationIngestionServiceTest {
                 " creator@company.com ",
                 "Flag changed",
                 "A flag changed",
-                null
+                "EMAIL"
         );
     }
 

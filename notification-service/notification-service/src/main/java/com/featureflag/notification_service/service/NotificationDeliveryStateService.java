@@ -59,6 +59,7 @@ public class NotificationDeliveryStateService {
                 notification.getRecipient(),
                 notification.getSubject(),
                 notification.getMessage(),
+                notification.getType(),
                 claimedAttempt
         ));
     }

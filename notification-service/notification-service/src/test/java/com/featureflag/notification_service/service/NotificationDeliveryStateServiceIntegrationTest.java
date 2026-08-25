@@ -105,8 +105,10 @@ class NotificationDeliveryStateServiceIntegrationTest {
 
         assertEquals(pending.getId(), first.notificationId());
         assertEquals(1, first.attemptCount());
+        assertEquals("EMAIL", first.type());
         assertEquals(retry.getId(), second.notificationId());
         assertEquals(2, second.attemptCount());
+        assertEquals("EMAIL", second.type());
 
         Notification claimedPending = notificationRepository
                 .findById(pending.getId())
@@ -484,6 +486,7 @@ class NotificationDeliveryStateServiceIntegrationTest {
                 notification.getRecipient(),
                 notification.getSubject(),
                 notification.getMessage(),
+                notification.getType(),
                 attemptCount
         );
     }

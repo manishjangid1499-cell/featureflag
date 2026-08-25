@@ -8,6 +8,7 @@ import com.featureflag.notification_service.exception.ResourceNotFoundException;
 import com.featureflag.notification_service.exception.ForbiddenException;
 import com.featureflag.notification_service.exception.NotificationConflictException;
 import com.featureflag.notification_service.repository.NotificationRepository;
+import com.featureflag.notification_service.validation.NotificationTypePolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.SimpleMailMessage;
@@ -50,13 +51,16 @@ public class NotificationService {
             NotificationRequest request,
             String creatorEmail
     ) {
+        String type = NotificationTypePolicy.resolveInternalType(
+                request.getType()
+        );
 
         Notification notification = Notification.builder()
                 .recipient(request.getRecipient().trim())
                 .creatorEmail(normalizeNullableEmail(creatorEmail))
                 .subject(request.getSubject())
                 .message(request.getMessage())
-                .type(request.getType() != null ? request.getType() : "EMAIL")
+                .type(type)
                 .status("PENDING")
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -89,6 +93,9 @@ public class NotificationService {
             String type,
             List<String> targetRoles
     ) {
+        String resolvedType =
+                NotificationTypePolicy.resolveInternalType(type);
+
         List<String> recipients =
                 resolveRoleRecipientEmails(targetRoles);
 
@@ -106,7 +113,7 @@ public class NotificationService {
                     .recipient(recipientEmail)
                     .subject(subject)
                     .message(message)
-                    .type(type != null ? type : "EMAIL")
+                    .type(resolvedType)
                     .status("PENDING")
                     .createdAt(LocalDateTime.now())
                     .build();

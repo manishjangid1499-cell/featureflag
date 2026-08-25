@@ -2,6 +2,7 @@ package com.featureflag.notification_service.service;
 
 import com.featureflag.notification_service.dto.NotificationEvent;
 import com.featureflag.notification_service.entity.ProcessedEvent;
+import com.featureflag.notification_service.exception.UnsupportedNotificationChannelException;
 import com.featureflag.notification_service.repository.NotificationRepository;
 import com.featureflag.notification_service.repository.ProcessedEventRepository;
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,25 @@ class NotificationIngestionServiceIntegrationTest {
                                 directEvent()
                         )
         ).isSameAs(markerFailure);
+
+        assertEquals(0, notificationRepository.count());
+        assertEquals(0, processedEventRepository.count());
+    }
+
+    @Test
+    void unsupportedTypeCommitsNeitherNotificationNorMarker() {
+        NotificationEvent event = directEvent();
+        event.setType("SMS");
+
+        assertThatThrownBy(
+                () -> ingestionService
+                        .ingestDirectNotificationEvent(
+                                "event-unsupported-1",
+                                event
+                        )
+        ).isInstanceOf(
+                UnsupportedNotificationChannelException.class
+        );
 
         assertEquals(0, notificationRepository.count());
         assertEquals(0, processedEventRepository.count());

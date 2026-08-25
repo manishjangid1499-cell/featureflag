@@ -1,5 +1,6 @@
 package com.featureflag.notification_service.config;
 
+import com.featureflag.notification_service.exception.UnsupportedNotificationChannelException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
@@ -112,13 +113,19 @@ public class KafkaConfig {
 
         recoverer.setFailIfSendResultIsError(true);
 
-        return new DefaultErrorHandler(
+        DefaultErrorHandler errorHandler = new DefaultErrorHandler(
                 recoverer,
                 new FixedBackOff(
                         RETRY_BACKOFF_MS,
                         MAX_RETRIES
                 )
         );
+
+        errorHandler.addNotRetryableExceptions(
+                UnsupportedNotificationChannelException.class
+        );
+
+        return errorHandler;
     }
 
     @Bean

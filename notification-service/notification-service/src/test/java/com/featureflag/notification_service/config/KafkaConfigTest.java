@@ -1,5 +1,6 @@
 package com.featureflag.notification_service.config;
 
+import com.featureflag.notification_service.exception.UnsupportedNotificationChannelException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.Test;
@@ -75,6 +76,21 @@ class KafkaConfigTest {
                 factory.getContainerProperties().getAckMode()
         ).isEqualTo(ContainerProperties.AckMode.RECORD);
         assertThat(errorHandler).isNotNull();
+    }
+
+    @Test
+    void unsupportedNotificationChannelIsConfiguredAsNonRetryable() {
+        DefaultErrorHandler errorHandler =
+                new KafkaConfig(kafkaProperties())
+                        .kafkaErrorHandler(
+                                mock(KafkaTemplate.class)
+                        );
+
+        assertThat(
+                errorHandler.removeClassification(
+                        UnsupportedNotificationChannelException.class
+                )
+        ).isFalse();
     }
 
     private KafkaProperties kafkaProperties() {

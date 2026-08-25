@@ -6,6 +6,7 @@ import com.featureflag.notification_service.entity.Notification;
 import com.featureflag.notification_service.entity.ProcessedEvent;
 import com.featureflag.notification_service.repository.NotificationRepository;
 import com.featureflag.notification_service.repository.ProcessedEventRepository;
+import com.featureflag.notification_service.validation.NotificationTypePolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,6 +61,10 @@ public class NotificationIngestionService {
             return;
         }
 
+        String type = NotificationTypePolicy.requireExplicitEmail(
+                event.getType()
+        );
+
         LocalDateTime now = LocalDateTime.now();
 
         List<Notification> notifications = recipients.stream()
@@ -68,11 +73,7 @@ public class NotificationIngestionService {
                         .creatorEmail(creatorEmail)
                         .subject(event.getSubject())
                         .message(event.getMessage())
-                        .type(
-                                event.getType() != null
-                                        ? event.getType()
-                                        : "EMAIL"
-                        )
+                        .type(type)
                         .status("PENDING")
                         .deliveryMode(DeliveryMode.DURABLE)
                         .attemptCount(0)

@@ -6,6 +6,7 @@ import com.featureflag.notification_service.entity.DeliveryMode;
 import com.featureflag.notification_service.entity.Notification;
 import com.featureflag.notification_service.exception.NotificationConflictException;
 import com.featureflag.notification_service.exception.ResourceNotFoundException;
+import com.featureflag.notification_service.exception.UnsupportedNotificationChannelException;
 import com.featureflag.notification_service.repository.NotificationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -155,6 +156,55 @@ class NotificationServiceTest {
         assertEquals(0, result.getAttemptCount());
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "SMS",
+            "PUSH",
+            "FAX",
+            "email",
+            "Email",
+            "",
+            "   "
+    })
+    @DisplayName("Create Notification - Unsupported explicit type has no side effects")
+    void testCreateNotification_UnsupportedTypeRejectedBeforeSideEffects(
+            String type
+    ) {
+        NotificationRequest request = new NotificationRequest();
+        request.setRecipient("admin@company.com");
+        request.setSubject("Alert");
+        request.setMessage("Message");
+        request.setType(type);
+
+        assertThrows(
+                UnsupportedNotificationChannelException.class,
+                () -> notificationService.createNotification(request)
+        );
+
+        verifyNoInteractions(
+                notificationRepository,
+                authRecipientsClient,
+                mailSender
+        );
+    }
+
+    @Test
+    @DisplayName("Create Notification - Null internal type preserves EMAIL default")
+    void testCreateNotification_NullInternalTypeDefaultsToEmail() {
+        NotificationRequest request = new NotificationRequest();
+        request.setRecipient("admin@company.com");
+        request.setSubject("Alert");
+        request.setMessage("Message");
+        when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Notification result =
+                notificationService.createNotification(request);
+
+        assertEquals("EMAIL", result.getType());
+        verify(mailSender).send(any(SimpleMailMessage.class));
+    }
+
     @Test
     @DisplayName("Send To Role Recipients - Dispatches email to each resolved recipient")
     void testSendToRoleRecipients_Success() {
@@ -172,6 +222,58 @@ class NotificationServiceTest {
         assertNotNull(dispatched);
         assertEquals(2, dispatched.size());
         verify(mailSender, times(2)).send(any(SimpleMailMessage.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "SMS",
+            "PUSH",
+            "FAX",
+            "email",
+            "Email",
+            "",
+            "   "
+    })
+    @DisplayName("Send To Role Recipients - Unsupported type is rejected before lookup")
+    void testSendToRoleRecipients_UnsupportedTypeRejectedBeforeSideEffects(
+            String type
+    ) {
+        assertThrows(
+                UnsupportedNotificationChannelException.class,
+                () -> notificationService.sendToRoleRecipients(
+                        "Flag changed",
+                        "Message",
+                        type,
+                        List.of("OWNER", "ADMIN")
+                )
+        );
+
+        verifyNoInteractions(
+                notificationRepository,
+                authRecipientsClient,
+                mailSender
+        );
+    }
+
+    @Test
+    @DisplayName("Send To Role Recipients - Null internal type preserves EMAIL default")
+    void testSendToRoleRecipients_NullInternalTypeDefaultsToEmail() {
+        when(authRecipientsClient.getNotificationRecipients(
+                List.of("OWNER")
+        )).thenReturn(List.of("owner@company.com"));
+        when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<Notification> notifications =
+                notificationService.sendToRoleRecipients(
+                        "Flag changed",
+                        "Message",
+                        null,
+                        List.of("OWNER")
+                );
+
+        assertEquals("EMAIL", notifications.getFirst().getType());
+        verify(mailSender).send(any(SimpleMailMessage.class));
     }
 
     @Test

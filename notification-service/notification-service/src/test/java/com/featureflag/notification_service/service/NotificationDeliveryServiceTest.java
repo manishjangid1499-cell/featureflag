@@ -190,6 +190,52 @@ class NotificationDeliveryServiceTest {
     }
 
     @Test
+    void unsupportedHistoricalJobIsMarkedDeadWithoutMailAndBatchContinues() {
+        DeliveryClaim unsupported = claim(11L, 1, "SMS");
+        DeliveryClaim email = claim(12L, 1, "EMAIL");
+        when(stateService.claimNextDueJob(any()))
+                .thenReturn(Optional.of(unsupported))
+                .thenReturn(Optional.of(email))
+                .thenReturn(Optional.empty());
+        when(stateService.markDead(
+                unsupported,
+                NotificationDeliveryService
+                        .UNSUPPORTED_CHANNEL_ERROR_TYPE
+        )).thenReturn(true);
+        when(stateService.markSent(eq(email), any()))
+                .thenReturn(true);
+
+        deliveryService.processDueNotifications();
+
+        verify(emailService, never()).sendEmail(
+                unsupported.recipient(),
+                unsupported.subject(),
+                unsupported.message()
+        );
+        verify(stateService).markDead(
+                unsupported,
+                "UnsupportedNotificationChannel"
+        );
+        verify(emailService).sendEmail(
+                email.recipient(),
+                email.subject(),
+                email.message()
+        );
+        verify(stateService).markSent(eq(email), any());
+
+        InOrder order = inOrder(stateService, emailService);
+        order.verify(stateService).markDead(
+                unsupported,
+                "UnsupportedNotificationChannel"
+        );
+        order.verify(emailService).sendEmail(
+                email.recipient(),
+                email.subject(),
+                email.message()
+        );
+    }
+
+    @Test
     void claimDatabaseFailureAbortsCurrentPoll() {
         RuntimeException databaseFailure =
                 new RuntimeException("database unavailable");
@@ -293,15 +339,25 @@ class NotificationDeliveryServiceTest {
         assertFalse(renderedClaim.contains(claim.recipient()));
         assertFalse(renderedClaim.contains(claim.subject()));
         assertFalse(renderedClaim.contains(claim.message()));
+        assertFalse(renderedClaim.contains(claim.type()));
     }
 
     private DeliveryClaim claim(Long id, int attemptCount) {
+        return claim(id, attemptCount, "EMAIL");
+    }
+
+    private DeliveryClaim claim(
+            Long id,
+            int attemptCount,
+            String type
+    ) {
         return new DeliveryClaim(
                 id,
                 "claim-token-" + id,
                 "recipient" + id + "@company.com",
                 "Subject " + id,
                 "Message " + id,
+                type,
                 attemptCount
         );
     }

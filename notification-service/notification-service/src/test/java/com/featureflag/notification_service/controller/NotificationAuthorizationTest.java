@@ -6,6 +6,8 @@ import com.featureflag.notification_service.security.JwtSecurityConfig;
 import com.featureflag.notification_service.security.SecurityConfig;
 import com.featureflag.notification_service.service.NotificationService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -26,6 +28,7 @@ import java.util.Map;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -113,6 +116,90 @@ class NotificationAuthorizationTest {
         );
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "SMS",
+            "PUSH",
+            "FAX",
+            "email",
+            "Email",
+            "",
+            "   "
+    })
+    void restRejectsEveryExplicitNonEmailType(
+            String type
+    ) throws Exception {
+        authenticate(
+                "admin-token",
+                "admin@company.com",
+                "ADMIN"
+        );
+
+        mockMvc.perform(post("/api/notifications")
+                        .header(
+                                "Authorization",
+                                "Bearer admin-token"
+                        )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(notificationJson(type)))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(notificationService);
+    }
+
+    @Test
+    void restRejectsMissingNotificationType() throws Exception {
+        authenticate(
+                "admin-token",
+                "admin@company.com",
+                "ADMIN"
+        );
+
+        mockMvc.perform(post("/api/notifications")
+                        .header(
+                                "Authorization",
+                                "Bearer admin-token"
+                        )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "recipient": "recipient@company.com",
+                                  "subject": "Alert",
+                                  "message": "Message"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(notificationService);
+    }
+
+    @Test
+    void restRejectsNullNotificationType() throws Exception {
+        authenticate(
+                "admin-token",
+                "admin@company.com",
+                "ADMIN"
+        );
+
+        mockMvc.perform(post("/api/notifications")
+                        .header(
+                                "Authorization",
+                                "Bearer admin-token"
+                        )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "recipient": "recipient@company.com",
+                                  "subject": "Alert",
+                                  "message": "Message",
+                                  "type": null
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(notificationService);
+    }
+
     private void authenticate(String token, String email, String role) {
         Instant now = Instant.now();
         when(jwtDecoder.decode(token)).thenReturn(new Jwt(
@@ -134,6 +221,17 @@ class NotificationAuthorizationTest {
                   "type": "EMAIL"
                 }
                 """.formatted(creatorEmail);
+    }
+
+    private String notificationJson(String type) {
+        return """
+                {
+                  "recipient": "recipient@company.com",
+                  "subject": "Alert",
+                  "message": "Message",
+                  "type": "%s"
+                }
+                """.formatted(type);
     }
 
     @TestConfiguration

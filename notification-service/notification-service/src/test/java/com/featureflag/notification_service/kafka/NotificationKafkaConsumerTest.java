@@ -4,12 +4,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.featureflag.notification_service.dto.NotificationEvent;
 import com.featureflag.notification_service.dto.NotificationRequest;
 import com.featureflag.notification_service.entity.ProcessedEvent;
+import com.featureflag.notification_service.exception.UnsupportedNotificationChannelException;
 import com.featureflag.notification_service.repository.ProcessedEventRepository;
 import com.featureflag.notification_service.service.NotificationIngestionService;
 import com.featureflag.notification_service.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
@@ -76,6 +79,76 @@ class NotificationKafkaConsumerTest {
                 eventCaptor.getValue().getCreatorEmail()
         );
         verifyNoInteractions(notificationService);
+        verify(processedRepository, never()).save(
+                any(ProcessedEvent.class)
+        );
+    }
+
+    @Test
+    void missingKafkaTypeDefaultsToEmailBeforeIngestion()
+            throws Exception {
+        consumer.consumeNotificationEvent(
+                directEventJsonWithoutType()
+        );
+
+        ArgumentCaptor<NotificationEvent> eventCaptor =
+                ArgumentCaptor.forClass(NotificationEvent.class);
+        verify(ingestionService).ingestDirectNotificationEvent(
+                eq("event-null-type-1"),
+                eventCaptor.capture()
+        );
+        assertEquals("EMAIL", eventCaptor.getValue().getType());
+        verifyNoInteractions(notificationService);
+    }
+
+    @Test
+    void explicitNullKafkaTypeDefaultsToEmailBeforeIngestion()
+            throws Exception {
+        consumer.consumeNotificationEvent(
+                directEventJsonWithNullType()
+        );
+
+        ArgumentCaptor<NotificationEvent> eventCaptor =
+                ArgumentCaptor.forClass(NotificationEvent.class);
+        verify(ingestionService).ingestDirectNotificationEvent(
+                eq("event-explicit-null-type-1"),
+                eventCaptor.capture()
+        );
+        assertEquals("EMAIL", eventCaptor.getValue().getType());
+        verifyNoInteractions(notificationService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "SMS",
+            "PUSH",
+            "FAX",
+            "email",
+            "Email",
+            "",
+            "   "
+    })
+    void unsupportedKafkaTypeIsRejectedBeforeRoleLookupOrIngestion(
+            String type
+    ) {
+        assertThatThrownBy(
+                () -> consumer.consumeNotificationEvent(
+                        roleEventJsonWithType(type)
+                )
+        )
+                .isInstanceOf(
+                        UnsupportedNotificationChannelException.class
+                )
+                .hasMessage(
+                        "Only EMAIL notification channel is supported"
+                );
+
+        verify(processedRepository)
+                .existsById("event-unsupported-type-1");
+        verifyNoInteractions(
+                notificationService,
+                ingestionService
+        );
         verify(processedRepository, never()).save(
                 any(ProcessedEvent.class)
         );
@@ -295,6 +368,42 @@ class NotificationKafkaConsumerTest {
                   "subject": "Flag changed",
                   "message": "A flag changed",
                   "type": "EMAIL"
+                }
+                """;
+    }
+
+    private String directEventJsonWithoutType() {
+        return """
+                {
+                  "eventId": "event-null-type-1",
+                  "recipient": "recipient@company.com",
+                  "creatorEmail": "event-creator@company.com",
+                  "subject": "Flag changed",
+                  "message": "A flag changed"
+                }
+                """;
+    }
+
+    private String roleEventJsonWithType(String type) {
+        return """
+                {
+                  "eventId": "event-unsupported-type-1",
+                  "subject": "Flag changed",
+                  "message": "A flag changed",
+                  "type": "%s"
+                }
+                """.formatted(type);
+    }
+
+    private String directEventJsonWithNullType() {
+        return """
+                {
+                  "eventId": "event-explicit-null-type-1",
+                  "recipient": "recipient@company.com",
+                  "creatorEmail": "event-creator@company.com",
+                  "subject": "Flag changed",
+                  "message": "A flag changed",
+                  "type": null
                 }
                 """;
     }

@@ -6,6 +6,7 @@ public record DeliveryClaim(
         String recipient,
         String subject,
         String message,
+        String type,
         int attemptCount
 ) {
 

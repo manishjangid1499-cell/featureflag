@@ -1,6 +1,7 @@
 package com.featureflag.notification_service.service;
 
 import com.featureflag.notification_service.config.NotificationDeliveryProperties;
+import com.featureflag.notification_service.validation.NotificationTypePolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,8 @@ import java.util.Optional;
 public class NotificationDeliveryService {
 
     private static final int LAST_ERROR_TYPE_MAX_LENGTH = 128;
+    static final String UNSUPPORTED_CHANNEL_ERROR_TYPE =
+            "UnsupportedNotificationChannel";
 
     private final NotificationDeliveryStateService stateService;
     private final EmailService emailService;
@@ -65,6 +68,11 @@ public class NotificationDeliveryService {
     }
 
     private void deliver(DeliveryClaim claim) {
+        if (!NotificationTypePolicy.isEmail(claim.type())) {
+            completeUnsupportedChannel(claim);
+            return;
+        }
+
         try {
             emailService.sendEmail(
                     claim.recipient(),
@@ -98,6 +106,38 @@ public class NotificationDeliveryService {
         } catch (RuntimeException exception) {
             log.error(
                     "Notification delivery success could not be persisted; notificationId={} attempt={} errorType={}",
+                    claim.notificationId(),
+                    claim.attemptCount(),
+                    safeErrorType(exception)
+            );
+        }
+    }
+
+    private void completeUnsupportedChannel(
+            DeliveryClaim claim
+    ) {
+        try {
+            boolean completed = stateService.markDead(
+                    claim,
+                    UNSUPPORTED_CHANNEL_ERROR_TYPE
+            );
+
+            if (completed) {
+                log.warn(
+                        "Notification marked DEAD due to unsupported notification channel; notificationId={} attempt={}",
+                        claim.notificationId(),
+                        claim.attemptCount()
+                );
+            } else {
+                log.warn(
+                        "Unsupported notification channel ignored for stale claim; notificationId={} attempt={}",
+                        claim.notificationId(),
+                        claim.attemptCount()
+                );
+            }
+        } catch (RuntimeException exception) {
+            log.error(
+                    "Unsupported notification channel state could not be persisted; notificationId={} attempt={} errorType={}",
                     claim.notificationId(),
                     claim.attemptCount(),
                     safeErrorType(exception)

@@ -6,6 +6,7 @@ import com.featureflag.notification_service.dto.NotificationEvent;
 import com.featureflag.notification_service.repository.ProcessedEventRepository;
 import com.featureflag.notification_service.service.NotificationIngestionService;
 import com.featureflag.notification_service.service.NotificationService;
+import com.featureflag.notification_service.validation.NotificationTypePolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -52,6 +53,12 @@ public class NotificationKafkaConsumer {
             );
             return;
         }
+
+        event.setType(
+                NotificationTypePolicy.resolveKafkaType(
+                        event.getType()
+                )
+        );
 
         log.info(
                 "Received notification event; eventId={}",

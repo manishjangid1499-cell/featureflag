@@ -7,6 +7,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import static com.featureflag.notification_service.validation.NotificationTypePolicy.EMAIL;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -26,8 +28,8 @@ public class NotificationRequest {
 
     @NotBlank(message = "Notification type is required")
     @Pattern(
-            regexp = "EMAIL|SMS|PUSH",
-            message = "Notification type must be EMAIL, SMS, or PUSH"
+            regexp = EMAIL,
+            message = "Notification type must be EMAIL"
     )
     private String type;
 
