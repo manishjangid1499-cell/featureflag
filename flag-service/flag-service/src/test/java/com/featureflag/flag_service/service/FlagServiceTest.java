@@ -447,12 +447,18 @@ class FlagServiceTest {
             ).delete(
                     "flag:config:DEV:NEW_CHECKOUT"
             );
+            verify(
+                    redisTemplate,
+                    never()
+            ).delete(
+                    "all_flags"
+            );
             List<TransactionSynchronization> synchronizations =
                     TransactionSynchronizationManager
                             .getSynchronizations();
             assertFalse(
                     synchronizations.isEmpty(),
-                    "Expected evaluation cache invalidation to be registered for afterCommit"
+                    "Expected cache invalidations to be registered for afterCommit"
             );
             synchronizations.forEach(
                     TransactionSynchronization::afterCommit
@@ -461,9 +467,92 @@ class FlagServiceTest {
                     .delete(
                             "flag:config:DEV:NEW_CHECKOUT"
                     );
+            verify(redisTemplate)
+                    .delete(
+                            "all_flags"
+                    );
         } finally {
             TransactionSynchronizationManager
                     .clearSynchronization();
+        }
+    }
+
+    @Test
+    @DisplayName("Update Flag - all_flags and config cache invalidations are deferred until transaction commit")
+    void testUpdateFlag_CacheInvalidationsDeferredUntilAfterCommit() {
+        FlagRequest request = new FlagRequest();
+        request.setName("Updated Checkout");
+        request.setFlagKey("NEW_CHECKOUT_V2");
+        request.setEnvironment("PROD");
+        request.setEnabled(false);
+        request.setRolloutPercentage(50);
+        when(repository.findById(1L)).thenReturn(Optional.of(testFlag));
+        when(repository.save(any(FeatureFlag.class))).thenAnswer(i -> i.getArgument(0));
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            flagService.updateFlag(1L, request);
+            verify(redisTemplate, never()).delete("all_flags");
+            verify(redisTemplate, never()).delete("flag:config:DEV:NEW_CHECKOUT");
+            verify(redisTemplate, never()).delete("flag:config:PROD:NEW_CHECKOUT_V2");
+
+            List<TransactionSynchronization> synchronizations =
+                    TransactionSynchronizationManager.getSynchronizations();
+            assertFalse(synchronizations.isEmpty());
+            synchronizations.forEach(TransactionSynchronization::afterCommit);
+
+            verify(redisTemplate).delete("all_flags");
+            verify(redisTemplate).delete("flag:config:DEV:NEW_CHECKOUT");
+            verify(redisTemplate).delete("flag:config:PROD:NEW_CHECKOUT_V2");
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    @DisplayName("Delete Flag - all_flags and config cache invalidations are deferred until transaction commit")
+    void testDeleteFlag_CacheInvalidationsDeferredUntilAfterCommit() {
+        when(repository.findById(1L)).thenReturn(Optional.of(testFlag));
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            flagService.deleteFlag(1L);
+            verify(redisTemplate, never()).delete("all_flags");
+            verify(redisTemplate, never()).delete("flag:config:DEV:NEW_CHECKOUT");
+
+            List<TransactionSynchronization> synchronizations =
+                    TransactionSynchronizationManager.getSynchronizations();
+            assertFalse(synchronizations.isEmpty());
+            synchronizations.forEach(TransactionSynchronization::afterCommit);
+
+            verify(redisTemplate).delete("all_flags");
+            verify(redisTemplate).delete("flag:config:DEV:NEW_CHECKOUT");
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    @DisplayName("Toggle Flag - all_flags and config cache invalidations are deferred until transaction commit")
+    void testToggleFlag_CacheInvalidationsDeferredUntilAfterCommit() {
+        when(repository.findById(1L)).thenReturn(Optional.of(testFlag));
+        when(repository.save(any(FeatureFlag.class))).thenAnswer(i -> i.getArgument(0));
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            flagService.toggleFlag(1L);
+            verify(redisTemplate, never()).delete("all_flags");
+            verify(redisTemplate, never()).delete("flag:config:DEV:NEW_CHECKOUT");
+
+            List<TransactionSynchronization> synchronizations =
+                    TransactionSynchronizationManager.getSynchronizations();
+            assertFalse(synchronizations.isEmpty());
+            synchronizations.forEach(TransactionSynchronization::afterCommit);
+
+            verify(redisTemplate).delete("all_flags");
+            verify(redisTemplate).delete("flag:config:DEV:NEW_CHECKOUT");
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
         }
     }
 
@@ -577,17 +666,23 @@ class FlagServiceTest {
     }
 
     @Test
-    @DisplayName("Get All Flags - Reads from MySQL and caches to Redis when cache miss")
-    void testGetAllFlags_CacheMiss_FetchesFromDb() {
+    @DisplayName("Get All Flags - Reads from MySQL and caches to Redis with TTL when cache miss")
+    void testGetAllFlags_CacheMiss_FetchesFromDb() throws Exception {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get("all_flags")).thenReturn(null);
         when(repository.findAll()).thenReturn(List.of(testFlag));
+        when(objectMapper.writeValueAsString(List.of(testFlag))).thenReturn("[{\"flagKey\":\"NEW_CHECKOUT\"}]");
 
         List<FeatureFlag> flags = flagService.getAllFlags();
 
         assertNotNull(flags);
         assertEquals(1, flags.size());
         verify(repository, times(1)).findAll();
+        verify(valueOperations, times(1)).set(
+                eq("all_flags"),
+                eq("[{\"flagKey\":\"NEW_CHECKOUT\"}]"),
+                eq(Duration.ofMinutes(5))
+        );
     }
 
     @Test

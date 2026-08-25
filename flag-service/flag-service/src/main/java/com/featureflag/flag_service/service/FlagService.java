@@ -36,6 +36,7 @@ public class FlagService {
 
     private static final String ALL_FLAGS_KEY = "all_flags";
     private static final String FLAG_CONFIG_CACHE_PREFIX = "flag:config:";
+    private static final Duration ALL_FLAGS_CACHE_TTL = Duration.ofMinutes(5);
     private static final Duration FLAG_CONFIG_CACHE_TTL = Duration.ofMinutes(5);
     private static final Set<String> SUPPORTED_ENVIRONMENTS =
             Set.of("DEV", "QA", "STAGING", "PROD");
@@ -68,7 +69,7 @@ public class FlagService {
         FeatureFlag savedFlag = repository.save(flag);
 
         // Invalidate Redis cache
-        clearFlagCache();
+        invalidateAllFlagsCacheAfterCommit();
 
         invalidateFlagConfigCacheAfterCommit(
                 savedFlag.getEnvironment(),
@@ -123,7 +124,7 @@ public class FlagService {
 
         try {
             String jsonToCache = objectMapper.writeValueAsString(flags);
-            redisTemplate.opsForValue().set(ALL_FLAGS_KEY, jsonToCache);
+            redisTemplate.opsForValue().set(ALL_FLAGS_KEY, jsonToCache, ALL_FLAGS_CACHE_TTL);
         } catch (Exception e) {
             log.warn("Redis cache write failed; errorType={}", e.getClass().getSimpleName());
         }
@@ -219,7 +220,7 @@ public class FlagService {
         FeatureFlag updatedFlag = repository.save(flag);
 
         // Invalidate Redis cache
-        clearFlagCache();
+        invalidateAllFlagsCacheAfterCommit();
 
         invalidateFlagConfigCacheAfterCommit(
                 oldEnvironment,
@@ -274,7 +275,7 @@ public class FlagService {
         repository.deleteById(id);
 
         // Invalidate Redis cache
-        clearFlagCache();
+        invalidateAllFlagsCacheAfterCommit();
 
         invalidateFlagConfigCacheAfterCommit(
                 environment,
@@ -320,7 +321,7 @@ public class FlagService {
         FeatureFlag updatedFlag = repository.save(flag);
 
         // Invalidate Redis cache
-        clearFlagCache();
+        invalidateAllFlagsCacheAfterCommit();
 
         invalidateFlagConfigCacheAfterCommit(
                 updatedFlag.getEnvironment(),
@@ -528,6 +529,34 @@ public class FlagService {
     // REDIS CACHE HELPERS
     // =========================================================
 
+    private void runAfterCommitOrNow(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            action.run();
+                        }
+                    }
+            );
+            return;
+        }
+        action.run();
+    }
+
+    private void invalidateAllFlagsCacheAfterCommit() {
+        runAfterCommitOrNow(this::deleteAllFlagsCache);
+    }
+
+    private void deleteAllFlagsCache() {
+        try {
+            redisTemplate.delete(ALL_FLAGS_KEY);
+            log.debug("Feature flags list cache cleared");
+        } catch (Exception e) {
+            log.warn("Failed to clear feature flags list cache; errorType={}", e.getClass().getSimpleName());
+        }
+    }
+
     private void invalidateFlagConfigCacheAfterCommit(
             String environment,
             String flagKey
@@ -537,25 +566,9 @@ public class FlagService {
                         environment,
                         flagKey
                 );
-        Runnable invalidation =
-                () -> deleteFlagConfigCacheKey(
-                        cacheKey
-                );
-        if (TransactionSynchronizationManager
-                .isSynchronizationActive()) {
-            TransactionSynchronizationManager
-                    .registerSynchronization(
-                            new TransactionSynchronization() {
-                                @Override
-                                public void afterCommit() {
-                                    invalidation.run();
-                                }
-                            }
-                    );
-            return;
-        }
-        invalidation.run();
+        runAfterCommitOrNow(() -> deleteFlagConfigCacheKey(cacheKey));
     }
+
     private void deleteFlagConfigCacheKey(
             String cacheKey
     ) {
@@ -571,15 +584,6 @@ public class FlagService {
                     cacheKey,
                     e.getClass().getSimpleName()
             );
-        }
-    }
-
-    private void clearFlagCache() {
-        try {
-            redisTemplate.delete(ALL_FLAGS_KEY);
-            log.debug("Feature flags cache cleared");
-        } catch (Exception e) {
-            log.warn("Failed to clear feature flags cache; errorType={}", e.getClass().getSimpleName());
         }
     }
 
