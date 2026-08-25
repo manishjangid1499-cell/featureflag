@@ -22,8 +22,6 @@ public class NotificationDeliveryStateService {
             "DeliveryLeaseExpired";
 
     private static final String PROCESSING = "PROCESSING";
-    private static final List<String> DUE_STATUSES =
-            List.of("PENDING", "RETRY");
 
     private final NotificationRepository notificationRepository;
     private final NotificationDeliveryProperties properties;
@@ -32,19 +30,14 @@ public class NotificationDeliveryStateService {
     public Optional<DeliveryClaim> claimNextDueJob(
             LocalDateTime now
     ) {
-        List<Notification> due =
-                notificationRepository.findDueForUpdate(
-                        DeliveryMode.DURABLE,
-                        DUE_STATUSES,
-                        now,
-                        PageRequest.of(0, 1)
-                );
+        Optional<Notification> due = notificationRepository
+                .findNextDueForUpdateSkipLocked(now);
 
         if (due.isEmpty()) {
             return Optional.empty();
         }
 
-        Notification notification = due.getFirst();
+        Notification notification = due.orElseThrow();
         int currentAttempts = notification.getAttemptCount() == null
                 ? 0
                 : notification.getAttemptCount();

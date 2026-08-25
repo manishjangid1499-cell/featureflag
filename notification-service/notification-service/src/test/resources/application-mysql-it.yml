@@ -1,0 +1,11 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.MySQLDialect
+    show-sql: false
+
+app:
+  notification:
+    delivery:
+      enabled: false

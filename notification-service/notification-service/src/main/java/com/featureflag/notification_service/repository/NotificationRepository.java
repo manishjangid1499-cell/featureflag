@@ -33,20 +33,18 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     List<Notification> findByStatus(String status);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("""
-            select n
-            from Notification n
-            where n.deliveryMode = :deliveryMode
-              and n.status in :statuses
-              and n.nextAttemptAt <= :now
-            order by n.nextAttemptAt, n.id
-            """)
-    List<Notification> findDueForUpdate(
-            @Param("deliveryMode") DeliveryMode deliveryMode,
-            @Param("statuses") List<String> statuses,
-            @Param("now") LocalDateTime now,
-            Pageable pageable
+    @Query(value = """
+            SELECT n.*
+            FROM notifications n
+            WHERE n.delivery_mode = 'DURABLE'
+              AND n.status IN ('PENDING', 'RETRY')
+              AND n.next_attempt_at <= :now
+            ORDER BY n.next_attempt_at, n.id
+            LIMIT 1
+            FOR UPDATE SKIP LOCKED
+            """, nativeQuery = true)
+    Optional<Notification> findNextDueForUpdateSkipLocked(
+            @Param("now") LocalDateTime now
     );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
