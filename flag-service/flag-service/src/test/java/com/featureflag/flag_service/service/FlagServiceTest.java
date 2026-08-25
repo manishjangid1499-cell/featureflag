@@ -41,6 +41,7 @@ class FlagServiceTest {
 
     @Mock
     private ObjectMapper objectMapper;
+
     @Mock
     private OutboxService outboxService;
 
