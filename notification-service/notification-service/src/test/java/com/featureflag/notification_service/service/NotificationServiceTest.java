@@ -2,6 +2,7 @@ package com.featureflag.notification_service.service;
 
 import com.featureflag.notification_service.client.AuthRecipientsClient;
 import com.featureflag.notification_service.dto.NotificationRequest;
+import com.featureflag.notification_service.entity.DeliveryMode;
 import com.featureflag.notification_service.entity.Notification;
 import com.featureflag.notification_service.exception.ResourceNotFoundException;
 import com.featureflag.notification_service.repository.NotificationRepository;
@@ -126,6 +127,8 @@ class NotificationServiceTest {
         assertNotNull(result);
         assertEquals("SENT", result.getStatus());
         assertEquals("owner@company.com", result.getCreatorEmail());
+        assertEquals(DeliveryMode.SYNCHRONOUS, result.getDeliveryMode());
+        assertEquals(0, result.getAttemptCount());
         assertNotNull(result.getSentAt());
         verify(mailSender, times(1)).send(any(SimpleMailMessage.class));
     }
@@ -145,6 +148,8 @@ class NotificationServiceTest {
 
         assertNotNull(result);
         assertEquals("FAILED", result.getStatus());
+        assertEquals(DeliveryMode.SYNCHRONOUS, result.getDeliveryMode());
+        assertEquals(0, result.getAttemptCount());
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.featureflag.notification_service.service;
 
 import com.featureflag.notification_service.dto.InvitationEmailRequest;
+import com.featureflag.notification_service.entity.DeliveryMode;
 import com.featureflag.notification_service.entity.Notification;
 import com.featureflag.notification_service.repository.NotificationRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -75,6 +76,11 @@ class InvitationEmailServiceTest {
                 InvitationEmailService.SAFE_HISTORY_MESSAGE,
                 result.getMessage()
         );
+        assertEquals(
+                DeliveryMode.SYNCHRONOUS,
+                result.getDeliveryMode()
+        );
+        assertEquals(0, result.getAttemptCount());
 
         assertFalse(result.getMessage().contains(RAW_TOKEN));
         assertFalse(result.getMessage().contains(ACCEPTANCE_URL));
@@ -105,6 +111,11 @@ class InvitationEmailServiceTest {
                 InvitationEmailService.SAFE_HISTORY_MESSAGE,
                 result.getMessage()
         );
+        assertEquals(
+                DeliveryMode.SYNCHRONOUS,
+                result.getDeliveryMode()
+        );
+        assertEquals(0, result.getAttemptCount());
         assertFalse(result.getMessage().contains(RAW_TOKEN));
         assertFalse(result.getMessage().contains(ACCEPTANCE_URL));
     }
