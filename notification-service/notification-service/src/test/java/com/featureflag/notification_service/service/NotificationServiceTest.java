@@ -4,12 +4,15 @@ import com.featureflag.notification_service.client.AuthRecipientsClient;
 import com.featureflag.notification_service.dto.NotificationRequest;
 import com.featureflag.notification_service.entity.DeliveryMode;
 import com.featureflag.notification_service.entity.Notification;
+import com.featureflag.notification_service.exception.NotificationConflictException;
 import com.featureflag.notification_service.exception.ResourceNotFoundException;
 import com.featureflag.notification_service.repository.NotificationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -303,7 +306,8 @@ class NotificationServiceTest {
     @Test
     @DisplayName("Delete Notification - Success")
     void testDeleteNotification_Success() {
-        when(notificationRepository.findById(1L)).thenReturn(Optional.of(testNotification));
+        when(notificationRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(testNotification));
 
         notificationService.deleteNotification(
                 1L,
@@ -312,6 +316,84 @@ class NotificationServiceTest {
         );
 
         verify(notificationRepository, times(1)).delete(testNotification);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"PENDING", "RETRY", "PROCESSING"})
+    @DisplayName("Delete Notification - Active durable delivery is rejected")
+    void testDeleteNotification_ActiveDurableRejected(
+            String status
+    ) {
+        testNotification.setDeliveryMode(DeliveryMode.DURABLE);
+        testNotification.setStatus(status);
+        when(notificationRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(testNotification));
+
+        assertThrows(
+                NotificationConflictException.class,
+                () -> notificationService.deleteNotification(
+                        1L,
+                        "admin@company.com",
+                        "ADMIN"
+                )
+        );
+
+        verify(notificationRepository, never())
+                .delete(any(Notification.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"SENT", "DEAD"})
+    @DisplayName("Delete Notification - Terminal durable delivery is allowed")
+    void testDeleteNotification_TerminalDurableAllowed(
+            String status
+    ) {
+        testNotification.setDeliveryMode(DeliveryMode.DURABLE);
+        testNotification.setStatus(status);
+        when(notificationRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(testNotification));
+
+        notificationService.deleteNotification(
+                1L,
+                "admin@company.com",
+                "ADMIN"
+        );
+
+        verify(notificationRepository).delete(testNotification);
+    }
+
+    @Test
+    @DisplayName("Delete Notification - Synchronous and legacy rows preserve existing behavior")
+    void testDeleteNotification_SynchronousAndLegacyAllowed() {
+        Notification synchronous = testNotification;
+        Notification legacy = Notification.builder()
+                .id(2L)
+                .recipient("admin@company.com")
+                .subject("Legacy")
+                .message("Legacy")
+                .type("EMAIL")
+                .status("PENDING")
+                .deliveryMode(null)
+                .build();
+        synchronous.setStatus("PENDING");
+        when(notificationRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(synchronous));
+        when(notificationRepository.findByIdForUpdate(2L))
+                .thenReturn(Optional.of(legacy));
+
+        notificationService.deleteNotification(
+                1L,
+                "admin@company.com",
+                "ADMIN"
+        );
+        notificationService.deleteNotification(
+                2L,
+                "admin@company.com",
+                "ADMIN"
+        );
+
+        verify(notificationRepository).delete(synchronous);
+        verify(notificationRepository).delete(legacy);
     }
 
     @Test
@@ -458,7 +540,8 @@ class NotificationServiceTest {
     @Test
     @DisplayName("ADMIN cannot delete unrelated notification")
     void testDeleteNotification_AdminUnrelatedDeniedAsNotFound() {
-        when(notificationRepository.findById(1L)).thenReturn(Optional.of(testNotification));
+        when(notificationRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(testNotification));
 
         assertThrows(ResourceNotFoundException.class, () ->
                 notificationService.deleteNotification(

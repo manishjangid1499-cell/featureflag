@@ -47,3 +47,8 @@ security:
 
 NOTIFICATION_INTERNAL_SERVICE_KEY: test-notification-internal-key
 AUTH_RECIPIENTS_SERVICE_KEY: test-auth-recipients-key
+
+app:
+  notification:
+    delivery:
+      enabled: false

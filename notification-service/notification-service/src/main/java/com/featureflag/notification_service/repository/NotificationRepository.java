@@ -1,9 +1,18 @@
 package com.featureflag.notification_service.repository;
 
+import com.featureflag.notification_service.entity.DeliveryMode;
 import com.featureflag.notification_service.entity.Notification;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
@@ -23,4 +32,109 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     );
 
     List<Notification> findByStatus(String status);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select n
+            from Notification n
+            where n.deliveryMode = :deliveryMode
+              and n.status in :statuses
+              and n.nextAttemptAt <= :now
+            order by n.nextAttemptAt, n.id
+            """)
+    List<Notification> findDueForUpdate(
+            @Param("deliveryMode") DeliveryMode deliveryMode,
+            @Param("statuses") List<String> statuses,
+            @Param("now") LocalDateTime now,
+            Pageable pageable
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select n
+            from Notification n
+            where n.deliveryMode = :deliveryMode
+              and n.status = :status
+              and n.leaseUntil <= :now
+            order by n.leaseUntil, n.id
+            """)
+    List<Notification> findExpiredLeasesForUpdate(
+            @Param("deliveryMode") DeliveryMode deliveryMode,
+            @Param("status") String status,
+            @Param("now") LocalDateTime now,
+            Pageable pageable
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select n
+            from Notification n
+            where n.id = :id
+            """)
+    Optional<Notification> findByIdForUpdate(
+            @Param("id") Long id
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update Notification n
+            set n.status = 'SENT',
+                n.sentAt = :sentAt,
+                n.nextAttemptAt = null,
+                n.leaseUntil = null,
+                n.claimToken = null
+            where n.id = :id
+              and n.deliveryMode = :deliveryMode
+              and n.status = 'PROCESSING'
+              and n.claimToken = :claimToken
+            """)
+    int markSentIfClaimMatches(
+            @Param("id") Long id,
+            @Param("deliveryMode") DeliveryMode deliveryMode,
+            @Param("claimToken") String claimToken,
+            @Param("sentAt") LocalDateTime sentAt
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update Notification n
+            set n.status = 'RETRY',
+                n.sentAt = null,
+                n.nextAttemptAt = :nextAttemptAt,
+                n.leaseUntil = null,
+                n.claimToken = null,
+                n.lastErrorType = :lastErrorType
+            where n.id = :id
+              and n.deliveryMode = :deliveryMode
+              and n.status = 'PROCESSING'
+              and n.claimToken = :claimToken
+            """)
+    int markRetryIfClaimMatches(
+            @Param("id") Long id,
+            @Param("deliveryMode") DeliveryMode deliveryMode,
+            @Param("claimToken") String claimToken,
+            @Param("nextAttemptAt") LocalDateTime nextAttemptAt,
+            @Param("lastErrorType") String lastErrorType
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update Notification n
+            set n.status = 'DEAD',
+                n.sentAt = null,
+                n.nextAttemptAt = null,
+                n.leaseUntil = null,
+                n.claimToken = null,
+                n.lastErrorType = :lastErrorType
+            where n.id = :id
+              and n.deliveryMode = :deliveryMode
+              and n.status = 'PROCESSING'
+              and n.claimToken = :claimToken
+            """)
+    int markDeadIfClaimMatches(
+            @Param("id") Long id,
+            @Param("deliveryMode") DeliveryMode deliveryMode,
+            @Param("claimToken") String claimToken,
+            @Param("lastErrorType") String lastErrorType
+    );
 }

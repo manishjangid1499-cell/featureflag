@@ -2,15 +2,18 @@ package com.featureflag.notification_service.service;
 
 import com.featureflag.notification_service.client.AuthRecipientsClient;
 import com.featureflag.notification_service.dto.NotificationRequest;
+import com.featureflag.notification_service.entity.DeliveryMode;
 import com.featureflag.notification_service.entity.Notification;
 import com.featureflag.notification_service.exception.ResourceNotFoundException;
 import com.featureflag.notification_service.exception.ForbiddenException;
+import com.featureflag.notification_service.exception.NotificationConflictException;
 import com.featureflag.notification_service.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -247,13 +250,15 @@ public class NotificationService {
                 .findByStatus(status);
     }
 
+    @Transactional
     public void deleteNotification(
             Long id,
             String userEmail,
             String userRole
     ) {
 
-        Notification notification = notificationRepository.findById(id)
+        Notification notification = notificationRepository
+                .findByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Notification not found with id: " + id
                 ));
@@ -264,7 +269,26 @@ public class NotificationService {
             );
         }
 
+        if (isActiveDurableDelivery(notification)) {
+            throw new NotificationConflictException(
+                    "Active notification delivery cannot be deleted"
+            );
+        }
+
         notificationRepository.delete(notification);
+    }
+
+    private boolean isActiveDurableDelivery(
+            Notification notification
+    ) {
+        if (notification.getDeliveryMode()
+                != DeliveryMode.DURABLE) {
+            return false;
+        }
+
+        return "PENDING".equals(notification.getStatus())
+                || "RETRY".equals(notification.getStatus())
+                || "PROCESSING".equals(notification.getStatus());
     }
 
     private boolean canAccessNotification(

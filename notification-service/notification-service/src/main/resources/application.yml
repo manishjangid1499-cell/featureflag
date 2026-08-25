@@ -1,3 +1,15 @@
 spring:
   profiles:
     active: local
+
+app:
+  notification:
+    delivery:
+      enabled: true
+      max-attempts: 5
+      initial-delay: 30s
+      multiplier: 2
+      max-delay: 15m
+      batch-size: 25
+      lease-duration: 2m
+      poll-interval: 5s
