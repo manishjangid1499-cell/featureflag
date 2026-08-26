@@ -6,10 +6,8 @@ import com.featureflag.notification_service.entity.DeliveryMode;
 import com.featureflag.notification_service.entity.Notification;
 import com.featureflag.notification_service.exception.NotificationConflictException;
 import com.featureflag.notification_service.repository.NotificationRepository;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -56,7 +54,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Testcontainers
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class NotificationDeleteClaimMySqlIT {
 
     private static final LocalDateTime NOW = LocalDateTime.of(
@@ -93,19 +90,6 @@ class NotificationDeleteClaimMySqlIT {
 
     @MockitoBean
     private AuthRecipientsClient authRecipientsClient;
-
-    @BeforeAll
-    void createTestOnlyDueQueueIndex() {
-        jdbcTemplate.execute("""
-                CREATE INDEX idx_test_notifications_delivery_due
-                ON notifications (
-                    delivery_mode,
-                    next_attempt_at,
-                    id,
-                    status
-                )
-                """);
-    }
 
     @BeforeEach
     void setUp() {

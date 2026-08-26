@@ -1,7 +1,11 @@
 spring:
+  flyway:
+    enabled: true
+    baseline-on-migrate: false
+
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: validate
     database-platform: org.hibernate.dialect.MySQLDialect
     show-sql: false
 

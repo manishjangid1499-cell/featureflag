@@ -10,9 +10,13 @@ spring:
     username: ${NOTIFICATION_DB_USERNAME}
     password: ${NOTIFICATION_DB_PASSWORD}
 
+  flyway:
+    enabled: true
+    baseline-on-migrate: false
+
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
 
   kafka:
