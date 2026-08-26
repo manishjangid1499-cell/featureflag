@@ -19,9 +19,13 @@ spring:
     username: ${FLAG_DB_USERNAME}
     password: ${FLAG_DB_PASSWORD}
 
+  flyway:
+    enabled: true
+    baseline-on-migrate: false
+
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
 
 eureka:
