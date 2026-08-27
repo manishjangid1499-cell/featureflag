@@ -18,7 +18,10 @@ public class AuditService {
     }
 
     public List<AuditLog> getAuditLogsByFlagKey(String flagKey) {
-        return auditLogRepository.findByFlagKeyOrderByTimestampDesc(flagKey);
+        return auditLogRepository
+                .findByFlagKeyOrderByOccurredAtDescIdDesc(
+                        flagKey
+                );
     }
 
     public AuditLog getAuditLogById(Long id) {

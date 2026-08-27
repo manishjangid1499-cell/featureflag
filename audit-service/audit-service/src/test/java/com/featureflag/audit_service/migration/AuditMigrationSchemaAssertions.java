@@ -22,15 +22,18 @@ final class AuditMigrationSchemaAssertions {
 
     static void assertPreFlywayLegacySchema(JdbcTemplate jdbcTemplate) {
         assertFalse(tableExists(jdbcTemplate, "flyway_schema_history"));
-        assertBaseSchema(jdbcTemplate);
+        assertSchema(jdbcTemplate, false);
     }
 
     static void assertMigratedSchema(JdbcTemplate jdbcTemplate) {
         assertTrue(tableExists(jdbcTemplate, "flyway_schema_history"));
-        assertBaseSchema(jdbcTemplate);
+        assertSchema(jdbcTemplate, true);
     }
 
-    private static void assertBaseSchema(JdbcTemplate jdbcTemplate) {
+    private static void assertSchema(
+            JdbcTemplate jdbcTemplate,
+            boolean enriched
+    ) {
         assertEquals(
                 BUSINESS_TABLES,
                 Set.copyOf(jdbcTemplate.queryForList(
@@ -48,21 +51,40 @@ final class AuditMigrationSchemaAssertions {
         BUSINESS_TABLES.forEach(
                 tableName -> assertTable(jdbcTemplate, tableName)
         );
-        assertAuditLogColumns(jdbcTemplate);
+        assertAuditLogColumns(jdbcTemplate, enriched);
         assertProcessedEventColumns(jdbcTemplate);
-        assertIndexes(jdbcTemplate);
-        assertConstraints(jdbcTemplate);
+        assertIndexes(jdbcTemplate, enriched);
+        assertConstraints(jdbcTemplate, enriched);
     }
 
-    private static void assertAuditLogColumns(JdbcTemplate jdbcTemplate) {
-        assertEquals(
-                List.of(
+    private static void assertAuditLogColumns(
+            JdbcTemplate jdbcTemplate,
+            boolean enriched
+    ) {
+        List<String> expectedColumns = enriched
+                ? List.of(
+                        "id",
+                        "environment",
+                        "event_type",
+                        "flag_key",
+                        "timestamp",
+                        "event_id",
+                        "source_service",
+                        "actor",
+                        "before_state",
+                        "after_state",
+                        "occurred_at"
+                )
+                : List.of(
                         "id",
                         "environment",
                         "event_type",
                         "flag_key",
                         "timestamp"
-                ),
+                );
+
+        assertEquals(
+                expectedColumns,
                 columnNames(jdbcTemplate, "audit_logs")
         );
 
@@ -77,6 +99,23 @@ final class AuditMigrationSchemaAssertions {
                 "varchar(255)", "varchar", true, 255L, null, "");
         assertColumn(jdbcTemplate, "audit_logs", "timestamp",
                 "varchar(255)", "varchar", true, 255L, null, "");
+
+        if (enriched) {
+            assertColumn(jdbcTemplate, "audit_logs", "event_id",
+                    "varchar(64)", "varchar", true, 64L, null, "");
+            assertColumn(jdbcTemplate, "audit_logs", "source_service",
+                    "varchar(100)", "varchar", true, 100L, null, "");
+            assertColumn(jdbcTemplate, "audit_logs", "actor",
+                    "varchar(255)", "varchar", true, 255L, null, "");
+            assertColumn(jdbcTemplate, "audit_logs", "before_state",
+                    "longtext", "longtext", true, 4_294_967_295L,
+                    null, "");
+            assertColumn(jdbcTemplate, "audit_logs", "after_state",
+                    "longtext", "longtext", true, 4_294_967_295L,
+                    null, "");
+            assertColumn(jdbcTemplate, "audit_logs", "occurred_at",
+                    "datetime(6)", "datetime", true, null, 6L, "");
+        }
     }
 
     private static void assertProcessedEventColumns(
@@ -122,12 +161,24 @@ final class AuditMigrationSchemaAssertions {
         );
     }
 
-    private static void assertIndexes(JdbcTemplate jdbcTemplate) {
-        assertEquals(
-                Set.of(
+    private static void assertIndexes(
+            JdbcTemplate jdbcTemplate,
+            boolean enriched
+    ) {
+        Set<String> expectedIndexes = enriched
+                ? Set.of(
+                        "audit_logs:PRIMARY",
+                        "audit_logs:uk_audit_logs_event_id",
+                        "audit_logs:idx_audit_logs_flag_occurred_at",
+                        "processed_kafka_events:PRIMARY"
+                )
+                : Set.of(
                         "audit_logs:PRIMARY",
                         "processed_kafka_events:PRIMARY"
-                ),
+                );
+
+        assertEquals(
+                expectedIndexes,
                 Set.copyOf(jdbcTemplate.queryForList(
                         """
                         SELECT DISTINCT CONCAT(table_name, ':', index_name)
@@ -156,14 +207,42 @@ final class AuditMigrationSchemaAssertions {
                 List.of("event_id"),
                 true
         );
+
+        if (enriched) {
+            assertIndex(
+                    jdbcTemplate,
+                    "audit_logs",
+                    "uk_audit_logs_event_id",
+                    List.of("event_id"),
+                    true
+            );
+            assertIndex(
+                    jdbcTemplate,
+                    "audit_logs",
+                    "idx_audit_logs_flag_occurred_at",
+                    List.of("flag_key", "occurred_at", "id"),
+                    false
+            );
+        }
     }
 
-    private static void assertConstraints(JdbcTemplate jdbcTemplate) {
-        assertEquals(
-                Set.of(
+    private static void assertConstraints(
+            JdbcTemplate jdbcTemplate,
+            boolean enriched
+    ) {
+        Set<String> expectedConstraints = enriched
+                ? Set.of(
+                        "audit_logs:PRIMARY:PRIMARY KEY",
+                        "audit_logs:uk_audit_logs_event_id:UNIQUE",
+                        "processed_kafka_events:PRIMARY:PRIMARY KEY"
+                )
+                : Set.of(
                         "audit_logs:PRIMARY:PRIMARY KEY",
                         "processed_kafka_events:PRIMARY:PRIMARY KEY"
-                ),
+                );
+
+        assertEquals(
+                expectedConstraints,
                 Set.copyOf(jdbcTemplate.queryForList(
                         """
                         SELECT CONCAT(

@@ -10,6 +10,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 class FlagServiceTransactionalTest {
 
     @Test
+    void mutationAuditWrapperOwnsTheOuterTransaction() {
+        assertThat(
+                FlagMutationAuditService.class.getAnnotation(
+                        Transactional.class
+                )
+        ).isNotNull();
+    }
+
+    @Test
     void mutatingOperationsAreTransactional()
             throws Exception {
 

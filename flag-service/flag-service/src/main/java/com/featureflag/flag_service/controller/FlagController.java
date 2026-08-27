@@ -4,6 +4,7 @@ import com.featureflag.flag_service.dto.FlagEvaluationResponse;
 import com.featureflag.flag_service.dto.FlagRequest;
 import com.featureflag.flag_service.entity.FeatureFlag;
 import com.featureflag.flag_service.service.FlagEvaluationTelemetryService;
+import com.featureflag.flag_service.service.FlagMutationAuditService;
 import com.featureflag.flag_service.service.FlagService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -15,6 +16,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -32,6 +34,8 @@ public class FlagController {
     private final FlagService flagService;
     private final FlagEvaluationTelemetryService
             flagEvaluationTelemetryService;
+    private final FlagMutationAuditService
+            flagMutationAuditService;
 
     // =========================================================
     // CREATE FLAG
@@ -46,8 +50,15 @@ public class FlagController {
             @ApiResponse(responseCode = "400", description = "Invalid request")
     })
     @PostMapping
-    public ResponseEntity<FeatureFlag> createFlag(@Valid @RequestBody FlagRequest request) {
-        FeatureFlag createdFlag = flagService.createFlag(request);
+    public ResponseEntity<FeatureFlag> createFlag(
+            @Valid @RequestBody FlagRequest request,
+            Authentication authentication
+    ) {
+        FeatureFlag createdFlag =
+                flagMutationAuditService.createFlag(
+                        request,
+                        authentication.getName()
+                );
         return ResponseEntity.status(HttpStatus.CREATED).body(createdFlag);
     }
 
@@ -165,9 +176,15 @@ public class FlagController {
     public ResponseEntity<FeatureFlag> updateFlag(
             @Parameter(description = "Feature flag ID", example = "1")
             @PathVariable Long id,
-            @Valid @RequestBody FlagRequest request) {
+            @Valid @RequestBody FlagRequest request,
+            Authentication authentication) {
 
-        FeatureFlag updatedFlag = flagService.updateFlag(id, request);
+        FeatureFlag updatedFlag =
+                flagMutationAuditService.updateFlag(
+                        id,
+                        request,
+                        authentication.getName()
+                );
         return ResponseEntity.ok(updatedFlag);
     }
 
@@ -183,9 +200,13 @@ public class FlagController {
     @DeleteMapping("/{id}")
     public ResponseEntity<String> deleteFlag(
             @Parameter(description = "Feature flag ID", example = "1")
-            @PathVariable Long id) {
+            @PathVariable Long id,
+            Authentication authentication) {
 
-        String message = flagService.deleteFlag(id);
+        String message = flagMutationAuditService.deleteFlag(
+                id,
+                authentication.getName()
+        );
         return ResponseEntity.ok(message);
     }
 
@@ -201,9 +222,14 @@ public class FlagController {
     @PatchMapping("/{id}/toggle")
     public ResponseEntity<FeatureFlag> toggleFlag(
             @Parameter(description = "Feature flag ID", example = "1")
-            @PathVariable Long id) {
+            @PathVariable Long id,
+            Authentication authentication) {
 
-        FeatureFlag toggledFlag = flagService.toggleFlag(id);
+        FeatureFlag toggledFlag =
+                flagMutationAuditService.toggleFlag(
+                        id,
+                        authentication.getName()
+                );
         return ResponseEntity.ok(toggledFlag);
     }
 }

@@ -50,21 +50,22 @@ class AuditFreshMigrationMySqlIT {
     @Test
     void freshSchemaMigratesAndValidates() {
         assertNotNull(entityManagerFactory);
-        assertSuccessfulV1();
+        assertSuccessfulMigrations();
         AuditMigrationSchemaAssertions.assertMigratedSchema(jdbcTemplate);
         assertNoBootstrapRows();
         assertDuplicateProcessedEventRejected();
+        assertDuplicateAuditEventRejected();
         assertEquals(0, flyway.migrate().migrationsExecuted);
     }
 
-    private void assertSuccessfulV1() {
+    private void assertSuccessfulMigrations() {
         assertEquals(
-                1,
+                2,
                 jdbcTemplate.queryForObject(
                         """
                         SELECT COUNT(*)
                         FROM flyway_schema_history
-                        WHERE version = '1'
+                        WHERE version IN ('1', '2')
                           AND type = 'SQL'
                           AND success = 1
                         """,
@@ -106,6 +107,39 @@ class AuditFreshMigrationMySqlIT {
         assertThrows(
                 DataAccessException.class,
                 () -> insertProcessedEvent(EVENT_ID)
+        );
+    }
+
+    private void assertDuplicateAuditEventRejected() {
+        insertAuditEvent(EVENT_ID);
+        assertThrows(
+                DataAccessException.class,
+                () -> insertAuditEvent(EVENT_ID)
+        );
+    }
+
+    private void insertAuditEvent(String eventId) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO audit_logs (
+                    event_id,
+                    event_type,
+                    flag_key,
+                    environment,
+                    timestamp,
+                    source_service,
+                    occurred_at
+                ) VALUES (
+                    ?,
+                    'FLAG_UPDATED',
+                    'fresh-checkout',
+                    'DEV',
+                    '2026-08-26T12:00:00',
+                    'flag-service',
+                    '2026-08-26 12:00:00.000000'
+                )
+                """,
+                eventId
         );
     }
 

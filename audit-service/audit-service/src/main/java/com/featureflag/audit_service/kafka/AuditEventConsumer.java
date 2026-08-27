@@ -1,5 +1,7 @@
 package com.featureflag.audit_service.kafka;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.featureflag.audit_service.entity.AuditLog;
 import com.featureflag.audit_service.entity.ProcessedEvent;
 import com.featureflag.audit_service.event.FlagEvent;
@@ -12,6 +14,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -21,9 +26,18 @@ public class AuditEventConsumer {
     private static final String TOPIC =
             "feature-flag-events";
 
+    private static final Set<String> LIFECYCLE_EVENT_TYPES =
+            Set.of(
+                    "FLAG_CREATED",
+                    "FLAG_UPDATED",
+                    "FLAG_TOGGLED",
+                    "FLAG_DELETED"
+            );
+
     private final AuditLogRepository auditLogRepository;
     private final ProcessedEventRepository
             processedEventRepository;
+    private final ObjectMapper objectMapper;
 
     @KafkaListener(
             topics = TOPIC,
@@ -34,22 +48,28 @@ public class AuditEventConsumer {
         String eventId =
                 requireEventId(event.getEventId());
 
-        requireField(
+        String eventType = requireField(
                 event.getEventType(),
                 "eventType"
         );
-        requireField(
+        String flagKey = requireField(
                 event.getFlagKey(),
                 "flagKey"
         );
-        requireField(
+        String environment = requireField(
                 event.getEnvironment(),
                 "environment"
         );
-        requireField(
+        String timestamp = requireField(
                 event.getTimestamp(),
                 "timestamp"
         );
+
+        if (!LIFECYCLE_EVENT_TYPES.contains(eventType)) {
+            throw new IllegalArgumentException(
+                    "Unsupported audit eventType: " + eventType
+            );
+        }
 
         if (processedEventRepository.existsById(eventId)) {
             log.info(
@@ -60,10 +80,16 @@ public class AuditEventConsumer {
         }
 
         AuditLog auditLog = AuditLog.builder()
-                .eventType(event.getEventType())
-                .flagKey(event.getFlagKey())
-                .environment(event.getEnvironment())
-                .timestamp(event.getTimestamp())
+                .eventId(eventId)
+                .eventType(eventType)
+                .flagKey(flagKey)
+                .environment(environment)
+                .timestamp(timestamp)
+                .sourceService(optional(event.getSourceService()))
+                .actor(optional(event.getActor()))
+                .beforeState(toJson(event.getBefore()))
+                .afterState(toJson(event.getAfter()))
+                .occurredAt(resolveOccurredAt(event, timestamp))
                 .build();
 
         auditLogRepository.save(auditLog);
@@ -80,9 +106,56 @@ public class AuditEventConsumer {
                 "Audit event persisted; eventId={} "
                         + "eventType={} flagKey={}",
                 eventId,
-                event.getEventType(),
+                eventType,
                 event.getFlagKey()
         );
+    }
+
+    private String toJson(Object snapshot) {
+        if (snapshot == null) {
+            return null;
+        }
+
+        try {
+            return objectMapper.writeValueAsString(snapshot);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalArgumentException(
+                    "Unable to serialize flag audit snapshot",
+                    exception
+            );
+        }
+    }
+
+    private LocalDateTime resolveOccurredAt(
+            FlagEvent event,
+            String timestamp
+    ) {
+        if (event.getOccurredAt() != null) {
+            return event.getOccurredAt();
+        }
+
+        try {
+            return LocalDateTime.parse(timestamp);
+        } catch (DateTimeParseException localFailure) {
+            try {
+                return OffsetDateTime.parse(timestamp)
+                        .toLocalDateTime();
+            } catch (DateTimeParseException offsetFailure) {
+                log.warn(
+                        "Audit event timestamp could not be converted; "
+                                + "eventId={} errorType={}",
+                        event.getEventId(),
+                        offsetFailure.getClass().getSimpleName()
+                );
+                return null;
+            }
+        }
+    }
+
+    private String optional(String value) {
+        return value == null || value.isBlank()
+                ? null
+                : value.trim();
     }
 
     private String requireField(
@@ -96,7 +169,7 @@ public class AuditEventConsumer {
                             + " is required"
             );
         }
-        return value;
+        return value.trim();
     }
 
     private String requireEventId(String eventId) {

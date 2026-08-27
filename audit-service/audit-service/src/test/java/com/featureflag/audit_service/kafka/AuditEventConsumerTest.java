@@ -1,16 +1,22 @@
 package com.featureflag.audit_service.kafka;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.featureflag.audit_service.entity.AuditLog;
 import com.featureflag.audit_service.entity.ProcessedEvent;
+import com.featureflag.audit_service.event.FlagAuditSnapshot;
 import com.featureflag.audit_service.event.FlagEvent;
 import com.featureflag.audit_service.repository.AuditLogRepository;
 import com.featureflag.audit_service.repository.ProcessedEventRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -29,12 +35,31 @@ class AuditEventConsumerTest {
     private ProcessedEventRepository
             processedEventRepository;
 
-    @InjectMocks
     private AuditEventConsumer consumer;
 
+    private final ObjectMapper objectMapper =
+            new ObjectMapper().findAndRegisterModules();
+
+    @BeforeEach
+    void setUp() {
+        consumer = new AuditEventConsumer(
+                auditLogRepository,
+                processedEventRepository,
+                objectMapper
+        );
+    }
+
     @Test
-    void successfulEventPersistsBusinessRecordAndMarker() {
+    void enrichedEventPersistsSnapshotsActorSourceAndMarker()
+            throws Exception {
         FlagEvent event = event();
+        event.setSourceService("flag-service");
+        event.setActor("actor-123");
+        event.setBefore(snapshot(false, "old description"));
+        event.setAfter(snapshot(true, "new description"));
+        event.setOccurredAt(LocalDateTime.parse(
+                "2026-08-20T10:00:00.123456"
+        ));
 
         consumer.consume(event);
 
@@ -45,12 +70,33 @@ class AuditEventConsumerTest {
                 auditCaptor.capture()
         );
 
-        assertThat(auditCaptor.getValue().getEventType())
-                .isEqualTo("UPDATED");
-        assertThat(auditCaptor.getValue().getFlagKey())
+        AuditLog auditLog = auditCaptor.getValue();
+        assertThat(auditLog.getEventId()).isEqualTo("event-1");
+        assertThat(auditLog.getEventType())
+                .isEqualTo("FLAG_UPDATED");
+        assertThat(auditLog.getFlagKey())
                 .isEqualTo("checkout");
-        assertThat(auditCaptor.getValue().getEnvironment())
+        assertThat(auditLog.getEnvironment())
                 .isEqualTo("DEV");
+        assertThat(auditLog.getSourceService())
+                .isEqualTo("flag-service");
+        assertThat(auditLog.getActor()).isEqualTo("actor-123");
+        assertThat(auditLog.getOccurredAt()).isEqualTo(
+                LocalDateTime.parse("2026-08-20T10:00:00.123456")
+        );
+
+        JsonNode before = objectMapper.readTree(
+                auditLog.getBeforeState()
+        );
+        JsonNode after = objectMapper.readTree(
+                auditLog.getAfterState()
+        );
+        assertThat(before.get("enabled").asBoolean()).isFalse();
+        assertThat(before.get("description").asText())
+                .isEqualTo("old description");
+        assertThat(after.get("enabled").asBoolean()).isTrue();
+        assertThat(after.get("description").asText())
+                .isEqualTo("new description");
 
         ArgumentCaptor<ProcessedEvent> markerCaptor =
                 ArgumentCaptor.forClass(
@@ -63,6 +109,48 @@ class AuditEventConsumerTest {
 
         assertThat(markerCaptor.getValue().getEventId())
                 .isEqualTo("event-1");
+        assertThat(markerCaptor.getValue().getTopic())
+                .isEqualTo("feature-flag-events");
+    }
+
+    @Test
+    void legacyEventWithoutOptionalEnrichmentRemainsConsumable() {
+        consumer.consume(event());
+
+        ArgumentCaptor<AuditLog> captor =
+                ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+
+        AuditLog auditLog = captor.getValue();
+        assertThat(auditLog.getSourceService()).isNull();
+        assertThat(auditLog.getActor()).isNull();
+        assertThat(auditLog.getBeforeState()).isNull();
+        assertThat(auditLog.getAfterState()).isNull();
+        assertThat(auditLog.getOccurredAt()).isEqualTo(
+                LocalDateTime.parse("2026-08-20T10:00:00")
+        );
+    }
+
+    @Test
+    void unparseableLegacyTimestampIsPreservedWithoutInventingTime() {
+        FlagEvent event = event();
+        event.setTimestamp("legacy-time-value");
+
+        consumer.consume(event);
+
+        ArgumentCaptor<AuditLog> captor =
+                ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getTimestamp())
+                .isEqualTo("legacy-time-value");
+        assertThat(captor.getValue().getOccurredAt()).isNull();
+    }
+
+    @Test
+    void evaluationTelemetryIsRejectedBeforeAuditWrites() {
+        FlagEvent event = event();
+        event.setEventType("EVALUATION_ENABLED");
+        assertRejectedBeforeWrites(event);
     }
 
     @Test
@@ -181,12 +269,30 @@ class AuditEventConsumerTest {
     private FlagEvent event() {
         FlagEvent event = new FlagEvent();
         event.setEventId("event-1");
-        event.setEventType("UPDATED");
+        event.setEventType("FLAG_UPDATED");
         event.setFlagKey("checkout");
         event.setEnvironment("DEV");
         event.setTimestamp(
                 "2026-08-20T10:00:00Z"
         );
         return event;
+    }
+
+    private FlagAuditSnapshot snapshot(
+            boolean enabled,
+            String description
+    ) {
+        return new FlagAuditSnapshot(
+                10L,
+                "checkout",
+                "Checkout",
+                description,
+                "DEV",
+                enabled,
+                50,
+                null,
+                null,
+                List.of("user-1")
+        );
     }
 }

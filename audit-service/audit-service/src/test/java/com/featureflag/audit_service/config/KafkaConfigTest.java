@@ -122,8 +122,10 @@ class KafkaConfigTest {
                 headers,
                 """
                 {
-                  "eventType":"UPDATED",
+                  "eventId":"legacy-event-1",
+                  "eventType":"FLAG_UPDATED",
                   "flagKey":"checkout",
+                  "environment":"DEV",
                   "timestamp":"2026-08-19T10:00:00Z"
                 }
                 """.getBytes(StandardCharsets.UTF_8)
@@ -131,11 +133,69 @@ class KafkaConfigTest {
 
         assertThat(event).isInstanceOf(FlagEvent.class);
         assertThat(event.getEventType())
-                .isEqualTo("UPDATED");
+                .isEqualTo("FLAG_UPDATED");
         assertThat(event.getFlagKey())
                 .isEqualTo("checkout");
         assertThat(event.getTimestamp())
                 .isEqualTo("2026-08-19T10:00:00Z");
+        assertThat(event.getSourceService()).isNull();
+        assertThat(event.getActor()).isNull();
+        assertThat(event.getBefore()).isNull();
+        assertThat(event.getAfter()).isNull();
+        assertThat(event.getOccurredAt()).isNull();
+    }
+
+    @Test
+    void enrichedLifecycleContractDeserializesWithSnapshots() {
+        KafkaProperties properties = kafkaProperties();
+        DefaultKafkaConsumerFactory<String, FlagEvent> factory =
+                (DefaultKafkaConsumerFactory<String, FlagEvent>)
+                        new KafkaConfig(properties).consumerFactory();
+        Map<String, Object> configuration =
+                factory.getConfigurationProperties();
+        ErrorHandlingDeserializer<FlagEvent> deserializer =
+                (ErrorHandlingDeserializer<FlagEvent>)
+                        factory.getValueDeserializer();
+        deserializer.configure(configuration, false);
+
+        FlagEvent event = deserializer.deserialize(
+                "feature-flag-events",
+                new RecordHeaders(),
+                """
+                {
+                  "eventId":"audit-event-1",
+                  "eventType":"FLAG_TOGGLED",
+                  "flagKey":"checkout",
+                  "environment":"DEV",
+                  "timestamp":"2026-08-27T12:00:00.123456",
+                  "sourceService":"flag-service",
+                  "actor":"actor-123",
+                  "before":{
+                    "id":10,
+                    "flagKey":"checkout",
+                    "environment":"DEV",
+                    "enabled":false,
+                    "targetUsers":["user-1"]
+                  },
+                  "after":{
+                    "id":10,
+                    "flagKey":"checkout",
+                    "environment":"DEV",
+                    "enabled":true,
+                    "targetUsers":["user-1"]
+                  },
+                  "occurredAt":"2026-08-27T12:00:00.123456"
+                }
+                """.getBytes(StandardCharsets.UTF_8)
+        );
+
+        assertThat(event).isNotNull();
+        assertThat(event.getSourceService()).isEqualTo("flag-service");
+        assertThat(event.getActor()).isEqualTo("actor-123");
+        assertThat(event.getBefore().enabled()).isFalse();
+        assertThat(event.getAfter().enabled()).isTrue();
+        assertThat(event.getOccurredAt().toString())
+                .isEqualTo("2026-08-27T12:00:00.123456");
     }
 
     @Test

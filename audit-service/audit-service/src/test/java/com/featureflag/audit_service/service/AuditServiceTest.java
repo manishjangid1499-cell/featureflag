@@ -1,5 +1,6 @@
 package com.featureflag.audit_service.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.featureflag.audit_service.entity.AuditLog;
 import com.featureflag.audit_service.event.FlagEvent;
 import com.featureflag.audit_service.kafka.AuditEventConsumer;
@@ -84,7 +85,7 @@ class AuditServiceTest {
     void testGetAuditLogsByFlagKey() {
         when(
                 repository
-                        .findByFlagKeyOrderByTimestampDesc(
+                        .findByFlagKeyOrderByOccurredAtDescIdDesc(
                                 "NEW_CHECKOUT"
                         )
         ).thenReturn(List.of(testLog));
@@ -143,7 +144,8 @@ class AuditServiceTest {
         AuditEventConsumer consumer =
                 new AuditEventConsumer(
                         repository,
-                        processedEventRepository
+                        processedEventRepository,
+                        new ObjectMapper().findAndRegisterModules()
                 );
 
         FlagEvent event =

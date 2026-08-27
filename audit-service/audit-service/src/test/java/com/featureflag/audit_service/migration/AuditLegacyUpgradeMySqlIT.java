@@ -66,8 +66,8 @@ class AuditLegacyUpgradeMySqlIT {
 
         MigrateResult firstMigration = flyway.migrate();
 
-        assertEquals(0, firstMigration.migrationsExecuted);
-        assertBaselineHistory(jdbcTemplate);
+        assertEquals(1, firstMigration.migrationsExecuted);
+        assertMigrationHistory(jdbcTemplate);
         AuditMigrationSchemaAssertions.assertMigratedSchema(jdbcTemplate);
         assertLegacyRowsAfterBaseline(jdbcTemplate);
         assertTrue(flyway.validateWithResult().validationSuccessful);
@@ -104,7 +104,7 @@ class AuditLegacyUpgradeMySqlIT {
         );
     }
 
-    private void assertBaselineHistory(JdbcTemplate jdbcTemplate) {
+    private void assertMigrationHistory(JdbcTemplate jdbcTemplate) {
         assertEquals(
                 1,
                 jdbcTemplate.queryForObject(
@@ -130,6 +130,19 @@ class AuditLegacyUpgradeMySqlIT {
                         Integer.class
                 )
         );
+        assertEquals(
+                1,
+                jdbcTemplate.queryForObject(
+                        """
+                        SELECT COUNT(*)
+                        FROM flyway_schema_history
+                        WHERE version = '2'
+                          AND type = 'SQL'
+                          AND success = 1
+                        """,
+                        Integer.class
+                )
+        );
     }
 
     private void assertLegacyRowsAfterBaseline(
@@ -147,6 +160,12 @@ class AuditLegacyUpgradeMySqlIT {
                           AND flag_key = 'fixture-checkout'
                           AND timestamp =
                               '2026-08-20T10:00:00.123456Z'
+                          AND event_id IS NULL
+                          AND source_service IS NULL
+                          AND actor IS NULL
+                          AND before_state IS NULL
+                          AND after_state IS NULL
+                          AND occurred_at IS NULL
                         """,
                         Integer.class
                 )
@@ -162,6 +181,12 @@ class AuditLegacyUpgradeMySqlIT {
                           AND event_type IS NULL
                           AND flag_key IS NULL
                           AND timestamp IS NULL
+                          AND event_id IS NULL
+                          AND source_service IS NULL
+                          AND actor IS NULL
+                          AND before_state IS NULL
+                          AND after_state IS NULL
+                          AND occurred_at IS NULL
                         """,
                         Integer.class
                 )

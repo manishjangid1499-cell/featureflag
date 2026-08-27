@@ -211,6 +211,45 @@ class KafkaConfigTest {
     }
 
     @Test
+    void enrichedLifecycleFieldsRemainBackwardCompatible() {
+        KafkaProperties properties = kafkaProperties();
+        DefaultKafkaConsumerFactory<String, FlagEvent> factory =
+                (DefaultKafkaConsumerFactory<String, FlagEvent>)
+                        new KafkaConfig(properties).consumerFactory();
+        Map<String, Object> configuration =
+                factory.getConfigurationProperties();
+        ErrorHandlingDeserializer<FlagEvent> deserializer =
+                (ErrorHandlingDeserializer<FlagEvent>)
+                        factory.getValueDeserializer();
+        deserializer.configure(configuration, false);
+
+        FlagEvent event = deserializer.deserialize(
+                "feature-flag-events",
+                new RecordHeaders(),
+                """
+                {
+                  "eventId":"audit-event-1",
+                  "eventType":"FLAG_UPDATED",
+                  "flagKey":"checkout",
+                  "environment":"DEV",
+                  "timestamp":"2026-08-27T12:00:00",
+                  "sourceService":"flag-service",
+                  "actor":"actor-123",
+                  "before":{"enabled":false},
+                  "after":{"enabled":true},
+                  "occurredAt":"2026-08-27T12:00:00"
+                }
+                """.getBytes(StandardCharsets.UTF_8)
+        );
+
+        assertThat(event).isNotNull();
+        assertThat(event.getEventId()).isEqualTo("audit-event-1");
+        assertThat(event.getEventType()).isEqualTo("FLAG_UPDATED");
+        assertThat(event.getFlagKey()).isEqualTo("checkout");
+        assertThat(event.getEnvironment()).isEqualTo("DEV");
+    }
+
+    @Test
     void listenerFactoryUsesRecordAckAndDefaultErrorHandler() {
         KafkaConfig config =
                 new KafkaConfig(kafkaProperties());

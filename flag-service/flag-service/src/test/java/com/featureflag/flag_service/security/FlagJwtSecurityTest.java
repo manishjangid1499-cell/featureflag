@@ -4,6 +4,7 @@ import com.featureflag.flag_service.config.OpenApiConfig;
 import com.featureflag.flag_service.controller.FlagController;
 import com.featureflag.flag_service.entity.FeatureFlag;
 import com.featureflag.flag_service.service.FlagEvaluationTelemetryService;
+import com.featureflag.flag_service.service.FlagMutationAuditService;
 import com.featureflag.flag_service.service.FlagService;
 import com.nimbusds.jose.JOSEObjectType;
 import com.nimbusds.jose.JWSAlgorithm;
@@ -41,6 +42,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -76,11 +78,16 @@ class FlagJwtSecurityTest {
     private FlagEvaluationTelemetryService
             flagEvaluationTelemetryService;
 
+    @MockitoBean
+    private FlagMutationAuditService flagMutationAuditService;
+
     @BeforeEach
     void setUp() {
         when(flagService.getAllFlags()).thenReturn(List.of());
-        when(flagService.toggleFlag(1L)).thenReturn(FeatureFlag.builder().id(1L).build());
-        when(flagService.deleteFlag(1L)).thenReturn("deleted");
+        when(flagMutationAuditService.toggleFlag(1L, EMAIL))
+                .thenReturn(FeatureFlag.builder().id(1L).build());
+        when(flagMutationAuditService.deleteFlag(1L, EMAIL))
+                .thenReturn("deleted");
     }
 
     @Test
@@ -173,6 +180,19 @@ class FlagJwtSecurityTest {
         assertEquals(1, authentication.getAuthorities().size());
         assertTrue(authentication.getAuthorities().stream()
                 .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN")));
+    }
+
+    @Test
+    void mutationPassesJwtSubjectToAuditWrapper() throws Exception {
+        String token = validTimingToken("ADMIN");
+
+        mockMvc.perform(
+                patch("/flags/1/toggle")
+                        .header("Authorization", "Bearer " + token)
+        ).andExpect(status().isOk());
+
+        verify(flagMutationAuditService)
+                .toggleFlag(1L, EMAIL);
     }
 
     @Test
