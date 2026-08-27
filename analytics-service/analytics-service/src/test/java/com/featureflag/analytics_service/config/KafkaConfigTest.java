@@ -173,6 +173,44 @@ class KafkaConfigTest {
     }
 
     @Test
+    void evaluationTelemetryContractDeserializesWithConfiguredFactory() {
+        KafkaProperties properties = kafkaProperties();
+
+        DefaultKafkaConsumerFactory<String, FlagEvent> factory =
+                (DefaultKafkaConsumerFactory<String, FlagEvent>)
+                        new KafkaConfig(properties).consumerFactory();
+        Map<String, Object> configuration =
+                factory.getConfigurationProperties();
+        ErrorHandlingDeserializer<FlagEvent> deserializer =
+                (ErrorHandlingDeserializer<FlagEvent>)
+                        factory.getValueDeserializer();
+        deserializer.configure(configuration, false);
+
+        FlagEvent event = deserializer.deserialize(
+                "feature-flag-evaluations",
+                new RecordHeaders(),
+                """
+                {
+                  "eventId":"evaluation-1",
+                  "eventType":"EVALUATION_ENABLED",
+                  "flagKey":"checkout",
+                  "environment":"DEV",
+                  "timestamp":"2026-08-27T12:00:00Z"
+                }
+                """.getBytes(StandardCharsets.UTF_8)
+        );
+
+        assertThat(event).isNotNull();
+        assertThat(event.getEventId()).isEqualTo("evaluation-1");
+        assertThat(event.getEventType())
+                .isEqualTo(FlagEvent.EVALUATION_ENABLED);
+        assertThat(event.getFlagKey()).isEqualTo("checkout");
+        assertThat(event.getEnvironment()).isEqualTo("DEV");
+        assertThat(event.getTimestamp())
+                .isEqualTo("2026-08-27T12:00:00Z");
+    }
+
+    @Test
     void listenerFactoryUsesRecordAckAndDefaultErrorHandler() {
         KafkaConfig config =
                 new KafkaConfig(kafkaProperties());

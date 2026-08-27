@@ -3,6 +3,7 @@ package com.featureflag.flag_service.controller;
 import com.featureflag.flag_service.dto.FlagEvaluationResponse;
 import com.featureflag.flag_service.dto.FlagRequest;
 import com.featureflag.flag_service.entity.FeatureFlag;
+import com.featureflag.flag_service.service.FlagEvaluationTelemetryService;
 import com.featureflag.flag_service.service.FlagService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -29,6 +30,8 @@ import java.util.List;
 public class FlagController {
 
     private final FlagService flagService;
+    private final FlagEvaluationTelemetryService
+            flagEvaluationTelemetryService;
 
     // =========================================================
     // CREATE FLAG
@@ -139,7 +142,12 @@ public class FlagController {
             @Parameter(description = "Environment", example = "DEV")
             @RequestParam String environment) {
 
-        FlagEvaluationResponse response = flagService.evaluateFlag(flagKey, userId, environment);
+        FlagEvaluationResponse response =
+                flagEvaluationTelemetryService.evaluateFlag(
+                        flagKey,
+                        userId,
+                        environment
+                );
         return ResponseEntity.ok(response);
     }
 

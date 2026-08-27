@@ -3,6 +3,7 @@ package com.featureflag.flag_service.security;
 import com.featureflag.flag_service.config.OpenApiConfig;
 import com.featureflag.flag_service.controller.FlagController;
 import com.featureflag.flag_service.entity.FeatureFlag;
+import com.featureflag.flag_service.service.FlagEvaluationTelemetryService;
 import com.featureflag.flag_service.service.FlagService;
 import com.nimbusds.jose.JOSEObjectType;
 import com.nimbusds.jose.JWSAlgorithm;
@@ -70,6 +71,10 @@ class FlagJwtSecurityTest {
 
     @MockitoBean
     private FlagService flagService;
+
+    @MockitoBean
+    private FlagEvaluationTelemetryService
+            flagEvaluationTelemetryService;
 
     @BeforeEach
     void setUp() {
