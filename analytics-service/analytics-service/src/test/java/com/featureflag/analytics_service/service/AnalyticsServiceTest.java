@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -83,42 +84,63 @@ class AnalyticsServiceTest {
     }
 
     @Test
-    @DisplayName("Process Event - New Event Initializes Count to 1")
+    @DisplayName("Process Event - Atomically Creates Count One")
     void testProcessEvent_NewEvent() {
+        AnalyticsEvent created = AnalyticsEvent.builder()
+                .id(2L)
+                .flagKey("DARK_MODE")
+                .environment("DEV")
+                .eventType("FLAG_CREATED")
+                .count(1L)
+                .build();
         when(
                 repository.findByFlagKeyAndEnvironmentAndEventType(
                         "DARK_MODE",
                         "DEV",
                         "FLAG_CREATED"
                 )
-        ).thenReturn(Optional.empty());
-        when(repository.save(any(AnalyticsEvent.class))).thenAnswer(i -> i.getArgument(0));
+        ).thenReturn(Optional.of(created));
 
-        AnalyticsEvent created =
+        AnalyticsEvent result =
                 service.processEvent(
                         "DARK_MODE",
                         "DEV",
                         "FLAG_CREATED"
                 );
 
-        assertNotNull(created);
-        assertEquals(1L, created.getCount());
-        assertEquals("DARK_MODE", created.getFlagKey());
-        assertEquals("DEV", created.getEnvironment());
-        assertEquals("FLAG_CREATED", created.getEventType());
+        assertSame(created, result);
+        InOrder inOrder = inOrder(repository);
+        inOrder.verify(repository).incrementOrCreate(
+                "DARK_MODE",
+                "DEV",
+                "FLAG_CREATED"
+        );
+        inOrder.verify(repository)
+                .findByFlagKeyAndEnvironmentAndEventType(
+                        "DARK_MODE",
+                        "DEV",
+                        "FLAG_CREATED"
+                );
+        verify(repository, never()).save(any(AnalyticsEvent.class));
     }
 
     @Test
-    @DisplayName("Process Event - Existing Event Increments Count from 5 to 6")
+    @DisplayName("Process Event - Atomically Increments Existing Aggregate")
     void testProcessEvent_ExistingEvent() {
+        AnalyticsEvent updatedEvent = AnalyticsEvent.builder()
+                .id(1L)
+                .flagKey("NEW_CHECKOUT")
+                .environment("DEV")
+                .eventType("FLAG_EVALUATED")
+                .count(6L)
+                .build();
         when(
                 repository.findByFlagKeyAndEnvironmentAndEventType(
                         "NEW_CHECKOUT",
                         "DEV",
                         "FLAG_EVALUATED"
                 )
-        ).thenReturn(Optional.of(testEvent));
-        when(repository.save(any(AnalyticsEvent.class))).thenAnswer(i -> i.getArgument(0));
+        ).thenReturn(Optional.of(updatedEvent));
 
         AnalyticsEvent updated =
                 service.processEvent(
@@ -130,32 +152,51 @@ class AnalyticsServiceTest {
         assertNotNull(updated);
         assertEquals(6L, updated.getCount());
         assertEquals("DEV", updated.getEnvironment());
+        InOrder inOrder = inOrder(repository);
+        inOrder.verify(repository).incrementOrCreate(
+                "NEW_CHECKOUT",
+                "DEV",
+                "FLAG_EVALUATED"
+        );
+        inOrder.verify(repository)
+                .findByFlagKeyAndEnvironmentAndEventType(
+                        "NEW_CHECKOUT",
+                        "DEV",
+                        "FLAG_EVALUATED"
+                );
+        verify(repository, never()).save(any(AnalyticsEvent.class));
     }
 
     @Test
     @DisplayName("Process Event - Same Flag Uses Separate Environment Aggregate")
     void testProcessEvent_SameFlagDifferentEnvironment() {
+        AnalyticsEvent created = AnalyticsEvent.builder()
+                .id(3L)
+                .flagKey("NEW_CHECKOUT")
+                .environment("PROD")
+                .eventType("FLAG_EVALUATED")
+                .count(1L)
+                .build();
         when(
                 repository.findByFlagKeyAndEnvironmentAndEventType(
                         "NEW_CHECKOUT",
                         "PROD",
                         "FLAG_EVALUATED"
                 )
-        ).thenReturn(Optional.empty());
-        when(repository.save(any(AnalyticsEvent.class)))
-                .thenAnswer(i -> i.getArgument(0));
-        AnalyticsEvent created =
+        ).thenReturn(Optional.of(created));
+        AnalyticsEvent result =
                 service.processEvent(
                         "NEW_CHECKOUT",
                         "PROD",
                         "FLAG_EVALUATED"
                 );
-        assertNotNull(created);
-        assertNotSame(testEvent, created);
-        assertEquals("NEW_CHECKOUT", created.getFlagKey());
-        assertEquals("PROD", created.getEnvironment());
-        assertEquals("FLAG_EVALUATED", created.getEventType());
-        assertEquals(1L, created.getCount());
+        assertSame(created, result);
+        verify(repository).incrementOrCreate(
+                "NEW_CHECKOUT",
+                "PROD",
+                "FLAG_EVALUATED"
+        );
+        verify(repository, never()).save(any(AnalyticsEvent.class));
     }
 
     @Test

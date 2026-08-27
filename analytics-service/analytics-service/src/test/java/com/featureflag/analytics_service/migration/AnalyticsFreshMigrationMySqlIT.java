@@ -17,6 +17,8 @@ import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -51,17 +53,18 @@ class AnalyticsFreshMigrationMySqlIT {
     @Test
     void freshSchemaMigratesAndValidates() {
         assertNotNull(entityManagerFactory);
-        assertSuccessfulV1();
+        assertSuccessfulMigrations();
         AnalyticsMigrationSchemaAssertions.assertMigratedSchema(
                 jdbcTemplate
         );
         assertNoBootstrapRows();
-        assertDuplicateAggregateKeysAllowed();
+        assertDuplicateAggregateKeysRejected();
+        assertAggregateLookupUsesUniqueIndex();
         assertDuplicateProcessedEventRejected();
         assertEquals(0, flyway.migrate().migrationsExecuted);
     }
 
-    private void assertSuccessfulV1() {
+    private void assertSuccessfulMigrations() {
         assertEquals(
                 1,
                 jdbcTemplate.queryForObject(
@@ -69,6 +72,19 @@ class AnalyticsFreshMigrationMySqlIT {
                         SELECT COUNT(*)
                         FROM flyway_schema_history
                         WHERE version = '1'
+                          AND type = 'SQL'
+                          AND success = 1
+                        """,
+                        Integer.class
+                )
+        );
+        assertEquals(
+                1,
+                jdbcTemplate.queryForObject(
+                        """
+                        SELECT COUNT(*)
+                        FROM flyway_schema_history
+                        WHERE version = '2'
                           AND type = 'SQL'
                           AND success = 1
                         """,
@@ -105,12 +121,15 @@ class AnalyticsFreshMigrationMySqlIT {
         );
     }
 
-    private void assertDuplicateAggregateKeysAllowed() {
+    private void assertDuplicateAggregateKeysRejected() {
         insertAggregate(5L);
-        insertAggregate(4L);
+        assertThrows(
+                DataAccessException.class,
+                () -> insertAggregate(4L)
+        );
 
         assertEquals(
-                2,
+                1,
                 jdbcTemplate.queryForObject(
                         """
                         SELECT COUNT(*)
@@ -121,6 +140,24 @@ class AnalyticsFreshMigrationMySqlIT {
                         """,
                         Integer.class
                 )
+        );
+    }
+
+    private void assertAggregateLookupUsesUniqueIndex() {
+        Map<String, Object> explain = jdbcTemplate.queryForMap(
+                """
+                EXPLAIN
+                SELECT id, count
+                FROM analytics_events
+                WHERE flag_key = 'fresh-checkout'
+                  AND environment = 'DEV'
+                  AND event_type = 'FLAG_EVALUATED'
+                """
+        );
+
+        assertEquals(
+                "uk_analytics_events_dimensions",
+                explain.get("key")
         );
     }
 

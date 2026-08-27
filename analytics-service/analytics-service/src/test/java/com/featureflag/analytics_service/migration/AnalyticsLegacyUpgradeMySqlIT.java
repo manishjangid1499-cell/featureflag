@@ -47,7 +47,7 @@ class AnalyticsLegacyUpgradeMySqlIT {
                     );
 
     @Test
-    void verifiedLegacySchemaBaselinesAndValidates() {
+    void verifiedLegacySchemaBaselinesMigratesAndValidates() {
         JdbcTemplate jdbcTemplate = jdbcTemplate();
 
         AnalyticsMigrationSchemaAssertions.assertPreFlywayLegacySchema(
@@ -68,12 +68,12 @@ class AnalyticsLegacyUpgradeMySqlIT {
 
         MigrateResult firstMigration = flyway.migrate();
 
-        assertEquals(0, firstMigration.migrationsExecuted);
-        assertBaselineHistory(jdbcTemplate);
+        assertEquals(1, firstMigration.migrationsExecuted);
+        assertMigrationHistory(jdbcTemplate);
         AnalyticsMigrationSchemaAssertions.assertMigratedSchema(
                 jdbcTemplate
         );
-        assertLegacyRowsAfterBaseline(jdbcTemplate);
+        assertLegacyRowsAfterMigration(jdbcTemplate);
         assertTrue(flyway.validateWithResult().validationSuccessful);
         assertHibernateValidate();
         assertEquals(0, flyway.migrate().migrationsExecuted);
@@ -106,9 +106,32 @@ class AnalyticsLegacyUpgradeMySqlIT {
                         Integer.class
                 )
         );
+        assertEquals(
+                1,
+                matchingAggregateCount(jdbcTemplate, 101L, 5L)
+        );
+        assertEquals(
+                1,
+                matchingAggregateCount(jdbcTemplate, 102L, 3L)
+        );
+        assertEquals(
+                1,
+                jdbcTemplate.queryForObject(
+                        """
+                        SELECT COUNT(*)
+                        FROM analytics_events
+                        WHERE id = 103
+                          AND count IS NULL
+                          AND environment IS NULL
+                          AND event_type IS NULL
+                          AND flag_key IS NULL
+                        """,
+                        Integer.class
+                )
+        );
     }
 
-    private void assertBaselineHistory(JdbcTemplate jdbcTemplate) {
+    private void assertMigrationHistory(JdbcTemplate jdbcTemplate) {
         assertEquals(
                 1,
                 jdbcTemplate.queryForObject(
@@ -134,21 +157,37 @@ class AnalyticsLegacyUpgradeMySqlIT {
                         Integer.class
                 )
         );
+        assertEquals(
+                1,
+                jdbcTemplate.queryForObject(
+                        """
+                        SELECT COUNT(*)
+                        FROM flyway_schema_history
+                        WHERE version = '2'
+                          AND type = 'SQL'
+                          AND success = 1
+                        """,
+                        Integer.class
+                )
+        );
     }
 
-    private void assertLegacyRowsAfterBaseline(
+    private void assertLegacyRowsAfterMigration(
             JdbcTemplate jdbcTemplate
     ) {
         assertEquals(
                 1,
-                matchingAggregateCount(jdbcTemplate, 101L, 5L)
+                matchingAggregateCount(jdbcTemplate, 101L, 8L)
+        );
+        assertEquals(
+                0,
+                jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM analytics_events WHERE id = 102",
+                        Integer.class
+                )
         );
         assertEquals(
                 1,
-                matchingAggregateCount(jdbcTemplate, 102L, 3L)
-        );
-        assertEquals(
-                2,
                 jdbcTemplate.queryForObject(
                         """
                         SELECT COUNT(*)
@@ -167,7 +206,7 @@ class AnalyticsLegacyUpgradeMySqlIT {
                         SELECT COUNT(*)
                         FROM analytics_events
                         WHERE id = 103
-                          AND count IS NULL
+                          AND count = 0
                           AND environment IS NULL
                           AND event_type IS NULL
                           AND flag_key IS NULL
@@ -190,7 +229,7 @@ class AnalyticsLegacyUpgradeMySqlIT {
                 )
         );
         assertEquals(
-                3,
+                2,
                 jdbcTemplate.queryForObject(
                         "SELECT COUNT(*) FROM analytics_events",
                         Integer.class

@@ -4,6 +4,7 @@ import com.featureflag.analytics_service.entity.AnalyticsEvent;
 import com.featureflag.analytics_service.repository.AnalyticsEventRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -48,32 +49,27 @@ public class AnalyticsService {
     /**
      * Process an event received from Kafka.
      */
+    @Transactional
     public AnalyticsEvent processEvent(
             String flagKey,
             String environment,
             String eventType
     ) {
-        AnalyticsEvent analyticsEvent =
-                analyticsEventRepository
-                        .findByFlagKeyAndEnvironmentAndEventType(
-                                flagKey,
-                                environment,
-                                eventType
-                        )
-                        .orElse(
-                                AnalyticsEvent.builder()
-                                        .flagKey(flagKey)
-                                        .environment(environment)
-                                        .eventType(eventType)
-                                        .count(0L)
-                                        .build()
-                        );
-        analyticsEvent.setCount(
-                analyticsEvent.getCount() + 1
+        analyticsEventRepository.incrementOrCreate(
+                flagKey,
+                environment,
+                eventType
         );
-        return analyticsEventRepository.save(
-                analyticsEvent
-        );
+
+        return analyticsEventRepository
+                .findByFlagKeyAndEnvironmentAndEventType(
+                        flagKey,
+                        environment,
+                        eventType
+                )
+                .orElseThrow(() -> new IllegalStateException(
+                        "Atomic analytics update did not produce a row"
+                ));
     }
 
     /**

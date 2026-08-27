@@ -22,15 +22,18 @@ final class AnalyticsMigrationSchemaAssertions {
 
     static void assertPreFlywayLegacySchema(JdbcTemplate jdbcTemplate) {
         assertFalse(tableExists(jdbcTemplate, "flyway_schema_history"));
-        assertBaseSchema(jdbcTemplate);
+        assertSchema(jdbcTemplate, false);
     }
 
     static void assertMigratedSchema(JdbcTemplate jdbcTemplate) {
         assertTrue(tableExists(jdbcTemplate, "flyway_schema_history"));
-        assertBaseSchema(jdbcTemplate);
+        assertSchema(jdbcTemplate, true);
     }
 
-    private static void assertBaseSchema(JdbcTemplate jdbcTemplate) {
+    private static void assertSchema(
+            JdbcTemplate jdbcTemplate,
+            boolean migrated
+    ) {
         assertEquals(
                 BUSINESS_TABLES,
                 Set.copyOf(jdbcTemplate.queryForList(
@@ -48,15 +51,15 @@ final class AnalyticsMigrationSchemaAssertions {
         BUSINESS_TABLES.forEach(
                 tableName -> assertTable(jdbcTemplate, tableName)
         );
-        assertAnalyticsEventColumns(jdbcTemplate);
+        assertAnalyticsEventColumns(jdbcTemplate, migrated);
         assertProcessedEventColumns(jdbcTemplate);
-        assertIndexes(jdbcTemplate);
-        assertConstraints(jdbcTemplate);
-        assertNoAggregateUniqueIndex(jdbcTemplate);
+        assertIndexes(jdbcTemplate, migrated);
+        assertConstraints(jdbcTemplate, migrated);
     }
 
     private static void assertAnalyticsEventColumns(
-            JdbcTemplate jdbcTemplate
+            JdbcTemplate jdbcTemplate,
+            boolean migrated
     ) {
         assertEquals(
                 List.of(
@@ -69,8 +72,18 @@ final class AnalyticsMigrationSchemaAssertions {
                 columnNames(jdbcTemplate, "analytics_events")
         );
 
-        assertColumn(jdbcTemplate, "analytics_events", "count",
-                "bigint", "bigint", true, null, null, "");
+        assertColumn(
+                jdbcTemplate,
+                "analytics_events",
+                "count",
+                "bigint",
+                "bigint",
+                !migrated,
+                null,
+                null,
+                "",
+                migrated ? "0" : null
+        );
         assertColumn(jdbcTemplate, "analytics_events", "id",
                 "bigint", "bigint", false, null, null,
                 "auto_increment");
@@ -125,12 +138,22 @@ final class AnalyticsMigrationSchemaAssertions {
         );
     }
 
-    private static void assertIndexes(JdbcTemplate jdbcTemplate) {
+    private static void assertIndexes(
+            JdbcTemplate jdbcTemplate,
+            boolean migrated
+    ) {
         assertEquals(
-                Set.of(
-                        "analytics_events:PRIMARY",
-                        "processed_kafka_events:PRIMARY"
-                ),
+                migrated
+                        ? Set.of(
+                                "analytics_events:PRIMARY",
+                                "analytics_events:"
+                                        + "uk_analytics_events_dimensions",
+                                "processed_kafka_events:PRIMARY"
+                        )
+                        : Set.of(
+                                "analytics_events:PRIMARY",
+                                "processed_kafka_events:PRIMARY"
+                        ),
                 Set.copyOf(jdbcTemplate.queryForList(
                         """
                         SELECT DISTINCT CONCAT(table_name, ':', index_name)
@@ -159,14 +182,40 @@ final class AnalyticsMigrationSchemaAssertions {
                 List.of("event_id"),
                 true
         );
+        if (migrated) {
+            assertIndex(
+                    jdbcTemplate,
+                    "analytics_events",
+                    "uk_analytics_events_dimensions",
+                    List.of(
+                            "flag_key",
+                            "environment",
+                            "event_type"
+                    ),
+                    true
+            );
+        } else {
+            assertNoAggregateUniqueIndex(jdbcTemplate);
+        }
     }
 
-    private static void assertConstraints(JdbcTemplate jdbcTemplate) {
+    private static void assertConstraints(
+            JdbcTemplate jdbcTemplate,
+            boolean migrated
+    ) {
         assertEquals(
-                Set.of(
-                        "analytics_events:PRIMARY:PRIMARY KEY",
-                        "processed_kafka_events:PRIMARY:PRIMARY KEY"
-                ),
+                migrated
+                        ? Set.of(
+                                "analytics_events:PRIMARY:PRIMARY KEY",
+                                "analytics_events:"
+                                        + "uk_analytics_events_dimensions:"
+                                        + "UNIQUE",
+                                "processed_kafka_events:PRIMARY:PRIMARY KEY"
+                        )
+                        : Set.of(
+                                "analytics_events:PRIMARY:PRIMARY KEY",
+                                "processed_kafka_events:PRIMARY:PRIMARY KEY"
+                        ),
                 Set.copyOf(jdbcTemplate.queryForList(
                         """
                         SELECT CONCAT(
@@ -264,6 +313,32 @@ final class AnalyticsMigrationSchemaAssertions {
             Long datetimePrecision,
             String extra
     ) {
+        assertColumn(
+                jdbcTemplate,
+                tableName,
+                columnName,
+                columnType,
+                dataType,
+                nullable,
+                length,
+                datetimePrecision,
+                extra,
+                null
+        );
+    }
+
+    private static void assertColumn(
+            JdbcTemplate jdbcTemplate,
+            String tableName,
+            String columnName,
+            String columnType,
+            String dataType,
+            boolean nullable,
+            Long length,
+            Long datetimePrecision,
+            String extra,
+            String defaultValue
+    ) {
         ColumnMetadata metadata = jdbcTemplate.queryForObject(
                 """
                 SELECT column_type,
@@ -271,7 +346,8 @@ final class AnalyticsMigrationSchemaAssertions {
                        is_nullable,
                        character_maximum_length,
                        datetime_precision,
-                       extra
+                       extra,
+                       column_default
                 FROM information_schema.columns
                 WHERE table_schema = DATABASE()
                   AND table_name = ?
@@ -287,7 +363,8 @@ final class AnalyticsMigrationSchemaAssertions {
                         nullableLong(resultSet.getObject(
                                 "datetime_precision"
                         )),
-                        resultSet.getString("extra")
+                        resultSet.getString("extra"),
+                        resultSet.getString("column_default")
                 ),
                 tableName,
                 columnName
@@ -299,6 +376,7 @@ final class AnalyticsMigrationSchemaAssertions {
         assertEquals(length, metadata.length());
         assertEquals(datetimePrecision, metadata.datetimePrecision());
         assertEquals(extra, metadata.extra());
+        assertEquals(defaultValue, metadata.defaultValue());
     }
 
     private static void assertIndex(
@@ -376,7 +454,8 @@ final class AnalyticsMigrationSchemaAssertions {
             boolean nullable,
             Long length,
             Long datetimePrecision,
-            String extra
+            String extra,
+            String defaultValue
     ) {
     }
 
