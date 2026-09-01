@@ -2,6 +2,7 @@ package com.featureflag.flag_service.migration;
 
 import com.featureflag.flag_service.entity.FeatureFlag;
 import com.featureflag.flag_service.entity.OutboxEvent;
+import com.featureflag.flag_service.entity.SdkKey;
 import jakarta.persistence.EntityManagerFactory;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.output.MigrateResult;
@@ -68,8 +69,8 @@ class FlagLegacyUpgradeMySqlIT {
 
         MigrateResult firstMigration = flyway.migrate();
 
-        assertEquals(0, firstMigration.migrationsExecuted);
-        assertBaselineHistory(jdbcTemplate);
+        assertEquals(1, firstMigration.migrationsExecuted);
+        assertMigrationHistory(jdbcTemplate);
         FlagMigrationSchemaAssertions.assertMigratedSchema(jdbcTemplate);
         assertLegacyRowsAfterBaseline(jdbcTemplate);
         assertEquals(payloadDigestsBefore, payloadDigests(jdbcTemplate));
@@ -114,7 +115,7 @@ class FlagLegacyUpgradeMySqlIT {
         );
     }
 
-    private void assertBaselineHistory(JdbcTemplate jdbcTemplate) {
+    private void assertMigrationHistory(JdbcTemplate jdbcTemplate) {
         assertEquals(
                 1,
                 jdbcTemplate.queryForObject(
@@ -136,6 +137,19 @@ class FlagLegacyUpgradeMySqlIT {
                         FROM flyway_schema_history
                         WHERE version = '1'
                           AND type = 'SQL'
+                        """,
+                        Integer.class
+                )
+        );
+        assertEquals(
+                1,
+                jdbcTemplate.queryForObject(
+                        """
+                        SELECT COUNT(*)
+                        FROM flyway_schema_history
+                        WHERE version = '2'
+                          AND type = 'SQL'
+                          AND success = 1
                         """,
                         Integer.class
                 )
@@ -182,6 +196,13 @@ class FlagLegacyUpgradeMySqlIT {
         assertPendingOutboxPreserved(jdbcTemplate);
         assertPublishedOutboxPreserved(jdbcTemplate);
         assertDeadOutboxPreserved(jdbcTemplate);
+        assertEquals(
+                0,
+                jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM sdk_keys",
+                        Integer.class
+                )
+        );
     }
 
     private void assertPendingOutboxPreserved(
@@ -320,7 +341,8 @@ class FlagLegacyUpgradeMySqlIT {
     @EnableAutoConfiguration
     @EntityScan(basePackageClasses = {
             FeatureFlag.class,
-            OutboxEvent.class
+            OutboxEvent.class,
+            SdkKey.class
     })
     static class LegacyValidationApplication {
     }

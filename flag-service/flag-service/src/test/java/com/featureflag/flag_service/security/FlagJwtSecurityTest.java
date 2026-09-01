@@ -6,6 +6,7 @@ import com.featureflag.flag_service.entity.FeatureFlag;
 import com.featureflag.flag_service.service.FlagEvaluationTelemetryService;
 import com.featureflag.flag_service.service.FlagMutationAuditService;
 import com.featureflag.flag_service.service.FlagService;
+import com.featureflag.flag_service.service.SdkKeyAuthenticationService;
 import com.nimbusds.jose.JOSEObjectType;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -80,6 +81,9 @@ class FlagJwtSecurityTest {
 
     @MockitoBean
     private FlagMutationAuditService flagMutationAuditService;
+
+    @MockitoBean
+    private SdkKeyAuthenticationService sdkKeyAuthenticationService;
 
     @BeforeEach
     void setUp() {

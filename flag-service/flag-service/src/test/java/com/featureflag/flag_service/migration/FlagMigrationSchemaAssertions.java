@@ -18,11 +18,20 @@ final class FlagMigrationSchemaAssertions {
     static final String OUTBOX_DUE_INDEX =
             "idx_outbox_status_next_attempt";
     static final String OUTBOX_CREATED_INDEX = "idx_outbox_created_at";
+    static final String SDK_KEY_HASH_UNIQUE =
+            "uk_sdk_keys_key_hash";
 
-    private static final Set<String> BUSINESS_TABLES = Set.of(
+    private static final Set<String> LEGACY_TABLES = Set.of(
             "feature_flags",
             "flag_target_users",
             "outbox_events"
+    );
+
+    private static final Set<String> MIGRATED_TABLES = Set.of(
+            "feature_flags",
+            "flag_target_users",
+            "outbox_events",
+            "sdk_keys"
     );
 
     private FlagMigrationSchemaAssertions() {
@@ -30,17 +39,23 @@ final class FlagMigrationSchemaAssertions {
 
     static void assertPreFlywayLegacySchema(JdbcTemplate jdbcTemplate) {
         assertFalse(tableExists(jdbcTemplate, "flyway_schema_history"));
-        assertBaseSchema(jdbcTemplate);
+        assertSchema(jdbcTemplate, false);
     }
 
     static void assertMigratedSchema(JdbcTemplate jdbcTemplate) {
         assertTrue(tableExists(jdbcTemplate, "flyway_schema_history"));
-        assertBaseSchema(jdbcTemplate);
+        assertSchema(jdbcTemplate, true);
     }
 
-    private static void assertBaseSchema(JdbcTemplate jdbcTemplate) {
+    private static void assertSchema(
+            JdbcTemplate jdbcTemplate,
+            boolean migrated
+    ) {
+        Set<String> expectedTables = migrated
+                ? MIGRATED_TABLES
+                : LEGACY_TABLES;
         assertEquals(
-                BUSINESS_TABLES,
+                expectedTables,
                 Set.copyOf(jdbcTemplate.queryForList(
                         """
                         SELECT table_name
@@ -53,14 +68,17 @@ final class FlagMigrationSchemaAssertions {
                 ))
         );
 
-        BUSINESS_TABLES.forEach(
+        expectedTables.forEach(
                 tableName -> assertTable(jdbcTemplate, tableName)
         );
         assertFeatureFlagColumns(jdbcTemplate);
         assertTargetUserColumns(jdbcTemplate);
         assertOutboxColumns(jdbcTemplate);
-        assertIndexes(jdbcTemplate);
-        assertConstraints(jdbcTemplate);
+        if (migrated) {
+            assertSdkKeyColumns(jdbcTemplate);
+        }
+        assertIndexes(jdbcTemplate, migrated);
+        assertConstraints(jdbcTemplate, migrated);
     }
 
     private static void assertFeatureFlagColumns(
@@ -158,16 +176,68 @@ final class FlagMigrationSchemaAssertions {
                 "longtext", "longtext", false, 4294967295L, null, "");
     }
 
-    private static void assertIndexes(JdbcTemplate jdbcTemplate) {
+    private static void assertSdkKeyColumns(JdbcTemplate jdbcTemplate) {
         assertEquals(
-                Set.of(
+                List.of(
+                        "active",
+                        "created_at",
+                        "id",
+                        "revoked_at",
+                        "environment",
+                        "key_prefix",
+                        "name",
+                        "key_hash",
+                        "created_by"
+                ),
+                columnNames(jdbcTemplate, "sdk_keys")
+        );
+
+        assertColumn(jdbcTemplate, "sdk_keys", "active",
+                "bit(1)", "bit", false, null, null, "");
+        assertColumn(jdbcTemplate, "sdk_keys", "created_at",
+                "datetime(6)", "datetime", false, null, 6L, "");
+        assertColumn(jdbcTemplate, "sdk_keys", "id",
+                "bigint", "bigint", false, null, null,
+                "auto_increment");
+        assertColumn(jdbcTemplate, "sdk_keys", "revoked_at",
+                "datetime(6)", "datetime", true, null, 6L, "");
+        assertColumn(jdbcTemplate, "sdk_keys", "environment",
+                "varchar(20)", "varchar", false, 20L, null, "");
+        assertColumn(jdbcTemplate, "sdk_keys", "key_prefix",
+                "varchar(20)", "varchar", false, 20L, null, "");
+        assertColumn(jdbcTemplate, "sdk_keys", "name",
+                "varchar(120)", "varchar", false, 120L, null, "");
+        assertColumn(jdbcTemplate, "sdk_keys", "key_hash",
+                "varchar(64)", "varchar", false, 64L, null, "");
+        assertColumn(jdbcTemplate, "sdk_keys", "created_by",
+                "varchar(255)", "varchar", false, 255L, null, "");
+    }
+
+    private static void assertIndexes(
+            JdbcTemplate jdbcTemplate,
+            boolean migrated
+    ) {
+        Set<String> expectedIndexes = migrated
+                ? Set.of(
+                        "feature_flags:PRIMARY",
+                        "feature_flags:" + FLAG_UNIQUE,
+                        "flag_target_users:" + TARGET_USER_FOREIGN_KEY,
+                        "outbox_events:PRIMARY",
+                        "outbox_events:" + OUTBOX_DUE_INDEX,
+                        "outbox_events:" + OUTBOX_CREATED_INDEX,
+                        "sdk_keys:PRIMARY",
+                        "sdk_keys:" + SDK_KEY_HASH_UNIQUE
+                )
+                : Set.of(
                         "feature_flags:PRIMARY",
                         "feature_flags:" + FLAG_UNIQUE,
                         "flag_target_users:" + TARGET_USER_FOREIGN_KEY,
                         "outbox_events:PRIMARY",
                         "outbox_events:" + OUTBOX_DUE_INDEX,
                         "outbox_events:" + OUTBOX_CREATED_INDEX
-                ),
+                );
+        assertEquals(
+                expectedIndexes,
                 Set.copyOf(jdbcTemplate.queryForList(
                         """
                         SELECT DISTINCT CONCAT(table_name, ':', index_name)
@@ -176,7 +246,8 @@ final class FlagMigrationSchemaAssertions {
                           AND table_name IN (
                               'feature_flags',
                               'flag_target_users',
-                              'outbox_events'
+                              'outbox_events',
+                              'sdk_keys'
                           )
                         """,
                         String.class
@@ -195,17 +266,37 @@ final class FlagMigrationSchemaAssertions {
                 List.of("status", "next_attempt_at"), false);
         assertIndex(jdbcTemplate, "outbox_events", OUTBOX_CREATED_INDEX,
                 List.of("created_at"), false);
+        if (migrated) {
+            assertIndex(jdbcTemplate, "sdk_keys", "PRIMARY",
+                    List.of("id"), true);
+            assertIndex(jdbcTemplate, "sdk_keys", SDK_KEY_HASH_UNIQUE,
+                    List.of("key_hash"), true);
+        }
     }
 
-    private static void assertConstraints(JdbcTemplate jdbcTemplate) {
-        assertEquals(
-                Set.of(
+    private static void assertConstraints(
+            JdbcTemplate jdbcTemplate,
+            boolean migrated
+    ) {
+        Set<String> expectedConstraints = migrated
+                ? Set.of(
+                        "feature_flags:PRIMARY:PRIMARY KEY",
+                        "feature_flags:" + FLAG_UNIQUE + ":UNIQUE",
+                        "flag_target_users:" + TARGET_USER_FOREIGN_KEY
+                                + ":FOREIGN KEY",
+                        "outbox_events:PRIMARY:PRIMARY KEY",
+                        "sdk_keys:PRIMARY:PRIMARY KEY",
+                        "sdk_keys:" + SDK_KEY_HASH_UNIQUE + ":UNIQUE"
+                )
+                : Set.of(
                         "feature_flags:PRIMARY:PRIMARY KEY",
                         "feature_flags:" + FLAG_UNIQUE + ":UNIQUE",
                         "flag_target_users:" + TARGET_USER_FOREIGN_KEY
                                 + ":FOREIGN KEY",
                         "outbox_events:PRIMARY:PRIMARY KEY"
-                ),
+                );
+        assertEquals(
+                expectedConstraints,
                 Set.copyOf(jdbcTemplate.queryForList(
                         """
                         SELECT CONCAT(
@@ -220,7 +311,8 @@ final class FlagMigrationSchemaAssertions {
                           AND table_name IN (
                               'feature_flags',
                               'flag_target_users',
-                              'outbox_events'
+                              'outbox_events',
+                              'sdk_keys'
                           )
                         """,
                         String.class
@@ -273,7 +365,8 @@ final class FlagMigrationSchemaAssertions {
                           AND table_name IN (
                               'feature_flags',
                               'flag_target_users',
-                              'outbox_events'
+                              'outbox_events',
+                              'sdk_keys'
                           )
                           AND constraint_type = 'CHECK'
                         """,
@@ -290,7 +383,8 @@ final class FlagMigrationSchemaAssertions {
                           AND table_name IN (
                               'feature_flags',
                               'flag_target_users',
-                              'outbox_events'
+                              'outbox_events',
+                              'sdk_keys'
                           )
                           AND data_type = 'enum'
                         """,

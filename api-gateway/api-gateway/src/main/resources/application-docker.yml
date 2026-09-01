@@ -96,7 +96,7 @@ spring:
             - id: flag-service
               uri: lb://FLAG-SERVICE
               predicates:
-                - Path=/flags/**
+                - Path=/flags/**, /runtime/**, /sdk-keys/**
 
             - id: analytics-service
               uri: lb://ANALYTICS-SERVICE

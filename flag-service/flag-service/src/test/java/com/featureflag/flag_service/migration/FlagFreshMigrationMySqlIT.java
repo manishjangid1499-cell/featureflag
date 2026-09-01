@@ -48,22 +48,23 @@ class FlagFreshMigrationMySqlIT {
     @Test
     void freshSchemaMigratesAndValidates() {
         assertNotNull(entityManagerFactory);
-        assertSuccessfulV1();
+        assertSuccessfulMigrations();
         FlagMigrationSchemaAssertions.assertMigratedSchema(jdbcTemplate);
         assertNoBootstrapRows();
         assertFlagUniqueConstraintRejectsDuplicate();
         assertTargetUserForeignKeyRejectsMissingFlag();
+        assertSdkKeyHashRejectsDuplicate();
         assertEquals(0, flyway.migrate().migrationsExecuted);
     }
 
-    private void assertSuccessfulV1() {
+    private void assertSuccessfulMigrations() {
         assertEquals(
-                1,
+                2,
                 jdbcTemplate.queryForObject(
                         """
                         SELECT COUNT(*)
                         FROM flyway_schema_history
-                        WHERE version = '1'
+                        WHERE version IN ('1', '2')
                           AND type = 'SQL'
                           AND success = 1
                         """,
@@ -105,6 +106,13 @@ class FlagFreshMigrationMySqlIT {
                         Integer.class
                 )
         );
+        assertEquals(
+                0,
+                jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM sdk_keys",
+                        Integer.class
+                )
+        );
     }
 
     private void assertFlagUniqueConstraintRejectsDuplicate() {
@@ -124,6 +132,42 @@ class FlagFreshMigrationMySqlIT {
                         VALUES (999999, 'missing-flag-user')
                         """
                 )
+        );
+    }
+
+    private void assertSdkKeyHashRejectsDuplicate() {
+        insertSdkKey(1L, "a".repeat(64));
+        assertThrows(
+                DataAccessException.class,
+                () -> insertSdkKey(2L, "a".repeat(64))
+        );
+    }
+
+    private void insertSdkKey(Long id, String keyHash) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO sdk_keys (
+                    active,
+                    created_at,
+                    id,
+                    environment,
+                    key_prefix,
+                    name,
+                    key_hash,
+                    created_by
+                ) VALUES (
+                    b'1',
+                    '2026-08-27 12:00:00.000000',
+                    ?,
+                    'DEV',
+                    'ff_sdk_fixture',
+                    'Fixture key',
+                    ?,
+                    'fixture-actor'
+                )
+                """,
+                id,
+                keyHash
         );
     }
 

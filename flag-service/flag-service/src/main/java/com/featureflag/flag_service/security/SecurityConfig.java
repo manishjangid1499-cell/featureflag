@@ -1,12 +1,17 @@
 package com.featureflag.flag_service.security;
 
+import com.featureflag.flag_service.service.SdkKeyAuthenticationService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -19,7 +24,49 @@ import java.util.List;
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(
+    @Order(1)
+    public SecurityFilterChain runtimeSecurityFilterChain(
+            HttpSecurity http,
+            SdkKeyAuthenticationService authenticationService
+    ) throws Exception {
+        http
+                .securityMatcher("/runtime/**")
+                .cors(cors -> cors.configurationSource(
+                        corsConfigurationSource()
+                ))
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(
+                                SessionCreationPolicy.STATELESS
+                        )
+                )
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(
+                                HttpMethod.OPTIONS,
+                                "/**"
+                        ).permitAll()
+                        .anyRequest().authenticated()
+                )
+                .exceptionHandling(exceptions ->
+                        exceptions.authenticationEntryPoint(
+                                new HttpStatusEntryPoint(
+                                        HttpStatus.UNAUTHORIZED
+                                )
+                        )
+                )
+                .addFilterBefore(
+                        new SdkKeyAuthenticationFilter(
+                                authenticationService
+                        ),
+                        AnonymousAuthenticationFilter.class
+                );
+
+        return http.build();
+    }
+
+    @Bean
+    @Order(2)
+    public SecurityFilterChain controlPlaneSecurityFilterChain(
             HttpSecurity http,
             Converter<Jwt, ? extends AbstractAuthenticationToken> jwtAuthenticationConverter
     ) throws Exception {
@@ -44,6 +91,10 @@ public class SecurityConfig {
                                 "/actuator/health",
                                 "/actuator/health/**"
                         ).permitAll()
+
+                        // SDK KEY MANAGEMENT - JWT CONTROL PLANE
+                        .requestMatchers("/sdk-keys/**")
+                        .hasAnyRole("OWNER", "ADMIN")
 
                         // FEATURE FLAGS - RBAC RULES
                         .requestMatchers(HttpMethod.GET, "/flags/**")
@@ -78,7 +129,14 @@ public class SecurityConfig {
 
         configuration.setAllowedOrigins(List.of("http://localhost:5173", "http://127.0.0.1:5173"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"));
+        configuration.setAllowedHeaders(List.of(
+                "Authorization",
+                "Content-Type",
+                "Accept",
+                "Origin",
+                "X-Requested-With",
+                SdkKeyAuthenticationFilter.HEADER_NAME
+        ));
         configuration.setExposedHeaders(List.of("Authorization"));
         configuration.setAllowCredentials(false);
         configuration.setMaxAge(3600L);
