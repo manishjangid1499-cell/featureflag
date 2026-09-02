@@ -89,6 +89,17 @@ class FeatureFlagClientTest {
     }
 
     @Test
+    void pathAndQueryComponentsUseRfc3986Encoding() {
+        FeatureFlagClient client = client();
+
+        client.isEnabled("price*~é", "user*~é", false);
+
+        assertThat(receivedUri.get())
+                .contains("price%2A~%C3%A9")
+                .contains("subject=user%2A~%C3%A9");
+    }
+
+    @Test
     void networkFailureReturnsCallerDefault() {
         FeatureFlagClient client = client();
         server.stop(0);
@@ -152,6 +163,42 @@ class FeatureFlagClientTest {
                 "user-1",
                 false
         )).isFalse();
+
+        response.set("{\"enabled\":\"true\"}");
+        assertThat(client().isEnabled(
+                "checkout",
+                "user-1",
+                false
+        )).isFalse();
+    }
+
+    @Test
+    void contradictoryResponseMetadataReturnsCallerDefault() {
+        response.set("""
+                {
+                  "flagKey": "another-flag",
+                  "environment": "PROD",
+                  "enabled": true
+                }
+                """);
+        assertThat(client().isEnabled(
+                "checkout",
+                "user-1",
+                false
+        )).isFalse();
+
+        response.set("""
+                {
+                  "flagKey": "checkout",
+                  "environment": " ",
+                  "enabled": true
+                }
+                """);
+        assertThat(client().isEnabled(
+                "checkout",
+                "user-1",
+                false
+        )).isFalse();
     }
 
     @Test
@@ -199,6 +246,26 @@ class FeatureFlagClientTest {
                 .build();
 
         assertThat(client).isNotNull();
+    }
+
+    @Test
+    void baseUrlCannotContainCredentials() {
+        String credentialedBaseUrl = baseUrl.replace(
+                "http://",
+                "http://user:password@"
+        );
+
+        assertThatThrownBy(
+                () -> FeatureFlagClient.builder()
+                        .baseUrl(credentialedBaseUrl)
+                        .sdkKey(SDK_KEY)
+                        .build()
+        )
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage(
+                        "baseUrl must be a valid HTTP(S) URL without credentials, query, or fragment"
+                )
+                .hasMessageNotContaining("password");
     }
 
     private FeatureFlagClient client() {

@@ -1,11 +1,10 @@
 package com.featureflag.sdk;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -19,6 +18,7 @@ public final class FeatureFlagClient {
             "X-Feature-Flag-Key";
     private static final String SDK_KEY_PREFIX = "ff_sdk_";
     private static final int SDK_KEY_SECRET_LENGTH = 43;
+    private static final char[] HEX = "0123456789ABCDEF".toCharArray();
 
     private final String baseUrl;
     private final String sdkKey;
@@ -39,11 +39,7 @@ public final class FeatureFlagClient {
                         "connectTimeout"
                 ))
                 .build();
-        this.objectMapper = new ObjectMapper()
-                .configure(
-                        DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,
-                        false
-                );
+        this.objectMapper = new ObjectMapper();
     }
 
     public static Builder builder() {
@@ -82,13 +78,11 @@ public final class FeatureFlagClient {
                 return defaultValue;
             }
 
-            RuntimeEvaluation evaluation = objectMapper.readValue(
+            return readEnabled(
                     response.body(),
-                    RuntimeEvaluation.class
+                    requiredFlagKey,
+                    defaultValue
             );
-            return evaluation.enabled() == null
-                    ? defaultValue
-                    : evaluation.enabled();
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             return defaultValue;
@@ -111,10 +105,12 @@ public final class FeatureFlagClient {
         if (!("http".equalsIgnoreCase(uri.getScheme())
                 || "https".equalsIgnoreCase(uri.getScheme()))
                 || uri.getHost() == null
+                || uri.getUserInfo() != null
+                || uri.getPort() > 65_535
                 || uri.getQuery() != null
                 || uri.getFragment() != null) {
             throw new IllegalArgumentException(
-                    "baseUrl must be a valid HTTP(S) URL without query or fragment"
+                    "baseUrl must be a valid HTTP(S) URL without credentials, query, or fragment"
             );
         }
 
@@ -184,15 +180,60 @@ public final class FeatureFlagClient {
     }
 
     private static String encode(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8)
-                .replace("+", "%20");
+        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+        StringBuilder encoded = new StringBuilder(bytes.length);
+        for (byte current : bytes) {
+            int unsigned = Byte.toUnsignedInt(current);
+            if (isUnreserved(unsigned)) {
+                encoded.append((char) unsigned);
+            } else {
+                encoded.append('%')
+                        .append(HEX[unsigned >>> 4])
+                        .append(HEX[unsigned & 0x0F]);
+            }
+        }
+        return encoded.toString();
     }
 
-    private record RuntimeEvaluation(
-            String flagKey,
-            String environment,
-            Boolean enabled
-    ) {
+    private static boolean isUnreserved(int value) {
+        return value >= 'A' && value <= 'Z'
+                || value >= 'a' && value <= 'z'
+                || value >= '0' && value <= '9'
+                || value == '-'
+                || value == '.'
+                || value == '_'
+                || value == '~';
+    }
+
+    private boolean readEnabled(
+            String body,
+            String requestedFlagKey,
+            boolean defaultValue
+    ) throws IOException {
+        JsonNode response = objectMapper.readTree(body);
+        if (response == null || !response.isObject()) {
+            return defaultValue;
+        }
+
+        JsonNode enabled = response.get("enabled");
+        if (enabled == null || !enabled.isBoolean()) {
+            return defaultValue;
+        }
+
+        JsonNode returnedFlagKey = response.get("flagKey");
+        if (returnedFlagKey != null
+                && (!returnedFlagKey.isTextual()
+                || !requestedFlagKey.equals(returnedFlagKey.textValue()))) {
+            return defaultValue;
+        }
+
+        JsonNode environment = response.get("environment");
+        if (environment != null
+                && (!environment.isTextual()
+                || environment.textValue().isBlank())) {
+            return defaultValue;
+        }
+        return enabled.booleanValue();
     }
 
     public static final class Builder {
