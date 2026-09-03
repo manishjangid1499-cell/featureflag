@@ -5,10 +5,13 @@ import type {
   MemberResponse,
   UserRole
 } from "../types/auth";
+import type { PageResponse } from "../types/page";
 
 export const getAllMembers = async (): Promise<MemberResponse[]> => {
-  const response = await api.get<MemberResponse[]>("/members");
-  return response.data;
+  const response = await api.get<PageResponse<MemberResponse>>(
+    "/members?page=0&size=100"
+  );
+  return response.data.content;
 };
 
 export const getMemberById = async (id: number): Promise<MemberResponse> => {
@@ -22,8 +25,10 @@ export const inviteMember = async (request: InviteMemberRequest): Promise<Invita
 };
 
 export const getAllInvitations = async (): Promise<InvitationResponse[]> => {
-  const response = await api.get<InvitationResponse[]>("/members/invitations");
-  return response.data;
+  const response = await api.get<PageResponse<InvitationResponse>>(
+    "/members/invitations?page=0&size=100"
+  );
+  return response.data.content;
 };
 
 export const resendInvitation = async (id: number): Promise<InvitationResponse> => {

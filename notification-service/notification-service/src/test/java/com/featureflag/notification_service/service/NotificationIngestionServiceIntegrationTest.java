@@ -1,5 +1,6 @@
 package com.featureflag.notification_service.service;
 
+import com.featureflag.notification_service.config.TimeConfiguration;
 import com.featureflag.notification_service.dto.NotificationEvent;
 import com.featureflag.notification_service.entity.ProcessedEvent;
 import com.featureflag.notification_service.exception.UnsupportedNotificationChannelException;
@@ -22,7 +23,7 @@ import static org.mockito.Mockito.doAnswer;
 
 @DataJpaTest
 @ActiveProfiles("test")
-@Import(NotificationIngestionService.class)
+@Import({NotificationIngestionService.class, TimeConfiguration.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class NotificationIngestionServiceIntegrationTest {
 

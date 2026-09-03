@@ -8,7 +8,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.test.context.ActiveProfiles;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -20,8 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @ActiveProfiles("test")
 class NotificationDeliveryStateTest {
 
-    private static final LocalDateTime CREATED_AT =
-            LocalDateTime.of(2026, 8, 25, 12, 0);
+    private static final Instant CREATED_AT =
+            Instant.parse("2026-08-25T12:00:00Z");
 
     @Autowired
     private TestEntityManager entityManager;
@@ -46,13 +46,13 @@ class NotificationDeliveryStateTest {
 
     @Test
     void internalDeliveryFieldsAreHiddenFromJson() {
-        LocalDateTime nextAttemptAt = CREATED_AT.plusMinutes(1);
+        Instant nextAttemptAt = CREATED_AT.plusSeconds(60);
         Notification notification = notificationBuilder()
                 .deliveryMode(DeliveryMode.DURABLE)
                 .attemptCount(2)
                 .nextAttemptAt(nextAttemptAt)
                 .lastAttemptAt(CREATED_AT)
-                .leaseUntil(CREATED_AT.plusMinutes(5))
+                .leaseUntil(CREATED_AT.plusSeconds(5 * 60))
                 .claimToken("test-claim-token")
                 .lastErrorType("MailSendException")
                 .build();
@@ -81,9 +81,9 @@ class NotificationDeliveryStateTest {
         Notification second = notificationBuilder()
                 .deliveryMode(DeliveryMode.DURABLE)
                 .attemptCount(3)
-                .nextAttemptAt(CREATED_AT.plusMinutes(1))
+                .nextAttemptAt(CREATED_AT.plusSeconds(60))
                 .lastAttemptAt(CREATED_AT)
-                .leaseUntil(CREATED_AT.plusMinutes(5))
+                .leaseUntil(CREATED_AT.plusSeconds(5 * 60))
                 .claimToken("test-claim-token")
                 .lastErrorType("MailSendException")
                 .build();
@@ -102,9 +102,9 @@ class NotificationDeliveryStateTest {
 
     @Test
     void deliveryStateRoundTripsThroughJpaMapping() {
-        LocalDateTime lastAttemptAt = CREATED_AT.plusMinutes(1);
-        LocalDateTime nextAttemptAt = CREATED_AT.plusMinutes(2);
-        LocalDateTime leaseUntil = CREATED_AT.plusMinutes(6);
+        Instant lastAttemptAt = CREATED_AT.plusSeconds(60);
+        Instant nextAttemptAt = CREATED_AT.plusSeconds(2 * 60);
+        Instant leaseUntil = CREATED_AT.plusSeconds(6 * 60);
         String claimToken = UUID.randomUUID().toString();
 
         Notification notification = notificationBuilder()

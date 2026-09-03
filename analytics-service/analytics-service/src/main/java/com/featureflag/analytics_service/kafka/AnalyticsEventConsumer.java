@@ -11,7 +11,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
@@ -75,7 +75,7 @@ public class AnalyticsEventConsumer {
                 ProcessedEvent.builder()
                         .eventId(eventId)
                         .topic(TOPIC)
-                        .processedAt(LocalDateTime.now())
+                        .processedAt(Instant.now())
                         .build()
         );
 

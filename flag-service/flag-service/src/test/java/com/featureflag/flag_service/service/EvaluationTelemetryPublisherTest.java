@@ -9,6 +9,9 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 
 import java.util.UUID;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -24,6 +27,9 @@ import static org.mockito.Mockito.when;
 
 class EvaluationTelemetryPublisherTest {
 
+    private static final Instant NOW =
+            Instant.parse("2026-08-27T12:00:00Z");
+
     private static final String TOPIC =
             "feature-flag-evaluations";
 
@@ -36,7 +42,8 @@ class EvaluationTelemetryPublisherTest {
             new EvaluationTelemetryPublisher(
                     kafkaTemplate,
                     objectMapper,
-                    TOPIC
+                    TOPIC,
+                    Clock.fixed(NOW, ZoneOffset.UTC)
             );
 
     @Test
@@ -72,6 +79,7 @@ class EvaluationTelemetryPublisherTest {
         assertEquals("checkout", event.getFlagKey());
         assertEquals("DEV", event.getEnvironment());
         assertFalse(event.getTimestamp().isBlank());
+        assertEquals(NOW.toString(), event.getTimestamp());
     }
 
     @Test
@@ -142,7 +150,8 @@ class EvaluationTelemetryPublisherTest {
                 new EvaluationTelemetryPublisher(
                         kafkaTemplate,
                         failingMapper,
-                        TOPIC
+                        TOPIC,
+                        Clock.fixed(NOW, ZoneOffset.UTC)
                 );
         when(failingMapper.writeValueAsString(
                 org.mockito.ArgumentMatchers.any(FlagEvent.class)

@@ -6,7 +6,7 @@ import com.featureflag.notification_service.repository.NotificationRepository;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -35,7 +35,7 @@ final class MySqlClaimTransactionHelper {
     }
 
     HeldClaim claimAndHold(
-            LocalDateTime now,
+            Instant now,
             CompletableFuture<Long> lockedNotificationId,
             CountDownLatch releaseTransaction
     ) {
@@ -75,7 +75,7 @@ final class MySqlClaimTransactionHelper {
         return result;
     }
 
-    Optional<Long> findNextDueId(LocalDateTime now) {
+    Optional<Long> findNextDueId(Instant now) {
         Optional<Long> result = transactionTemplate.execute(status ->
                 notificationRepository
                         .findNextDueForUpdateSkipLocked(now)

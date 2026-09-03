@@ -3,7 +3,7 @@ package com.featureflag.auth_service.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "invitations")
@@ -37,16 +37,15 @@ public class Invitation {
     private String tokenHash;
 
     @Column(nullable = false)
-    private LocalDateTime expiresAt;
+    private Instant expiresAt;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
     private InvitationStatus status = InvitationStatus.PENDING;
 
-    private LocalDateTime acceptedAt;
+    private Instant acceptedAt;
 
     @Column(nullable = false)
-    @Builder.Default
-    private LocalDateTime createdAt = LocalDateTime.now();
+    private Instant createdAt;
 }

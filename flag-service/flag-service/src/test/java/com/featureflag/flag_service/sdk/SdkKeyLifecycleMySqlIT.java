@@ -13,6 +13,8 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Import;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
@@ -22,6 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -37,7 +43,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @Import({
         SdkKeyCredentialService.class,
         SdkKeyService.class,
-        SdkKeyAuthenticationService.class
+        SdkKeyAuthenticationService.class,
+        SdkKeyLifecycleMySqlIT.ClockConfiguration.class
 })
 class SdkKeyLifecycleMySqlIT {
 
@@ -166,11 +173,23 @@ class SdkKeyLifecycleMySqlIT {
                 .keyPrefix("ff_sdk_DUPLICAT")
                 .keyHash(first.getKeyHash())
                 .active(true)
-                .createdAt(java.time.LocalDateTime.now())
+                .createdAt(Instant.parse("2026-08-27T12:00:00Z"))
                 .createdBy("owner@example.com")
                 .build();
 
         assertThatThrownBy(() -> repository.saveAndFlush(duplicate))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class ClockConfiguration {
+
+        @Bean
+        Clock clock() {
+            return Clock.fixed(
+                    Instant.parse("2026-08-27T12:00:00Z"),
+                    ZoneOffset.UTC
+            );
+        }
     }
 }

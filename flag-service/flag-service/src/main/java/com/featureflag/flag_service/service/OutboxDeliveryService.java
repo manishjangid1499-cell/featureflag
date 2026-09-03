@@ -8,7 +8,8 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -22,6 +23,7 @@ public class OutboxDeliveryService {
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final long sendTimeoutSeconds;
     private final int maxAttempts;
+    private final Clock clock;
 
     public OutboxDeliveryService(
             OutboxEventRepository outboxEventRepository,
@@ -33,7 +35,8 @@ public class OutboxDeliveryService {
             @Value(
                     "${outbox.publisher.max-attempts:10}"
             )
-            int maxAttempts
+            int maxAttempts,
+            Clock clock
     ) {
         if (maxAttempts < 1) {
             throw new IllegalArgumentException(
@@ -46,6 +49,7 @@ public class OutboxDeliveryService {
         this.kafkaTemplate = kafkaTemplate;
         this.sendTimeoutSeconds = sendTimeoutSeconds;
         this.maxAttempts = maxAttempts;
+        this.clock = clock;
     }
 
     @Transactional
@@ -78,7 +82,7 @@ public class OutboxDeliveryService {
             return;
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = clock.instant();
 
         if (event.getNextAttemptAt() != null
                 && event.getNextAttemptAt()
@@ -100,7 +104,7 @@ public class OutboxDeliveryService {
                     OutboxEvent.STATUS_PUBLISHED
             );
             event.setPublishedAt(
-                    LocalDateTime.now()
+                    clock.instant()
             );
             event.setLastErrorType(null);
 
@@ -145,7 +149,7 @@ public class OutboxDeliveryService {
         long delaySeconds =
                 calculateRetryDelaySeconds(attempts);
         event.setNextAttemptAt(
-                LocalDateTime.now()
+                clock.instant()
                         .plusSeconds(delaySeconds)
         );
         log.warn(

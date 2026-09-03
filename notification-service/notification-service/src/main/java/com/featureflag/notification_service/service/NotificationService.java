@@ -15,8 +15,10 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
-import java.time.LocalDateTime;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -31,6 +33,7 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final JavaMailSender mailSender;
     private final AuthRecipientsClient authRecipientsClient;
+    private final Clock clock;
 
     public Notification createNotification(
             NotificationRequest request
@@ -62,7 +65,7 @@ public class NotificationService {
                 .message(request.getMessage())
                 .type(type)
                 .status("PENDING")
-                .createdAt(LocalDateTime.now())
+                .createdAt(clock.instant())
                 .build();
 
         notification = notificationRepository.save(notification);
@@ -76,7 +79,7 @@ public class NotificationService {
             mailSender.send(mailMessage);
 
             notification.setStatus("SENT");
-            notification.setSentAt(LocalDateTime.now());
+            notification.setSentAt(clock.instant());
             log.info("Email successfully sent; notificationId={}", notification.getId());
 
         } catch (Exception e) {
@@ -115,7 +118,7 @@ public class NotificationService {
                     .message(message)
                     .type(resolvedType)
                     .status("PENDING")
-                    .createdAt(LocalDateTime.now())
+                    .createdAt(clock.instant())
                     .build();
 
             notification = notificationRepository.save(notification);
@@ -129,7 +132,7 @@ public class NotificationService {
                 mailSender.send(mailMessage);
 
                 notification.setStatus("SENT");
-                notification.setSentAt(LocalDateTime.now());
+                notification.setSentAt(clock.instant());
                 log.info("Email notification sent; notificationId={}", notification.getId());
 
             } catch (Exception e) {
@@ -197,6 +200,39 @@ public class NotificationService {
         }
     }
 
+    public Page<Notification> getNotificationsForUser(
+            String userEmail,
+            String userRole,
+            Pageable pageable
+    ) {
+        if (userEmail == null || userEmail.isBlank()) {
+            return Page.empty(pageable);
+        }
+
+        String normalizedEmail = userEmail.toLowerCase().trim();
+        String normalizedRole = userRole != null
+                ? userRole.toUpperCase().trim()
+                : "VIEWER";
+
+        if ("OWNER".equals(normalizedRole)) {
+            return notificationRepository
+                    .findAllByOrderByCreatedAtDescIdDesc(pageable);
+        }
+        if ("ADMIN".equals(normalizedRole)) {
+            return notificationRepository
+                    .findByRecipientIgnoreCaseOrCreatorEmailIgnoreCaseOrderByCreatedAtDescIdDesc(
+                            normalizedEmail,
+                            normalizedEmail,
+                            pageable
+                    );
+        }
+        return notificationRepository
+                .findByRecipientIgnoreCaseOrderByCreatedAtDescIdDesc(
+                        normalizedEmail,
+                        pageable
+                );
+    }
+
     public List<Notification> getUserNotifications(String userEmail) {
         return getNotificationsForUser(userEmail, "VIEWER");
     }
@@ -249,12 +285,43 @@ public class NotificationService {
                 .findByRecipientIgnoreCaseOrderByCreatedAtDesc(normalizedRecipient);
     }
 
+    public Page<Notification> getNotificationsByRecipient(
+            String recipient,
+            String userEmail,
+            String userRole,
+            Pageable pageable
+    ) {
+        String normalizedRole = normalizeRole(userRole);
+        String normalizedRecipient = normalizeEmail(recipient);
+
+        if (!"OWNER".equals(normalizedRole)
+                && !emailsEqual(normalizedRecipient, userEmail)) {
+            throw new ForbiddenException(
+                    "You do not have permission to query this recipient"
+            );
+        }
+
+        return notificationRepository
+                .findByRecipientIgnoreCaseOrderByCreatedAtDescIdDesc(
+                        normalizedRecipient,
+                        pageable
+                );
+    }
+
     public List<Notification> getNotificationsByStatus(
             String status
     ) {
 
         return notificationRepository
                 .findByStatus(status);
+    }
+
+    public Page<Notification> getNotificationsByStatus(
+            String status,
+            Pageable pageable
+    ) {
+        return notificationRepository
+                .findByStatusOrderByCreatedAtDescIdDesc(status, pageable);
     }
 
     @Transactional

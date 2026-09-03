@@ -15,6 +15,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -82,7 +83,7 @@ class AuditEventConsumerTest {
                 .isEqualTo("flag-service");
         assertThat(auditLog.getActor()).isEqualTo("actor-123");
         assertThat(auditLog.getOccurredAt()).isEqualTo(
-                LocalDateTime.parse("2026-08-20T10:00:00.123456")
+                Instant.parse("2026-08-20T10:00:00.123456Z")
         );
 
         JsonNode before = objectMapper.readTree(
@@ -127,7 +128,7 @@ class AuditEventConsumerTest {
         assertThat(auditLog.getBeforeState()).isNull();
         assertThat(auditLog.getAfterState()).isNull();
         assertThat(auditLog.getOccurredAt()).isEqualTo(
-                LocalDateTime.parse("2026-08-20T10:00:00")
+                Instant.parse("2026-08-20T10:00:00Z")
         );
     }
 

@@ -21,6 +21,8 @@ import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -38,6 +40,8 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -62,10 +66,18 @@ class NotificationJwtSecurityTest {
 
     @BeforeEach
     void setUp() {
-        when(notificationService.getNotificationsForUser(EMAIL, "OWNER")).thenReturn(List.of());
-        when(notificationService.getNotificationsForUser(EMAIL, "ADMIN")).thenReturn(List.of());
-        when(notificationService.getNotificationsForUser(EMAIL, "DEVELOPER")).thenReturn(List.of());
-        when(notificationService.getNotificationsForUser(EMAIL, "VIEWER")).thenReturn(List.of());
+        for (String role : List.of(
+                "OWNER",
+                "ADMIN",
+                "DEVELOPER",
+                "VIEWER"
+        )) {
+            when(notificationService.getNotificationsForUser(
+                    eq(EMAIL),
+                    eq(role),
+                    any(Pageable.class)
+            )).thenReturn(Page.empty());
+        }
     }
 
     @Test

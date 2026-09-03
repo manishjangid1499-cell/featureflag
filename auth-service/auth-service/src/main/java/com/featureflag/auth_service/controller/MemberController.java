@@ -3,6 +3,7 @@ package com.featureflag.auth_service.controller;
 import com.featureflag.auth_service.dto.InvitationResponse;
 import com.featureflag.auth_service.dto.InviteMemberRequest;
 import com.featureflag.auth_service.dto.MemberResponse;
+import com.featureflag.auth_service.dto.PageResponse;
 import com.featureflag.auth_service.entity.Role;
 import com.featureflag.auth_service.entity.User;
 import com.featureflag.auth_service.service.InvitationService;
@@ -10,13 +11,15 @@ import com.featureflag.auth_service.service.MemberService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/members")
@@ -40,9 +43,16 @@ public class MemberController {
 
     @Operation(summary = "Get all member invitations")
     @GetMapping("/invitations")
-    public ResponseEntity<List<InvitationResponse>> getAllInvitations() {
-        List<InvitationResponse> list = invitationService.getAllInvitations();
-        return ResponseEntity.ok(list);
+    public ResponseEntity<PageResponse<InvitationResponse>> getAllInvitations(
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20")
+            @Min(1) @Max(100) int size
+    ) {
+        return ResponseEntity.ok(PageResponse.from(
+                invitationService.getAllInvitations(
+                        PageRequest.of(page, size)
+                )
+        ));
     }
 
     @Operation(summary = "Resend a pending invitation")
@@ -69,8 +79,18 @@ public class MemberController {
 
     @Operation(summary = "Get all platform members")
     @GetMapping
-    public List<MemberResponse> getAllMembers() {
-        return memberService.getAllMembers();
+    public PageResponse<MemberResponse> getAllMembers(
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20")
+            @Min(1) @Max(100) int size
+    ) {
+        return PageResponse.from(
+                memberService.getAllMembers(PageRequest.of(
+                        page,
+                        size,
+                        Sort.by(Sort.Direction.DESC, "id")
+                ))
+        );
     }
 
     @Operation(summary = "Get member by ID")

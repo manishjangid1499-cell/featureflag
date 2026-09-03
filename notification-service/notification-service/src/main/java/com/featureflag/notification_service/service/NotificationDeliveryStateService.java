@@ -9,7 +9,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,7 +28,7 @@ public class NotificationDeliveryStateService {
 
     @Transactional
     public Optional<DeliveryClaim> claimNextDueJob(
-            LocalDateTime now
+            Instant now
     ) {
         Optional<Notification> due = notificationRepository
                 .findNextDueForUpdateSkipLocked(now);
@@ -65,7 +65,7 @@ public class NotificationDeliveryStateService {
     }
 
     @Transactional
-    public int recoverExpiredLeases(LocalDateTime now) {
+    public int recoverExpiredLeases(Instant now) {
         List<Notification> expired =
                 notificationRepository.findExpiredLeasesForUpdate(
                         DeliveryMode.DURABLE,
@@ -104,7 +104,7 @@ public class NotificationDeliveryStateService {
     @Transactional
     public boolean markSent(
             DeliveryClaim claim,
-            LocalDateTime sentAt
+            Instant sentAt
     ) {
         return notificationRepository.markSentIfClaimMatches(
                 claim.notificationId(),
@@ -117,7 +117,7 @@ public class NotificationDeliveryStateService {
     @Transactional
     public boolean markRetry(
             DeliveryClaim claim,
-            LocalDateTime nextAttemptAt,
+            Instant nextAttemptAt,
             String lastErrorType
     ) {
         return notificationRepository.markRetryIfClaimMatches(

@@ -26,7 +26,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -60,13 +60,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Testcontainers
 class NotificationDeliveryClaimMySqlIT {
 
-    private static final LocalDateTime NOW = LocalDateTime.of(
-            2026,
-            8,
-            25,
-            12,
-            0
-    );
+    private static final Instant NOW =
+            Instant.parse("2026-08-25T12:00:00Z");
     private static final long FUTURE_TIMEOUT_SECONDS = 15;
 
     @Container
@@ -107,12 +102,12 @@ class NotificationDeliveryClaimMySqlIT {
         Notification first = saveDue(
                 DeliveryMode.DURABLE,
                 "PENDING",
-                NOW.minusMinutes(1)
+                NOW.minusSeconds(60)
         );
         Notification second = saveDue(
                 DeliveryMode.DURABLE,
                 "PENDING",
-                NOW.minusMinutes(1)
+                NOW.minusSeconds(60)
         );
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CompletableFuture<Long> firstLockedId =
@@ -180,7 +175,7 @@ class NotificationDeliveryClaimMySqlIT {
         Notification only = saveDue(
                 DeliveryMode.DURABLE,
                 "PENDING",
-                NOW.minusMinutes(1)
+                NOW.minusSeconds(60)
         );
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CompletableFuture<Long> lockedId = new CompletableFuture<>();
@@ -236,7 +231,7 @@ class NotificationDeliveryClaimMySqlIT {
         Notification due = saveDue(
                 DeliveryMode.DURABLE,
                 "PENDING",
-                NOW.minusMinutes(1)
+                NOW.minusSeconds(60)
         );
 
         DeliveryClaim claim = stateService
@@ -251,7 +246,7 @@ class NotificationDeliveryClaimMySqlIT {
         assertEquals("PROCESSING", processing.getStatus());
         assertEquals(1, processing.getAttemptCount());
         assertEquals(NOW, processing.getLastAttemptAt());
-        assertEquals(NOW.plusMinutes(2), processing.getLeaseUntil());
+        assertEquals(NOW.plusSeconds(2 * 60), processing.getLeaseUntil());
         assertNull(processing.getNextAttemptAt());
         assertNotNull(processing.getClaimToken());
     }
@@ -261,17 +256,17 @@ class NotificationDeliveryClaimMySqlIT {
         Notification synchronous = saveDue(
                 DeliveryMode.SYNCHRONOUS,
                 "PENDING",
-                NOW.minusMinutes(3)
+                NOW.minusSeconds(3 * 60)
         );
         Notification legacy = saveDue(
                 null,
                 "PENDING",
-                NOW.minusMinutes(2)
+                NOW.minusSeconds(2 * 60)
         );
         Notification durable = saveDue(
                 DeliveryMode.DURABLE,
                 "PENDING",
-                NOW.minusMinutes(1)
+                NOW.minusSeconds(60)
         );
 
         DeliveryClaim claim = stateService
@@ -298,17 +293,17 @@ class NotificationDeliveryClaimMySqlIT {
         Notification later = saveDue(
                 DeliveryMode.DURABLE,
                 "PENDING",
-                NOW.minusMinutes(1)
+                NOW.minusSeconds(60)
         );
         Notification firstAtEarliestTime = saveDue(
                 DeliveryMode.DURABLE,
                 "PENDING",
-                NOW.minusMinutes(3)
+                NOW.minusSeconds(3 * 60)
         );
         Notification secondAtEarliestTime = saveDue(
                 DeliveryMode.DURABLE,
                 "RETRY",
-                NOW.minusMinutes(3)
+                NOW.minusSeconds(3 * 60)
         );
 
         List<Long> claimedIds = List.of(
@@ -338,12 +333,12 @@ class NotificationDeliveryClaimMySqlIT {
         Notification due = saveDue(
                 DeliveryMode.DURABLE,
                 "PENDING",
-                NOW.minusMinutes(1)
+                NOW.minusSeconds(60)
         );
         DeliveryClaim oldClaim = stateService
                 .claimNextDueJob(NOW)
                 .orElseThrow();
-        LocalDateTime recoveryTime = NOW.plusMinutes(3);
+        Instant recoveryTime = NOW.plusSeconds(3 * 60);
 
         assertEquals(1, stateService.recoverExpiredLeases(recoveryTime));
         DeliveryClaim currentClaim = stateService
@@ -365,31 +360,31 @@ class NotificationDeliveryClaimMySqlIT {
     void leaseRecoveryUsesMySqlAndExcludesIneligibleRows() {
         Notification retry = saveProcessing(
                 DeliveryMode.DURABLE,
-                NOW.minusMinutes(2),
+                NOW.minusSeconds(2 * 60),
                 2,
                 "retry-token"
         );
         Notification dead = saveProcessing(
                 DeliveryMode.DURABLE,
-                NOW.minusMinutes(1),
+                NOW.minusSeconds(60),
                 5,
                 "dead-token"
         );
         Notification active = saveProcessing(
                 DeliveryMode.DURABLE,
-                NOW.plusMinutes(1),
+                NOW.plusSeconds(60),
                 1,
                 "active-token"
         );
         Notification synchronous = saveProcessing(
                 DeliveryMode.SYNCHRONOUS,
-                NOW.minusMinutes(1),
+                NOW.minusSeconds(60),
                 1,
                 "sync-token"
         );
         Notification legacy = saveProcessing(
                 null,
-                NOW.minusMinutes(1),
+                NOW.minusSeconds(60),
                 1,
                 "legacy-token"
         );
@@ -416,7 +411,7 @@ class NotificationDeliveryClaimMySqlIT {
     private Notification saveDue(
             DeliveryMode mode,
             String status,
-            LocalDateTime nextAttemptAt
+            Instant nextAttemptAt
     ) {
         return notificationRepository.saveAndFlush(
                 notification(mode, status)
@@ -427,14 +422,14 @@ class NotificationDeliveryClaimMySqlIT {
 
     private Notification saveProcessing(
             DeliveryMode mode,
-            LocalDateTime leaseUntil,
+            Instant leaseUntil,
             int attemptCount,
             String claimToken
     ) {
         return notificationRepository.saveAndFlush(
                 notification(mode, "PROCESSING")
                         .attemptCount(attemptCount)
-                        .lastAttemptAt(NOW.minusMinutes(3))
+                        .lastAttemptAt(NOW.minusSeconds(3 * 60))
                         .leaseUntil(leaseUntil)
                         .claimToken(claimToken)
                         .build()
@@ -463,7 +458,7 @@ class NotificationDeliveryClaimMySqlIT {
                     int category = sequence % 50;
                     statement.setTimestamp(
                             1,
-                            Timestamp.valueOf(NOW.minusHours(2))
+                            Timestamp.from(NOW.minusSeconds(2 * 60 * 60))
                     );
                     if (category <= 5) {
                         statement.setString(2, "DURABLE");
@@ -474,10 +469,10 @@ class NotificationDeliveryClaimMySqlIT {
                     }
                     statement.setTimestamp(
                             3,
-                            Timestamp.valueOf(
+                            Timestamp.from(
                                     category == 2
-                                            ? NOW.plusHours(1)
-                                            : NOW.minusMinutes(1)
+                                            ? NOW.plusSeconds(60 * 60)
+                                            : NOW.minusSeconds(60)
                             )
                     );
                     statement.setString(
@@ -509,7 +504,7 @@ class NotificationDeliveryClaimMySqlIT {
                 LIMIT 1
                 FOR UPDATE SKIP LOCKED
                 """,
-                Timestamp.valueOf(NOW)
+                Timestamp.from(NOW)
         );
         assertPlanUsesIndex(
                 "due",
@@ -544,7 +539,7 @@ class NotificationDeliveryClaimMySqlIT {
                     statement.setString(1, "lease-token-" + sequence);
                     statement.setTimestamp(
                             2,
-                            Timestamp.valueOf(NOW.minusHours(2))
+                            Timestamp.from(NOW.minusSeconds(2 * 60 * 60))
                     );
                     statement.setString(
                             3,
@@ -554,14 +549,14 @@ class NotificationDeliveryClaimMySqlIT {
                     );
                     statement.setTimestamp(
                             4,
-                            Timestamp.valueOf(NOW.minusMinutes(3))
+                            Timestamp.from(NOW.minusSeconds(3 * 60))
                     );
                     statement.setTimestamp(
                             5,
-                            Timestamp.valueOf(
+                            Timestamp.from(
                                     active
-                                            ? NOW.plusMinutes(5)
-                                            : NOW.minusMinutes(1)
+                                            ? NOW.plusSeconds(5 * 60)
+                                            : NOW.minusSeconds(60)
                             )
                     );
                     statement.setString(
@@ -594,7 +589,7 @@ class NotificationDeliveryClaimMySqlIT {
                 LIMIT 25
                 FOR UPDATE
                 """,
-                Timestamp.valueOf(NOW)
+                Timestamp.from(NOW)
         );
         assertPlanUsesIndex(
                 "recovery",
@@ -639,7 +634,7 @@ class NotificationDeliveryClaimMySqlIT {
                 .message("Message")
                 .type("EMAIL")
                 .status(status)
-                .createdAt(NOW.minusHours(1))
+                .createdAt(NOW.minusSeconds(60 * 60))
                 .deliveryMode(mode)
                 .attemptCount(0);
     }
@@ -658,7 +653,7 @@ class NotificationDeliveryClaimMySqlIT {
     private void assertRecovered(
             Long id,
             String status,
-            LocalDateTime nextAttemptAt
+            Instant nextAttemptAt
     ) {
         Notification notification = notificationRepository
                 .findById(id)

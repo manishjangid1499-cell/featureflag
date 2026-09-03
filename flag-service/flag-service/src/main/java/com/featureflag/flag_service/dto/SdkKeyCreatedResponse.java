@@ -1,6 +1,6 @@
 package com.featureflag.flag_service.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record SdkKeyCreatedResponse(
         Long id,
@@ -8,7 +8,7 @@ public record SdkKeyCreatedResponse(
         String environment,
         String keyPrefix,
         boolean active,
-        LocalDateTime createdAt,
+        Instant createdAt,
         String createdBy,
         String rawKey
 ) {

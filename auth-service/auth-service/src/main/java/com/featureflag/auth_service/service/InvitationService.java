@@ -15,13 +15,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 
@@ -37,6 +40,7 @@ public class InvitationService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final InvitationNotificationDispatcher invitationNotificationDispatcher;
+    private final Clock clock;
 
     @Value("${app.invitation.expiration-hours:48}")
     private int expirationHours;
@@ -72,7 +76,8 @@ public class InvitationService {
 
         String rawToken = generateSecureToken();
         String tokenHash = hashToken(rawToken);
-        LocalDateTime expiresAt = LocalDateTime.now().plusHours(expirationHours);
+        Instant now = clock.instant();
+        Instant expiresAt = now.plusSeconds(expirationHours * 3600L);
 
         String inviterName =
                 currentUser.getName() != null && !currentUser.getName().isBlank()
@@ -94,7 +99,7 @@ public class InvitationService {
                 .tokenHash(tokenHash)
                 .expiresAt(expiresAt)
                 .status(InvitationStatus.PENDING)
-                .createdAt(LocalDateTime.now())
+                .createdAt(now)
                 .build();
 
         Invitation saved = invitationRepository.save(invitation);
@@ -125,7 +130,7 @@ public class InvitationService {
 
     public List<InvitationResponse> getAllInvitations() {
         List<Invitation> list = invitationRepository.findAllByOrderByCreatedAtDesc();
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = clock.instant();
 
         // Auto-mark expired invitations.
         for (Invitation invitation : list) {
@@ -137,6 +142,24 @@ public class InvitationService {
         }
 
         return list.stream().map(this::toResponse).toList();
+    }
+
+    @Transactional
+    public Page<InvitationResponse> getAllInvitations(
+            Pageable pageable
+    ) {
+        Page<Invitation> invitations =
+                invitationRepository.findAllByOrderByCreatedAtDescIdDesc(
+                        pageable
+                );
+        Instant now = clock.instant();
+        invitations.getContent().forEach(invitation -> {
+            if (invitation.getStatus() == InvitationStatus.PENDING
+                    && now.isAfter(invitation.getExpiresAt())) {
+                invitation.setStatus(InvitationStatus.EXPIRED);
+            }
+        });
+        return invitations.map(this::toResponse);
     }
 
     @Transactional
@@ -213,7 +236,7 @@ public class InvitationService {
                     .build();
         }
 
-        if (LocalDateTime.now().isAfter(invitation.getExpiresAt())
+        if (clock.instant().isAfter(invitation.getExpiresAt())
                 || invitation.getStatus() == InvitationStatus.EXPIRED) {
             invitation.setStatus(InvitationStatus.EXPIRED);
             invitationRepository.save(invitation);
@@ -257,7 +280,7 @@ public class InvitationService {
             throw new RuntimeException("This invitation has been revoked.");
         }
 
-        if (LocalDateTime.now().isAfter(invitation.getExpiresAt())
+        if (clock.instant().isAfter(invitation.getExpiresAt())
                 || invitation.getStatus() == InvitationStatus.EXPIRED) {
             throw new RuntimeException(
                     "This invitation has expired. Please request a new invitation."
@@ -282,7 +305,7 @@ public class InvitationService {
         userRepository.save(user);
 
         invitation.setStatus(InvitationStatus.ACCEPTED);
-        invitation.setAcceptedAt(LocalDateTime.now());
+        invitation.setAcceptedAt(clock.instant());
         invitationRepository.save(invitation);
 
         log.info("Invitation accepted and user activated successfully");

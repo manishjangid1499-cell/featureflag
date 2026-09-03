@@ -8,8 +8,9 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -21,7 +22,7 @@ public class GlobalExceptionHandler {
             NoResourceFoundException ex
     ) {
         Map<String, Object> response = new HashMap<>();
-        response.put("timestamp", LocalDateTime.now().toString());
+        response.put("timestamp", Instant.now().toString());
         response.put("status", HttpStatus.NOT_FOUND.value());
         response.put("error", "Not Found");
         response.put("message", ex.getMessage());
@@ -31,7 +32,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ForbiddenException.class)
     public ResponseEntity<Map<String, Object>> handleForbiddenException(ForbiddenException ex) {
         Map<String, Object> response = new HashMap<>();
-        response.put("timestamp", LocalDateTime.now().toString());
+        response.put("timestamp", Instant.now().toString());
         response.put("status", HttpStatus.FORBIDDEN.value());
         response.put("error", "Forbidden");
         response.put("message", ex.getMessage());
@@ -41,7 +42,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<Map<String, Object>> handleBadCredentials(BadCredentialsException ex) {
         Map<String, Object> response = new HashMap<>();
-        response.put("timestamp", LocalDateTime.now().toString());
+        response.put("timestamp", Instant.now().toString());
         response.put("status", HttpStatus.UNAUTHORIZED.value());
         response.put("error", "Unauthorized");
         response.put("message", "Invalid email or password");
@@ -53,7 +54,7 @@ public class GlobalExceptionHandler {
             InvitationConflictException ex
     ) {
         Map<String, Object> response = new HashMap<>();
-        response.put("timestamp", LocalDateTime.now().toString());
+        response.put("timestamp", Instant.now().toString());
         response.put("status", HttpStatus.CONFLICT.value());
         response.put("error", "Conflict");
         response.put("message", ex.getMessage());
@@ -63,7 +64,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> handleRuntimeException(RuntimeException ex) {
         Map<String, Object> response = new HashMap<>();
-        response.put("timestamp", LocalDateTime.now().toString());
+        response.put("timestamp", Instant.now().toString());
         response.put("status", HttpStatus.BAD_REQUEST.value());
         response.put("error", "Bad Request");
         response.put("message", ex.getMessage());
@@ -81,7 +82,7 @@ public class GlobalExceptionHandler {
             errors.put(fieldName, errorMessage);
         });
 
-        response.put("timestamp", LocalDateTime.now().toString());
+        response.put("timestamp", Instant.now().toString());
         response.put("status", HttpStatus.BAD_REQUEST.value());
         response.put("error", "Validation Error");
         response.put("message", "Validation failed for one or more fields");
@@ -90,10 +91,22 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<Map<String, Object>> handleMethodValidation(
+            HandlerMethodValidationException ex
+    ) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", Instant.now().toString());
+        response.put("status", HttpStatus.BAD_REQUEST.value());
+        response.put("error", "Validation Error");
+        response.put("message", "Invalid request parameter");
+        return ResponseEntity.badRequest().body(response);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneralException(Exception ex) {
         Map<String, Object> response = new HashMap<>();
-        response.put("timestamp", LocalDateTime.now().toString());
+        response.put("timestamp", Instant.now().toString());
         response.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
         response.put("error", "Internal Server Error");
         response.put("message", "An unexpected error occurred");

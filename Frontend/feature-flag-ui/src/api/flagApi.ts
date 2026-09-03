@@ -1,9 +1,10 @@
 import api from "./axios";
 import type { FeatureFlag, FlagRequest, FlagEvaluationResponse } from "../types/featureFlag";
+import type { PageResponse } from "../types/page";
 
 export const getAllFlags = async (): Promise<FeatureFlag[]> => {
-  const response = await api.get<FeatureFlag[]>("/flags");
-  return response.data;
+  const response = await api.get<PageResponse<FeatureFlag>>("/flags?page=0&size=100");
+  return response.data.content;
 };
 
 export const getFlagById = async (id: number): Promise<FeatureFlag> => {

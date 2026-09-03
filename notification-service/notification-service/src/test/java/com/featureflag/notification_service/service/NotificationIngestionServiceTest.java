@@ -7,16 +7,19 @@ import com.featureflag.notification_service.entity.ProcessedEvent;
 import com.featureflag.notification_service.exception.UnsupportedNotificationChannelException;
 import com.featureflag.notification_service.repository.NotificationRepository;
 import com.featureflag.notification_service.repository.ProcessedEventRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.stream.StreamSupport;
 
@@ -32,14 +35,25 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class NotificationIngestionServiceTest {
 
+    private static final Instant NOW =
+            Instant.parse("2026-09-02T12:00:00Z");
+
     @Mock
     private NotificationRepository notificationRepository;
 
     @Mock
     private ProcessedEventRepository processedEventRepository;
 
-    @InjectMocks
     private NotificationIngestionService ingestionService;
+
+    @BeforeEach
+    void setUp() {
+        ingestionService = new NotificationIngestionService(
+                notificationRepository,
+                processedEventRepository,
+                Clock.fixed(NOW, ZoneOffset.UTC)
+        );
+    }
 
     @Test
     void directEventCreatesOneDurablePendingJobAndMarker() {

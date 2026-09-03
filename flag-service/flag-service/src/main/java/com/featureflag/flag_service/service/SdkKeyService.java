@@ -9,8 +9,11 @@ import com.featureflag.flag_service.repository.SdkKeyRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
-import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -24,6 +27,7 @@ public class SdkKeyService {
 
     private final SdkKeyRepository repository;
     private final SdkKeyCredentialService credentialService;
+    private final Clock clock;
 
     @Transactional
     public SdkKeyCreatedResponse create(
@@ -36,7 +40,7 @@ public class SdkKeyService {
         String createdBy = requireActor(actor);
         SdkKeyCredentialService.GeneratedSdkKey generated =
                 credentialService.generate();
-        LocalDateTime createdAt = LocalDateTime.now();
+        Instant createdAt = clock.instant();
 
         SdkKey saved = repository.save(
                 SdkKey.builder()
@@ -71,6 +75,13 @@ public class SdkKeyService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public Page<SdkKeyMetadataResponse> list(Pageable pageable) {
+        return repository
+                .findAllByOrderByCreatedAtDescIdDesc(pageable)
+                .map(this::metadata);
+    }
+
     @Transactional
     public SdkKeyMetadataResponse revoke(Long id) {
         SdkKey sdkKey = repository.findById(id)
@@ -80,7 +91,7 @@ public class SdkKeyService {
 
         if (sdkKey.isActive()) {
             sdkKey.setActive(false);
-            sdkKey.setRevokedAt(LocalDateTime.now());
+            sdkKey.setRevokedAt(clock.instant());
         }
         return metadata(sdkKey);
     }

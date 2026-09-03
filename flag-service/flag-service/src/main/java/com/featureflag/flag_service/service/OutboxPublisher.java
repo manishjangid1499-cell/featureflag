@@ -7,7 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
+import java.time.Clock;
 import java.util.List;
 
 @Component
@@ -17,6 +17,7 @@ public class OutboxPublisher {
 
     private final OutboxEventRepository outboxEventRepository;
     private final OutboxDeliveryService outboxDeliveryService;
+    private final Clock clock;
 
     @Scheduled(
             fixedDelayString =
@@ -27,7 +28,7 @@ public class OutboxPublisher {
                 outboxEventRepository
                         .findTop50ByStatusAndNextAttemptAtLessThanEqualOrderByCreatedAtAsc(
                                 OutboxEvent.STATUS_PENDING,
-                                LocalDateTime.now()
+                                clock.instant()
                         );
 
         for (OutboxEvent event : pendingEvents) {

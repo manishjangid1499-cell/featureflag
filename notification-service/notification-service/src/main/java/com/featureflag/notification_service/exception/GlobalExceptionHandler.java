@@ -5,13 +5,26 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<Map<String, Object>> handleMethodValidation(
+            HandlerMethodValidationException ex
+    ) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", Instant.now());
+        response.put("status", HttpStatus.BAD_REQUEST.value());
+        response.put("error", "Validation Failed");
+        response.put("message", "Invalid request parameter");
+        return ResponseEntity.badRequest().body(response);
+    }
 
     @ExceptionHandler(InvitationDeliveryException.class)
     public ResponseEntity<Map<String, Object>>
@@ -19,7 +32,7 @@ public class GlobalExceptionHandler {
             InvitationDeliveryException ex
     ) {
         Map<String, Object> response = new HashMap<>();
-        response.put("timestamp", LocalDateTime.now());
+        response.put("timestamp", Instant.now());
         response.put("status", HttpStatus.BAD_GATEWAY.value());
         response.put("error", "Bad Gateway");
         response.put("message", ex.getMessage());
@@ -35,7 +48,7 @@ public class GlobalExceptionHandler {
             NotificationConflictException ex
     ) {
         Map<String, Object> response = new HashMap<>();
-        response.put("timestamp", LocalDateTime.now());
+        response.put("timestamp", Instant.now());
         response.put("status", HttpStatus.CONFLICT.value());
         response.put("error", "Conflict");
         response.put("message", ex.getMessage());
@@ -48,7 +61,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ForbiddenException.class)
     public ResponseEntity<Map<String, Object>> handleForbidden(ForbiddenException ex) {
         Map<String, Object> response = new HashMap<>();
-        response.put("timestamp", LocalDateTime.now());
+        response.put("timestamp", Instant.now());
         response.put("status", HttpStatus.FORBIDDEN.value());
         response.put("error", "Forbidden");
         response.put("message", ex.getMessage());
@@ -69,7 +82,7 @@ public class GlobalExceptionHandler {
 
         response.put(
                 "timestamp",
-                LocalDateTime.now()
+                Instant.now()
         );
 
         response.put(
@@ -120,7 +133,7 @@ public class GlobalExceptionHandler {
 
         response.put(
                 "timestamp",
-                LocalDateTime.now()
+                Instant.now()
         );
 
         response.put(
@@ -159,7 +172,7 @@ public class GlobalExceptionHandler {
 
         response.put(
                 "timestamp",
-                LocalDateTime.now()
+                Instant.now()
         );
 
         response.put(
@@ -194,7 +207,7 @@ public class GlobalExceptionHandler {
 
         response.put(
                 "timestamp",
-                LocalDateTime.now()
+                Instant.now()
         );
 
         response.put(

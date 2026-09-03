@@ -2,6 +2,7 @@ package com.featureflag.flag_service.security;
 
 import com.featureflag.flag_service.controller.RuntimeEvaluationController;
 import com.featureflag.flag_service.controller.SdkKeyController;
+import com.featureflag.flag_service.config.TimeConfiguration;
 import com.featureflag.flag_service.dto.CreateSdkKeyRequest;
 import com.featureflag.flag_service.dto.FlagEvaluationResponse;
 import com.featureflag.flag_service.dto.SdkKeyCreatedResponse;
@@ -18,6 +19,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.MediaType;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -25,7 +28,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -48,6 +51,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @Import({
         SecurityConfig.class,
+        TimeConfiguration.class,
         SdkRuntimeSecurityTest.TestSecurityConfiguration.class
 })
 class SdkRuntimeSecurityTest {
@@ -293,7 +297,9 @@ class SdkRuntimeSecurityTest {
                 new CreateSdkKeyRequest("Backend", "DEV"),
                 "operator@example.com"
         )).thenReturn(createdResponse());
-        when(sdkKeyService.list()).thenReturn(List.of(metadata()));
+        when(sdkKeyService.list(
+                org.mockito.ArgumentMatchers.any(Pageable.class)
+        )).thenReturn(new PageImpl<>(List.of(metadata())));
         when(sdkKeyService.revoke(10L)).thenReturn(
                 revokedMetadata()
         );
@@ -352,7 +358,9 @@ class SdkRuntimeSecurityTest {
                 new CreateSdkKeyRequest("Backend", "DEV"),
                 "owner@example.com"
         )).thenReturn(createdResponse());
-        when(sdkKeyService.list()).thenReturn(List.of(metadata()));
+        when(sdkKeyService.list(
+                org.mockito.ArgumentMatchers.any(Pageable.class)
+        )).thenReturn(new PageImpl<>(List.of(metadata())));
         when(sdkKeyService.revoke(10L)).thenReturn(
                 revokedMetadata()
         );
@@ -417,7 +425,7 @@ class SdkRuntimeSecurityTest {
                 "DEV",
                 "ff_sdk_AAAAAAAA",
                 true,
-                LocalDateTime.parse("2026-08-27T12:00:00"),
+                Instant.parse("2026-08-27T12:00:00Z"),
                 "owner@example.com",
                 RAW_KEY
         );
@@ -430,7 +438,7 @@ class SdkRuntimeSecurityTest {
                 "DEV",
                 "ff_sdk_AAAAAAAA",
                 true,
-                LocalDateTime.parse("2026-08-27T12:00:00"),
+                Instant.parse("2026-08-27T12:00:00Z"),
                 null,
                 "owner@example.com"
         );
@@ -443,8 +451,8 @@ class SdkRuntimeSecurityTest {
                 "DEV",
                 "ff_sdk_AAAAAAAA",
                 false,
-                LocalDateTime.parse("2026-08-27T12:00:00"),
-                LocalDateTime.parse("2026-08-27T13:00:00"),
+                Instant.parse("2026-08-27T12:00:00Z"),
+                Instant.parse("2026-08-27T13:00:00Z"),
                 "owner@example.com"
         );
     }

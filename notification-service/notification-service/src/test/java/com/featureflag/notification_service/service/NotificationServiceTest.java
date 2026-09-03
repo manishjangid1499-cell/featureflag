@@ -14,12 +14,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -30,6 +32,9 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
 
+    private static final Instant NOW =
+            Instant.parse("2026-09-02T12:00:00Z");
+
     @Mock
     private NotificationRepository notificationRepository;
 
@@ -39,13 +44,18 @@ class NotificationServiceTest {
     @Mock
     private AuthRecipientsClient authRecipientsClient;
 
-    @InjectMocks
     private NotificationService notificationService;
 
     private Notification testNotification;
 
     @BeforeEach
     void setUp() {
+        notificationService = new NotificationService(
+                notificationRepository,
+                mailSender,
+                authRecipientsClient,
+                Clock.fixed(NOW, ZoneOffset.UTC)
+        );
         testNotification = Notification.builder()
                 .id(1L)
                 .recipient("owner@company.com")

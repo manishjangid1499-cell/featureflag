@@ -11,7 +11,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mail.MailSendException;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -31,6 +33,9 @@ import static org.springframework.transaction.support.TransactionSynchronization
 @ExtendWith(MockitoExtension.class)
 class NotificationDeliveryServiceTest {
 
+    private static final Instant NOW =
+            Instant.parse("2026-09-02T12:00:00Z");
+
     @Mock
     private NotificationDeliveryStateService stateService;
 
@@ -46,7 +51,8 @@ class NotificationDeliveryServiceTest {
         deliveryService = new NotificationDeliveryService(
                 stateService,
                 emailService,
-                properties
+                properties,
+                Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }
 
@@ -93,28 +99,16 @@ class NotificationDeliveryServiceTest {
                 any(),
                 eq("MailSendException")
         )).thenReturn(true);
-        LocalDateTime before = LocalDateTime.now();
-
         deliveryService.processDueNotifications();
 
-        LocalDateTime after = LocalDateTime.now();
-        ArgumentCaptor<LocalDateTime> nextAttemptCaptor =
-                ArgumentCaptor.forClass(LocalDateTime.class);
+        ArgumentCaptor<Instant> nextAttemptCaptor =
+                ArgumentCaptor.forClass(Instant.class);
         verify(stateService).markRetry(
                 eq(claim),
                 nextAttemptCaptor.capture(),
                 eq("MailSendException")
         );
-        assertFalse(
-                nextAttemptCaptor.getValue().isBefore(
-                        before.plusSeconds(60)
-                )
-        );
-        assertFalse(
-                nextAttemptCaptor.getValue().isAfter(
-                        after.plusSeconds(60)
-                )
-        );
+        assertEquals(NOW.plusSeconds(60), nextAttemptCaptor.getValue());
         verify(stateService, never()).markDead(any(), any());
     }
 

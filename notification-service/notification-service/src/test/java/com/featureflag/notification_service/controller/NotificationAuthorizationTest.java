@@ -18,6 +18,8 @@ import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
@@ -51,8 +53,10 @@ class NotificationAuthorizationTest {
     @Test
     void ownerCanQueryOrganizationWideStatus() throws Exception {
         authenticate("owner-token", "owner@company.com", "OWNER");
-        when(notificationService.getNotificationsByStatus("SENT"))
-                .thenReturn(List.of());
+        when(notificationService.getNotificationsByStatus(
+                eq("SENT"),
+                any(Pageable.class)
+        )).thenReturn(Page.empty());
 
         mockMvc.perform(get("/api/notifications/status/SENT")
                         .header("Authorization", "Bearer owner-token"))

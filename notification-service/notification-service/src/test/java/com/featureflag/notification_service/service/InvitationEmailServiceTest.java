@@ -9,12 +9,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,6 +26,9 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class InvitationEmailServiceTest {
+
+    private static final Instant NOW =
+            Instant.parse("2026-09-02T12:00:00Z");
 
     private static final String RAW_TOKEN =
             "VERY_SECRET_TEST_TOKEN";
@@ -38,7 +43,6 @@ class InvitationEmailServiceTest {
     @Mock
     private JavaMailSender mailSender;
 
-    @InjectMocks
     private InvitationEmailService invitationEmailService;
 
     private InvitationEmailRequest request;
@@ -46,6 +50,11 @@ class InvitationEmailServiceTest {
 
     @BeforeEach
     void setUp() {
+        invitationEmailService = new InvitationEmailService(
+                notificationRepository,
+                mailSender,
+                Clock.fixed(NOW, ZoneOffset.UTC)
+        );
         persistedStatuses = new ArrayList<>();
 
         request = new InvitationEmailRequest(

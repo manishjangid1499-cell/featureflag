@@ -3,6 +3,7 @@ package com.featureflag.flag_service.controller;
 import com.featureflag.flag_service.dto.FlagEvaluationResponse;
 import com.featureflag.flag_service.service.FlagEvaluationTelemetryService;
 import com.featureflag.flag_service.service.FlagMutationAuditService;
+import com.featureflag.flag_service.service.FlagQueryService;
 import com.featureflag.flag_service.service.FlagService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,6 +29,9 @@ class FlagControllerEvaluationTelemetryTest {
 
     @Mock
     private FlagMutationAuditService flagMutationAuditService;
+
+    @Mock
+    private FlagQueryService flagQueryService;
 
     @InjectMocks
     private FlagController controller;

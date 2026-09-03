@@ -11,7 +11,10 @@ import com.featureflag.flag_service.repository.OutboxEventRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Service
@@ -31,6 +34,7 @@ public class OutboxService {
     private final ObjectMapper objectMapper;
     private final FeatureFlagRepository featureFlagRepository;
     private final FlagAuditContext flagAuditContext;
+    private final Clock clock;
 
     public String enqueueFlagEvent(
             String eventType,
@@ -39,7 +43,11 @@ public class OutboxService {
     ) {
         String eventId = UUID.randomUUID().toString();
 
-        LocalDateTime occurredAt = LocalDateTime.now();
+        Instant eventInstant = clock.instant();
+        LocalDateTime occurredAt = LocalDateTime.ofInstant(
+                eventInstant,
+                ZoneOffset.UTC
+        );
         FlagAuditContext.AuditDetails auditDetails =
                 flagAuditContext.current().orElse(null);
 
@@ -48,7 +56,7 @@ public class OutboxService {
                 eventType,
                 flagKey,
                 environment,
-                occurredAt.toString(),
+                eventInstant.toString(),
                 SOURCE_SERVICE,
                 auditDetails == null
                         ? null
@@ -144,7 +152,7 @@ public class OutboxService {
             );
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = clock.instant();
 
         OutboxEvent outboxEvent =
                 OutboxEvent.builder()

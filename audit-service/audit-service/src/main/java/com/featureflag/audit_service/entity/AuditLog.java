@@ -3,6 +3,8 @@ package com.featureflag.audit_service.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.Instant;
+
 @Entity
 @Table(
         name = "audit_logs",
@@ -50,5 +52,5 @@ public class AuditLog {
     private String afterState;
 
     @Column(name = "occurred_at")
-    private java.time.LocalDateTime occurredAt;
+    private Instant occurredAt;
 }

@@ -2,6 +2,7 @@ package com.featureflag.notification_service.service;
 
 import com.featureflag.notification_service.client.AuthRecipientsClient;
 import com.featureflag.notification_service.config.NotificationDeliveryProperties;
+import com.featureflag.notification_service.config.TimeConfiguration;
 import com.featureflag.notification_service.entity.DeliveryMode;
 import com.featureflag.notification_service.entity.Notification;
 import com.featureflag.notification_service.exception.NotificationConflictException;
@@ -27,7 +28,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -49,6 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Import({
         NotificationService.class,
         MySqlClaimTransactionHelper.class,
+        TimeConfiguration.class,
         NotificationDeleteClaimMySqlIT.PropertiesConfiguration.class
 })
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -56,13 +58,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Testcontainers
 class NotificationDeleteClaimMySqlIT {
 
-    private static final LocalDateTime NOW = LocalDateTime.of(
-            2026,
-            8,
-            25,
-            12,
-            0
-    );
+    private static final Instant NOW =
+            Instant.parse("2026-08-25T12:00:00Z");
     private static final long FUTURE_TIMEOUT_SECONDS = 15;
 
     @Container
@@ -108,10 +105,10 @@ class NotificationDeleteClaimMySqlIT {
                         .message("Message")
                         .type("EMAIL")
                         .status("PENDING")
-                        .createdAt(NOW.minusHours(1))
+                        .createdAt(NOW.minusSeconds(60 * 60))
                         .deliveryMode(DeliveryMode.DURABLE)
                         .attemptCount(0)
-                        .nextAttemptAt(NOW.minusMinutes(1))
+                        .nextAttemptAt(NOW.minusSeconds(60))
                         .build()
         );
         ExecutorService executor = Executors.newFixedThreadPool(2);

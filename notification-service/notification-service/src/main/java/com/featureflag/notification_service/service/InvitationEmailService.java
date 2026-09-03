@@ -10,7 +10,7 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import java.time.Clock;
 import java.util.Locale;
 
 @Service
@@ -30,6 +30,7 @@ public class InvitationEmailService {
 
     private final NotificationRepository notificationRepository;
     private final JavaMailSender mailSender;
+    private final Clock clock;
 
     public Notification sendInvitationEmail(InvitationEmailRequest request) {
         String recipient = normalizeEmail(request.getRecipient());
@@ -42,7 +43,7 @@ public class InvitationEmailService {
                 .message(SAFE_HISTORY_MESSAGE)
                 .type("EMAIL")
                 .status("PENDING")
-                .createdAt(LocalDateTime.now())
+                .createdAt(clock.instant())
                 .build();
 
         notification = notificationRepository.save(notification);
@@ -58,7 +59,7 @@ public class InvitationEmailService {
             mailSender.send(mailMessage);
 
             notification.setStatus("SENT");
-            notification.setSentAt(LocalDateTime.now());
+            notification.setSentAt(clock.instant());
         } catch (Exception exception) {
             notification.setStatus("FAILED");
 

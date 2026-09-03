@@ -11,7 +11,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Set;
 
 @Service
@@ -97,7 +97,7 @@ public class EvaluationTelemetryConsumer {
                 ProcessedEvent.builder()
                         .eventId(eventId)
                         .topic(topic)
-                        .processedAt(LocalDateTime.now())
+                        .processedAt(Instant.now())
                         .build()
         );
 

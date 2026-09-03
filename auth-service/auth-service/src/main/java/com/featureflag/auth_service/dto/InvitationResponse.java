@@ -7,7 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Data
 @NoArgsConstructor
@@ -23,7 +23,7 @@ public class InvitationResponse {
     private String invitedByEmail;
     private String invitedByName;
     private InvitationStatus status;
-    private LocalDateTime expiresAt;
-    private LocalDateTime createdAt;
-    private LocalDateTime acceptedAt;
+    private Instant expiresAt;
+    private Instant createdAt;
+    private Instant acceptedAt;
 }

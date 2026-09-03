@@ -15,7 +15,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,7 +22,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.HexFormat;
 import java.util.List;
@@ -35,6 +36,9 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class InvitationServiceTest {
+
+    private static final Instant NOW =
+            Instant.parse("2026-09-02T12:00:00Z");
 
     @Mock
     private InvitationRepository invitationRepository;
@@ -48,7 +52,6 @@ class InvitationServiceTest {
     @Mock
     private InvitationNotificationDispatcher invitationNotificationDispatcher;
 
-    @InjectMocks
     private InvitationService invitationService;
 
     private User ownerUser;
@@ -57,6 +60,13 @@ class InvitationServiceTest {
 
     @BeforeEach
     void setUp() {
+        invitationService = new InvitationService(
+                invitationRepository,
+                userRepository,
+                passwordEncoder,
+                invitationNotificationDispatcher,
+                Clock.fixed(NOW, ZoneOffset.UTC)
+        );
         ReflectionTestUtils.setField(
                 invitationService,
                 "expirationHours",
@@ -289,7 +299,7 @@ class InvitationServiceTest {
                 .fullName("New Dev")
                 .invitedRole(Role.DEVELOPER)
                 .status(InvitationStatus.PENDING)
-                .expiresAt(LocalDateTime.now().plusHours(24))
+                .expiresAt(NOW.plusSeconds(24 * 60 * 60))
                 .tokenHash("previous-hash")
                 .build();
         InviteMemberRequest request = new InviteMemberRequest(
@@ -323,7 +333,7 @@ class InvitationServiceTest {
                 .email("expired@company.com")
                 .invitedRole(Role.DEVELOPER)
                 .status(InvitationStatus.PENDING)
-                .expiresAt(LocalDateTime.now().minusHours(1))
+                .expiresAt(NOW.minusSeconds(60 * 60))
                 .tokenHash("somehash")
                 .build();
 
@@ -347,7 +357,7 @@ class InvitationServiceTest {
                 .fullName("Invitee")
                 .invitedRole(Role.DEVELOPER)
                 .status(InvitationStatus.PENDING)
-                .expiresAt(LocalDateTime.now().plusHours(24))
+                .expiresAt(NOW.plusSeconds(24 * 60 * 60))
                 .tokenHash("hash")
                 .build();
 
@@ -424,7 +434,7 @@ class InvitationServiceTest {
     @Test
     @DisplayName("Accept Invitation - Already accepted invitation returns conflict")
     void testAcceptInvitation_AlreadyAcceptedReturnsConflict() {
-        LocalDateTime acceptedAt = LocalDateTime.now().minusMinutes(5);
+        Instant acceptedAt = NOW.minusSeconds(5 * 60);
         Invitation invitation = pendingInvitation();
         invitation.setStatus(InvitationStatus.ACCEPTED);
         invitation.setAcceptedAt(acceptedAt);
@@ -465,7 +475,7 @@ class InvitationServiceTest {
     @DisplayName("Accept Invitation - Expired invitation is rejected without status save")
     void testAcceptInvitation_ExpiredInvitationRejectedWithoutSave() {
         Invitation invitation = pendingInvitation();
-        invitation.setExpiresAt(LocalDateTime.now().minusMinutes(1));
+        invitation.setExpiresAt(NOW.minusSeconds(60));
         when(invitationRepository.findByTokenHashForUpdate(anyString()))
                 .thenReturn(Optional.of(invitation));
 
@@ -593,7 +603,7 @@ class InvitationServiceTest {
                 .fullName("Invitee")
                 .invitedRole(Role.DEVELOPER)
                 .status(InvitationStatus.PENDING)
-                .expiresAt(LocalDateTime.now().plusHours(24))
+                .expiresAt(NOW.plusSeconds(24 * 60 * 60))
                 .tokenHash("hash")
                 .build();
     }

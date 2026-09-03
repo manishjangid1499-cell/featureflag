@@ -11,7 +11,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -26,6 +28,8 @@ class SdkKeyServiceTest {
     private static final String RAW_KEY =
             "ff_sdk_" + "A".repeat(43);
     private static final String HASH = "b".repeat(64);
+    private static final Instant NOW =
+            Instant.parse("2026-08-27T12:00:00Z");
 
     @Mock
     private SdkKeyRepository repository;
@@ -37,7 +41,11 @@ class SdkKeyServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new SdkKeyService(repository, credentialService);
+        service = new SdkKeyService(
+                repository,
+                credentialService,
+                Clock.fixed(NOW, ZoneOffset.UTC)
+        );
     }
 
     @Test
@@ -107,7 +115,7 @@ class SdkKeyServiceTest {
         );
 
         var first = service.revoke(10L);
-        LocalDateTime revokedAt = sdkKey.getRevokedAt();
+        Instant revokedAt = sdkKey.getRevokedAt();
         var second = service.revoke(10L);
 
         assertThat(first.active()).isFalse();
@@ -132,9 +140,7 @@ class SdkKeyServiceTest {
                 .keyPrefix("ff_sdk_AAAAAAAA")
                 .keyHash(HASH)
                 .active(active)
-                .createdAt(LocalDateTime.parse(
-                        "2026-08-27T12:00:00"
-                ))
+                .createdAt(NOW)
                 .createdBy("owner@example.com")
                 .build();
     }

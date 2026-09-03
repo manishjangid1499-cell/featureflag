@@ -1,6 +1,7 @@
 package com.featureflag.notification_service.service;
 
 import com.featureflag.notification_service.config.NotificationDeliveryProperties;
+import com.featureflag.notification_service.config.TimeConfiguration;
 import com.featureflag.notification_service.entity.DeliveryMode;
 import com.featureflag.notification_service.entity.Notification;
 import com.featureflag.notification_service.repository.NotificationRepository;
@@ -17,7 +18,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -32,6 +33,7 @@ import static org.mockito.Mockito.verify;
 @Import({
         NotificationDeliveryStateService.class,
         NotificationDeliveryService.class,
+        TimeConfiguration.class,
         NotificationUnsupportedChannelDeliveryIntegrationTest.PropertiesConfiguration.class
 })
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -66,7 +68,7 @@ class NotificationUnsupportedChannelDeliveryIntegrationTest {
 
     @Test
     void unsupportedJobBecomesDeadWithoutSmtpAndEmailJobStillDelivers() {
-        LocalDateTime dueAt = LocalDateTime.now().minusMinutes(1);
+        Instant dueAt = Instant.now().minusSeconds(60);
         Notification unsupported = save(
                 "sms-recipient@company.com",
                 "SMS",
@@ -122,7 +124,7 @@ class NotificationUnsupportedChannelDeliveryIntegrationTest {
     private Notification save(
             String recipient,
             String type,
-            LocalDateTime dueAt
+            Instant dueAt
     ) {
         return notificationRepository.saveAndFlush(
                 Notification.builder()
@@ -131,7 +133,7 @@ class NotificationUnsupportedChannelDeliveryIntegrationTest {
                         .message("Message")
                         .type(type)
                         .status("PENDING")
-                        .createdAt(dueAt.minusMinutes(1))
+                        .createdAt(dueAt.minusSeconds(60))
                         .deliveryMode(DeliveryMode.DURABLE)
                         .attemptCount(0)
                         .nextAttemptAt(dueAt)

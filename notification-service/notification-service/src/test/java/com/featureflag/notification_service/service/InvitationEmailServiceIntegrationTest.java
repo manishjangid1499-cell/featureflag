@@ -1,5 +1,6 @@
 package com.featureflag.notification_service.service;
 
+import com.featureflag.notification_service.config.TimeConfiguration;
 import com.featureflag.notification_service.dto.InvitationEmailRequest;
 import com.featureflag.notification_service.entity.DeliveryMode;
 import com.featureflag.notification_service.entity.Notification;
@@ -29,7 +30,7 @@ import static org.mockito.Mockito.doThrow;
 
 @DataJpaTest
 @ActiveProfiles("test")
-@Import(InvitationEmailService.class)
+@Import({InvitationEmailService.class, TimeConfiguration.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class InvitationEmailServiceIntegrationTest {
 

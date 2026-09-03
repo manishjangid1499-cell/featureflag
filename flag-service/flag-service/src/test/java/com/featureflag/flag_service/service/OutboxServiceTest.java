@@ -11,6 +11,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,12 +37,18 @@ class OutboxServiceTest {
     private final FlagAuditContext flagAuditContext =
             new FlagAuditContext();
 
+    private final Clock clock = Clock.fixed(
+            Instant.parse("2026-08-27T12:00:00Z"),
+            ZoneOffset.UTC
+    );
+
     private final OutboxService outboxService =
             new OutboxService(
                     repository,
                     objectMapper,
                     featureFlagRepository,
-                    flagAuditContext
+                    flagAuditContext,
+                    clock
             );
 
     @Test
@@ -77,7 +86,7 @@ class OutboxServiceTest {
         assertThat(stored.getCreatedAt())
                 .isNotNull();
         assertThat(stored.getNextAttemptAt())
-                .isNotNull();
+                .isEqualTo(Instant.parse("2026-08-27T12:00:00Z"));
 
         JsonNode payload =
                 objectMapper.readTree(
@@ -99,7 +108,9 @@ class OutboxServiceTest {
         assertThat(payload.get("sourceService").asText())
                 .isEqualTo("flag-service");
         assertThat(payload.get("occurredAt").asText())
-                .isNotBlank();
+                .isEqualTo("2026-08-27T12:00:00");
+        assertThat(payload.get("timestamp").asText())
+                .isEqualTo("2026-08-27T12:00:00Z");
         assertThat(payload.get("actor").isNull()).isTrue();
         assertThat(payload.get("before").isNull()).isTrue();
         assertThat(payload.get("after").isNull()).isTrue();

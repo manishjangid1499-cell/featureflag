@@ -9,7 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import java.time.Clock;
 import java.util.UUID;
 
 @Service
@@ -22,6 +22,7 @@ public class EvaluationTelemetryPublisher {
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
     private final String topic;
+    private final Clock clock;
 
     public EvaluationTelemetryPublisher(
             KafkaTemplate<String, String> kafkaTemplate,
@@ -31,11 +32,13 @@ public class EvaluationTelemetryPublisher {
                             + DEFAULT_TOPIC
                             + "}"
             )
-            String topic
+            String topic,
+            Clock clock
     ) {
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
         this.topic = topic;
+        this.clock = clock;
     }
 
     public void publish(FlagEvaluationResponse evaluation) {
@@ -47,7 +50,7 @@ public class EvaluationTelemetryPublisher {
                         : FlagEvent.EVALUATION_DISABLED,
                 evaluation.getFlagKey(),
                 evaluation.getEnvironment(),
-                LocalDateTime.now().toString()
+                clock.instant().toString()
         );
 
         String payload;

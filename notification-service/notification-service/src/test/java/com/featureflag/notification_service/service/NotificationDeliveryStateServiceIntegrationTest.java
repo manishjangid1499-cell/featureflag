@@ -1,6 +1,7 @@
 package com.featureflag.notification_service.service;
 
 import com.featureflag.notification_service.config.NotificationDeliveryProperties;
+import com.featureflag.notification_service.config.TimeConfiguration;
 import com.featureflag.notification_service.entity.DeliveryMode;
 import com.featureflag.notification_service.entity.Notification;
 import com.featureflag.notification_service.repository.NotificationRepository;
@@ -18,7 +19,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,6 +35,7 @@ import static org.mockito.Mockito.doAnswer;
 @Import({
         NotificationDeliveryStateService.class,
         NotificationDeliveryService.class,
+        TimeConfiguration.class,
         NotificationDeliveryStateServiceIntegrationTest.PropertiesConfiguration.class
 })
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -72,17 +74,11 @@ class NotificationDeliveryStateServiceIntegrationTest {
 
     @Test
     void claimsDuePendingAndRetryJobsOneAtATime() {
-        LocalDateTime now = LocalDateTime.of(
-                2026,
-                8,
-                25,
-                12,
-                0
-        );
+        Instant now = Instant.parse("2026-08-25T12:00:00Z");
         Notification pending = save(
                 DeliveryMode.DURABLE,
                 "PENDING",
-                now.minusMinutes(2),
+                now.minusSeconds(2 * 60),
                 null,
                 0,
                 null
@@ -90,7 +86,7 @@ class NotificationDeliveryStateServiceIntegrationTest {
         Notification retry = save(
                 DeliveryMode.DURABLE,
                 "RETRY",
-                now.minusMinutes(1),
+                now.minusSeconds(60),
                 null,
                 1,
                 null
@@ -117,7 +113,7 @@ class NotificationDeliveryStateServiceIntegrationTest {
         assertEquals(1, claimedPending.getAttemptCount());
         assertEquals(now, claimedPending.getLastAttemptAt());
         assertEquals(
-                now.plusMinutes(2),
+                now.plusSeconds(2 * 60),
                 claimedPending.getLeaseUntil()
         );
         assertNull(claimedPending.getNextAttemptAt());
@@ -127,17 +123,11 @@ class NotificationDeliveryStateServiceIntegrationTest {
 
     @Test
     void normalClaimExcludesEveryIneligibleModeAndState() {
-        LocalDateTime now = LocalDateTime.of(
-                2026,
-                8,
-                25,
-                12,
-                0
-        );
+        Instant now = Instant.parse("2026-08-25T12:00:00Z");
         save(
                 DeliveryMode.SYNCHRONOUS,
                 "PENDING",
-                now.minusMinutes(1),
+                now.minusSeconds(60),
                 null,
                 0,
                 null
@@ -145,7 +135,7 @@ class NotificationDeliveryStateServiceIntegrationTest {
         save(
                 null,
                 "PENDING",
-                now.minusMinutes(1),
+                now.minusSeconds(60),
                 null,
                 0,
                 null
@@ -153,7 +143,7 @@ class NotificationDeliveryStateServiceIntegrationTest {
         save(
                 DeliveryMode.DURABLE,
                 "PENDING",
-                now.plusMinutes(1),
+                now.plusSeconds(60),
                 null,
                 0,
                 null
@@ -161,7 +151,7 @@ class NotificationDeliveryStateServiceIntegrationTest {
         save(
                 DeliveryMode.DURABLE,
                 "SENT",
-                now.minusMinutes(1),
+                now.minusSeconds(60),
                 null,
                 1,
                 null
@@ -169,7 +159,7 @@ class NotificationDeliveryStateServiceIntegrationTest {
         save(
                 DeliveryMode.DURABLE,
                 "DEAD",
-                now.minusMinutes(1),
+                now.minusSeconds(60),
                 null,
                 5,
                 null
@@ -178,7 +168,7 @@ class NotificationDeliveryStateServiceIntegrationTest {
                 DeliveryMode.DURABLE,
                 "PROCESSING",
                 null,
-                now.plusMinutes(1),
+                now.plusSeconds(60),
                 1,
                 "active-token"
         );
@@ -191,18 +181,12 @@ class NotificationDeliveryStateServiceIntegrationTest {
 
     @Test
     void staleCompletionCannotOverwriteCurrentClaim() {
-        LocalDateTime now = LocalDateTime.of(
-                2026,
-                8,
-                25,
-                12,
-                0
-        );
+        Instant now = Instant.parse("2026-08-25T12:00:00Z");
         Notification processing = save(
                 DeliveryMode.DURABLE,
                 "PROCESSING",
                 null,
-                now.plusMinutes(2),
+                now.plusSeconds(2 * 60),
                 2,
                 "current-token"
         );
@@ -242,18 +226,12 @@ class NotificationDeliveryStateServiceIntegrationTest {
 
     @Test
     void retryAndDeadCompletionPersistExpectedTerminalFields() {
-        LocalDateTime now = LocalDateTime.of(
-                2026,
-                8,
-                25,
-                12,
-                0
-        );
+        Instant now = Instant.parse("2026-08-25T12:00:00Z");
         Notification retrying = save(
                 DeliveryMode.DURABLE,
                 "PROCESSING",
                 null,
-                now.plusMinutes(2),
+                now.plusSeconds(2 * 60),
                 2,
                 "retry-token"
         );
@@ -261,14 +239,14 @@ class NotificationDeliveryStateServiceIntegrationTest {
                 DeliveryMode.DURABLE,
                 "PROCESSING",
                 null,
-                now.plusMinutes(2),
+                now.plusSeconds(2 * 60),
                 5,
                 "dead-token"
         );
 
         assertTrue(stateService.markRetry(
                 claim(retrying, "retry-token", 2),
-                now.plusMinutes(1),
+                now.plusSeconds(60),
                 "MailSendException"
         ));
         assertTrue(stateService.markDead(
@@ -280,7 +258,7 @@ class NotificationDeliveryStateServiceIntegrationTest {
                 .findById(retrying.getId())
                 .orElseThrow();
         assertEquals("RETRY", retry.getStatus());
-        assertEquals(now.plusMinutes(1), retry.getNextAttemptAt());
+        assertEquals(now.plusSeconds(60), retry.getNextAttemptAt());
         assertNull(retry.getClaimToken());
         assertNull(retry.getLeaseUntil());
         assertNull(retry.getSentAt());
@@ -302,18 +280,12 @@ class NotificationDeliveryStateServiceIntegrationTest {
 
     @Test
     void recoversOnlyExpiredDurableProcessingRows() {
-        LocalDateTime now = LocalDateTime.of(
-                2026,
-                8,
-                25,
-                12,
-                0
-        );
+        Instant now = Instant.parse("2026-08-25T12:00:00Z");
         Notification retry = save(
                 DeliveryMode.DURABLE,
                 "PROCESSING",
                 null,
-                now.minusMinutes(1),
+                now.minusSeconds(60),
                 2,
                 "retry-token"
         );
@@ -321,7 +293,7 @@ class NotificationDeliveryStateServiceIntegrationTest {
                 DeliveryMode.DURABLE,
                 "PROCESSING",
                 null,
-                now.minusMinutes(1),
+                now.minusSeconds(60),
                 5,
                 "dead-token"
         );
@@ -329,7 +301,7 @@ class NotificationDeliveryStateServiceIntegrationTest {
                 DeliveryMode.DURABLE,
                 "PROCESSING",
                 null,
-                now.plusMinutes(1),
+                now.plusSeconds(60),
                 1,
                 "active-token"
         );
@@ -337,7 +309,7 @@ class NotificationDeliveryStateServiceIntegrationTest {
                 DeliveryMode.SYNCHRONOUS,
                 "PROCESSING",
                 null,
-                now.minusMinutes(1),
+                now.minusSeconds(60),
                 1,
                 "sync-token"
         );
@@ -345,7 +317,7 @@ class NotificationDeliveryStateServiceIntegrationTest {
                 null,
                 "PROCESSING",
                 null,
-                now.minusMinutes(1),
+                now.minusSeconds(60),
                 1,
                 "legacy-token"
         );
@@ -382,19 +354,13 @@ class NotificationDeliveryStateServiceIntegrationTest {
     @Test
     void leaseRecoveryIsBoundedByConfiguredBatchSize() {
         properties.setBatchSize(2);
-        LocalDateTime now = LocalDateTime.of(
-                2026,
-                8,
-                25,
-                12,
-                0
-        );
+        Instant now = Instant.parse("2026-08-25T12:00:00Z");
         for (int index = 0; index < 3; index++) {
             save(
                     DeliveryMode.DURABLE,
                     "PROCESSING",
                     null,
-                    now.minusMinutes(3L - index),
+                    now.minusSeconds((3L - index) * 60),
                     1,
                     "token-" + index
             );
@@ -416,7 +382,7 @@ class NotificationDeliveryStateServiceIntegrationTest {
 
     @Test
     void realClaimTransactionCommitsBeforeSmtpCall() {
-        LocalDateTime dueAt = LocalDateTime.now().minusMinutes(1);
+        Instant dueAt = Instant.now().minusSeconds(60);
         Notification notification = save(
                 DeliveryMode.DURABLE,
                 "PENDING",
@@ -453,8 +419,8 @@ class NotificationDeliveryStateServiceIntegrationTest {
     private Notification save(
             DeliveryMode deliveryMode,
             String status,
-            LocalDateTime nextAttemptAt,
-            LocalDateTime leaseUntil,
+            Instant nextAttemptAt,
+            Instant leaseUntil,
             Integer attemptCount,
             String claimToken
     ) {
@@ -465,7 +431,7 @@ class NotificationDeliveryStateServiceIntegrationTest {
                         .message("Message")
                         .type("EMAIL")
                         .status(status)
-                        .createdAt(LocalDateTime.now().minusHours(1))
+                        .createdAt(Instant.now().minusSeconds(60 * 60))
                         .deliveryMode(deliveryMode)
                         .attemptCount(attemptCount)
                         .nextAttemptAt(nextAttemptAt)
@@ -494,7 +460,7 @@ class NotificationDeliveryStateServiceIntegrationTest {
     private void assertRecovered(
             Long id,
             String status,
-            LocalDateTime nextAttemptAt
+            Instant nextAttemptAt
     ) {
         Notification notification = notificationRepository
                 .findById(id)

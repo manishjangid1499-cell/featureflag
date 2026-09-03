@@ -6,7 +6,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 
-import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -17,6 +19,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class OutboxDeliveryServiceTest {
+
+    private static final Instant NOW =
+            Instant.parse("2026-08-27T12:00:00Z");
+    private static final Clock CLOCK =
+            Clock.fixed(NOW, ZoneOffset.UTC);
 
     private final OutboxEventRepository repository =
             mock(OutboxEventRepository.class);
@@ -29,7 +36,8 @@ class OutboxDeliveryServiceTest {
                     repository,
                     kafkaTemplate,
                     1L,
-                    10
+                    10,
+                    CLOCK
             );
 
     @Test
@@ -93,9 +101,6 @@ class OutboxDeliveryServiceTest {
                 )
         ).thenReturn(future);
 
-        LocalDateTime before =
-                LocalDateTime.now();
-
         service.publishById(event.getId());
 
         assertThat(event.getStatus())
@@ -105,7 +110,7 @@ class OutboxDeliveryServiceTest {
         assertThat(event.getAttempts())
                 .isEqualTo(1);
         assertThat(event.getNextAttemptAt())
-                .isAfter(before);
+                .isEqualTo(NOW.plusSeconds(1));
         assertThat(event.getLastErrorType())
                 .isNotBlank();
     }
@@ -185,7 +190,8 @@ class OutboxDeliveryServiceTest {
                         repository,
                         kafkaTemplate,
                         1L,
-                        3
+                        3,
+                        CLOCK
                 );
         OutboxEvent event = pendingEvent();
         event.setAttempts(2);
@@ -276,8 +282,7 @@ class OutboxDeliveryServiceTest {
     }
 
     private OutboxEvent pendingEvent() {
-        LocalDateTime now =
-                LocalDateTime.now().minusSeconds(1);
+        Instant now = NOW.minusSeconds(1);
 
         return OutboxEvent.builder()
                 .id(

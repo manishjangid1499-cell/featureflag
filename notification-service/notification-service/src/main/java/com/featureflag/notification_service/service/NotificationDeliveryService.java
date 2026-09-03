@@ -7,7 +7,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Optional;
 
 @Service
@@ -22,11 +23,12 @@ public class NotificationDeliveryService {
     private final NotificationDeliveryStateService stateService;
     private final EmailService emailService;
     private final NotificationDeliveryProperties properties;
+    private final Clock clock;
 
     public void processDueNotifications() {
         try {
             int recovered = stateService.recoverExpiredLeases(
-                    LocalDateTime.now()
+                    clock.instant()
             );
             if (recovered > 0) {
                 log.info(
@@ -49,7 +51,7 @@ public class NotificationDeliveryService {
 
             try {
                 claim = stateService.claimNextDueJob(
-                        LocalDateTime.now()
+                        clock.instant()
                 );
             } catch (RuntimeException exception) {
                 log.error(
@@ -87,7 +89,7 @@ public class NotificationDeliveryService {
         try {
             boolean completed = stateService.markSent(
                     claim,
-                    LocalDateTime.now()
+                    clock.instant()
             );
 
             if (completed) {
@@ -164,8 +166,8 @@ public class NotificationDeliveryService {
                 );
             } else {
                 targetStatus = "RETRY";
-                LocalDateTime nextAttemptAt =
-                        LocalDateTime.now().plus(
+                Instant nextAttemptAt =
+                        clock.instant().plus(
                                 calculateBackoff(
                                         claim.attemptCount()
                                 )

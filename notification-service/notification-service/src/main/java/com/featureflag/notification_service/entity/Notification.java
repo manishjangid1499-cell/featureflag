@@ -11,7 +11,7 @@ import lombok.ToString;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "notifications")
@@ -43,9 +43,9 @@ public class Notification {
     private String status;
 
     @Column(nullable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
-    private LocalDateTime sentAt;
+    private Instant sentAt;
 
     @JsonIgnore
     @Builder.Default
@@ -67,19 +67,19 @@ public class Notification {
     @EqualsAndHashCode.Exclude
     @ToString.Exclude
     @Column(name = "next_attempt_at")
-    private LocalDateTime nextAttemptAt;
+    private Instant nextAttemptAt;
 
     @JsonIgnore
     @EqualsAndHashCode.Exclude
     @ToString.Exclude
     @Column(name = "last_attempt_at")
-    private LocalDateTime lastAttemptAt;
+    private Instant lastAttemptAt;
 
     @JsonIgnore
     @EqualsAndHashCode.Exclude
     @ToString.Exclude
     @Column(name = "lease_until")
-    private LocalDateTime leaseUntil;
+    private Instant leaseUntil;
 
     @JsonIgnore
     @EqualsAndHashCode.Exclude

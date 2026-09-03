@@ -4,13 +4,14 @@ import com.featureflag.notification_service.entity.DeliveryMode;
 import com.featureflag.notification_service.entity.Notification;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -18,11 +19,18 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     List<Notification> findAllByOrderByCreatedAtDesc();
 
+    Page<Notification> findAllByOrderByCreatedAtDescIdDesc(Pageable pageable);
+
     List<Notification> findByRecipient(String recipient);
 
     List<Notification> findByRecipientOrderByCreatedAtDesc(String recipient);
 
     List<Notification> findByRecipientIgnoreCaseOrderByCreatedAtDesc(String recipient);
+
+    Page<Notification> findByRecipientIgnoreCaseOrderByCreatedAtDescIdDesc(
+            String recipient,
+            Pageable pageable
+    );
 
     List<Notification> findByRecipientOrCreatorEmailOrderByCreatedAtDesc(String recipient, String creatorEmail);
 
@@ -31,7 +39,18 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
             String creatorEmail
     );
 
+    Page<Notification> findByRecipientIgnoreCaseOrCreatorEmailIgnoreCaseOrderByCreatedAtDescIdDesc(
+            String recipient,
+            String creatorEmail,
+            Pageable pageable
+    );
+
     List<Notification> findByStatus(String status);
+
+    Page<Notification> findByStatusOrderByCreatedAtDescIdDesc(
+            String status,
+            Pageable pageable
+    );
 
     @Query(value = """
             SELECT n.*
@@ -44,7 +63,7 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
             FOR UPDATE SKIP LOCKED
             """, nativeQuery = true)
     Optional<Notification> findNextDueForUpdateSkipLocked(
-            @Param("now") LocalDateTime now
+            @Param("now") Instant now
     );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -59,7 +78,7 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     List<Notification> findExpiredLeasesForUpdate(
             @Param("deliveryMode") DeliveryMode deliveryMode,
             @Param("status") String status,
-            @Param("now") LocalDateTime now,
+            @Param("now") Instant now,
             Pageable pageable
     );
 
@@ -90,7 +109,7 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
             @Param("id") Long id,
             @Param("deliveryMode") DeliveryMode deliveryMode,
             @Param("claimToken") String claimToken,
-            @Param("sentAt") LocalDateTime sentAt
+            @Param("sentAt") Instant sentAt
     );
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
@@ -111,7 +130,7 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
             @Param("id") Long id,
             @Param("deliveryMode") DeliveryMode deliveryMode,
             @Param("claimToken") String claimToken,
-            @Param("nextAttemptAt") LocalDateTime nextAttemptAt,
+            @Param("nextAttemptAt") Instant nextAttemptAt,
             @Param("lastErrorType") String lastErrorType
     );
 

@@ -13,8 +13,10 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.Set;
 
@@ -98,7 +100,7 @@ public class AuditEventConsumer {
                 ProcessedEvent.builder()
                         .eventId(eventId)
                         .topic(TOPIC)
-                        .processedAt(LocalDateTime.now())
+                        .processedAt(Instant.now())
                         .build()
         );
 
@@ -126,28 +128,33 @@ public class AuditEventConsumer {
         }
     }
 
-    private LocalDateTime resolveOccurredAt(
+    private Instant resolveOccurredAt(
             FlagEvent event,
             String timestamp
     ) {
         if (event.getOccurredAt() != null) {
-            return event.getOccurredAt();
+            return event.getOccurredAt().toInstant(ZoneOffset.UTC);
         }
 
         try {
-            return LocalDateTime.parse(timestamp);
-        } catch (DateTimeParseException localFailure) {
+            return Instant.parse(timestamp);
+        } catch (DateTimeParseException instantFailure) {
             try {
                 return OffsetDateTime.parse(timestamp)
-                        .toLocalDateTime();
+                        .toInstant();
             } catch (DateTimeParseException offsetFailure) {
-                log.warn(
-                        "Audit event timestamp could not be converted; "
-                                + "eventId={} errorType={}",
-                        event.getEventId(),
-                        offsetFailure.getClass().getSimpleName()
-                );
-                return null;
+                try {
+                    return LocalDateTime.parse(timestamp)
+                            .toInstant(ZoneOffset.UTC);
+                } catch (DateTimeParseException localFailure) {
+                    log.warn(
+                            "Audit event timestamp could not be converted; "
+                                    + "eventId={} errorType={}",
+                            event.getEventId(),
+                            localFailure.getClass().getSimpleName()
+                    );
+                    return null;
+                }
             }
         }
     }

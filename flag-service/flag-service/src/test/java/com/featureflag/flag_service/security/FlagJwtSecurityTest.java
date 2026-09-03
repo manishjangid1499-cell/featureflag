@@ -1,10 +1,12 @@
 package com.featureflag.flag_service.security;
 
 import com.featureflag.flag_service.config.OpenApiConfig;
+import com.featureflag.flag_service.config.TimeConfiguration;
 import com.featureflag.flag_service.controller.FlagController;
 import com.featureflag.flag_service.entity.FeatureFlag;
 import com.featureflag.flag_service.service.FlagEvaluationTelemetryService;
 import com.featureflag.flag_service.service.FlagMutationAuditService;
+import com.featureflag.flag_service.service.FlagQueryService;
 import com.featureflag.flag_service.service.FlagService;
 import com.featureflag.flag_service.service.SdkKeyAuthenticationService;
 import com.nimbusds.jose.JOSEObjectType;
@@ -26,6 +28,7 @@ import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.data.domain.Page;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -53,6 +56,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({
         SecurityConfig.class,
         OpenApiConfig.class,
+        TimeConfiguration.class,
         FlagJwtSecurityTest.TestJwtConfiguration.class,
         FlagJwtSecurityTest.HealthProbeController.class
 })
@@ -83,11 +87,16 @@ class FlagJwtSecurityTest {
     private FlagMutationAuditService flagMutationAuditService;
 
     @MockitoBean
+    private FlagQueryService flagQueryService;
+
+    @MockitoBean
     private SdkKeyAuthenticationService sdkKeyAuthenticationService;
 
     @BeforeEach
     void setUp() {
-        when(flagService.getAllFlags()).thenReturn(List.of());
+        when(flagQueryService.findAll(
+                org.mockito.ArgumentMatchers.any()
+        )).thenReturn(Page.empty());
         when(flagMutationAuditService.toggleFlag(1L, EMAIL))
                 .thenReturn(FeatureFlag.builder().id(1L).build());
         when(flagMutationAuditService.deleteFlag(1L, EMAIL))

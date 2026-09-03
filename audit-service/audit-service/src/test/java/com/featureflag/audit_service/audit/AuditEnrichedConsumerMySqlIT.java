@@ -29,6 +29,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -96,7 +97,8 @@ class AuditEnrichedConsumerMySqlIT {
         assertThat(auditLog.getEnvironment()).isEqualTo("DEV");
         assertThat(auditLog.getSourceService()).isEqualTo("flag-service");
         assertThat(auditLog.getActor()).isEqualTo("actor-123");
-        assertThat(auditLog.getOccurredAt()).isEqualTo(OCCURRED_AT);
+        assertThat(auditLog.getOccurredAt())
+                .isEqualTo(OCCURRED_AT.toInstant(ZoneOffset.UTC));
         assertThat(auditLog.getTimestamp())
                 .isEqualTo("2026-08-27T12:00:00.123456");
 

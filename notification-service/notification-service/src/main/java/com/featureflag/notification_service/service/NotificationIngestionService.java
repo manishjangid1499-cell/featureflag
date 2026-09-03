@@ -11,7 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 
 @Service
@@ -23,6 +24,7 @@ public class NotificationIngestionService {
 
     private final NotificationRepository notificationRepository;
     private final ProcessedEventRepository processedEventRepository;
+    private final Clock clock;
 
     @Transactional
     public void ingestDirectNotificationEvent(
@@ -65,7 +67,7 @@ public class NotificationIngestionService {
                 event.getType()
         );
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = clock.instant();
 
         List<Notification> notifications = recipients.stream()
                 .map(recipient -> Notification.builder()
