@@ -7,6 +7,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -20,7 +25,12 @@ class GlobalExceptionHandlerTest {
     void setUp() {
 
         handler =
-                new GlobalExceptionHandler();
+                new GlobalExceptionHandler(
+                        Clock.fixed(
+                                Instant.parse("2026-09-01T10:00:00Z"),
+                                ZoneOffset.UTC
+                        )
+                );
 
         request =
                 mock(HttpServletRequest.class);
@@ -76,6 +86,29 @@ class GlobalExceptionHandlerTest {
         assertEquals(
                 "/flags",
                 response.getBody().getPath()
+        );
+    }
+
+    @Test
+    void optimisticLockFailureReturnsConflict() {
+        ResponseEntity<ErrorResponse> response =
+                handler.handleOptimisticLock(
+                        new ObjectOptimisticLockingFailureException(
+                                "FeatureFlag",
+                                1L
+                        ),
+                        request
+                );
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(
+                "Feature flag was modified by another request",
+                response.getBody().getMessage()
+        );
+        assertEquals(
+                Instant.parse("2026-09-01T10:00:00Z"),
+                response.getBody().getTimestamp()
         );
     }
 }

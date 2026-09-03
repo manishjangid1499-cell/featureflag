@@ -1,0 +1,2 @@
+ALTER TABLE feature_flags
+    ADD COLUMN version BIGINT NOT NULL DEFAULT 0 AFTER id;
