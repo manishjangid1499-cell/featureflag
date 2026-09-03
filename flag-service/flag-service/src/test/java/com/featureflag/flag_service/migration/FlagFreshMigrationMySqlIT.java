@@ -59,12 +59,12 @@ class FlagFreshMigrationMySqlIT {
 
     private void assertSuccessfulMigrations() {
         assertEquals(
-                2,
+                4,
                 jdbcTemplate.queryForObject(
                         """
                         SELECT COUNT(*)
                         FROM flyway_schema_history
-                        WHERE version IN ('1', '2')
+                        WHERE version IN ('1', '2', '3', '4')
                           AND type = 'SQL'
                           AND success = 1
                         """,
@@ -179,6 +179,19 @@ class FlagFreshMigrationMySqlIT {
                 """,
                 flagKey,
                 environment
+        );
+        assertEquals(
+                0L,
+                jdbcTemplate.queryForObject(
+                        """
+                        SELECT version
+                        FROM feature_flags
+                        WHERE flag_key = ? AND environment = ?
+                        """,
+                        Long.class,
+                        flagKey,
+                        environment
+                )
         );
     }
 }

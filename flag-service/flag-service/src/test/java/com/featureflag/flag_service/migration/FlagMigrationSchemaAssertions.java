@@ -18,6 +18,8 @@ final class FlagMigrationSchemaAssertions {
     static final String OUTBOX_DUE_INDEX =
             "idx_outbox_status_next_attempt";
     static final String OUTBOX_CREATED_INDEX = "idx_outbox_created_at";
+    static final String OUTBOX_RETENTION_INDEX =
+            "idx_outbox_status_published_at_id";
     static final String SDK_KEY_HASH_UNIQUE =
             "uk_sdk_keys_key_hash";
 
@@ -71,7 +73,7 @@ final class FlagMigrationSchemaAssertions {
         expectedTables.forEach(
                 tableName -> assertTable(jdbcTemplate, tableName)
         );
-        assertFeatureFlagColumns(jdbcTemplate);
+        assertFeatureFlagColumns(jdbcTemplate, migrated);
         assertTargetUserColumns(jdbcTemplate);
         assertOutboxColumns(jdbcTemplate);
         if (migrated) {
@@ -82,10 +84,23 @@ final class FlagMigrationSchemaAssertions {
     }
 
     private static void assertFeatureFlagColumns(
-            JdbcTemplate jdbcTemplate
+            JdbcTemplate jdbcTemplate,
+            boolean migrated
     ) {
-        assertEquals(
-                List.of(
+        List<String> expectedColumns = migrated
+                ? List.of(
+                        "enabled",
+                        "rollout_percentage",
+                        "end_date",
+                        "id",
+                        "version",
+                        "start_date",
+                        "description",
+                        "environment",
+                        "flag_key",
+                        "name"
+                )
+                : List.of(
                         "enabled",
                         "rollout_percentage",
                         "end_date",
@@ -95,7 +110,9 @@ final class FlagMigrationSchemaAssertions {
                         "environment",
                         "flag_key",
                         "name"
-                ),
+                );
+        assertEquals(
+                expectedColumns,
                 columnNames(jdbcTemplate, "feature_flags")
         );
 
@@ -108,6 +125,23 @@ final class FlagMigrationSchemaAssertions {
         assertColumn(jdbcTemplate, "feature_flags", "id",
                 "bigint", "bigint", false, null, null,
                 "auto_increment");
+        if (migrated) {
+            assertColumn(jdbcTemplate, "feature_flags", "version",
+                    "bigint", "bigint", false, null, null, "");
+            assertEquals(
+                    "0",
+                    jdbcTemplate.queryForObject(
+                            """
+                            SELECT column_default
+                            FROM information_schema.columns
+                            WHERE table_schema = DATABASE()
+                              AND table_name = 'feature_flags'
+                              AND column_name = 'version'
+                            """,
+                            String.class
+                    )
+            );
+        }
         assertColumn(jdbcTemplate, "feature_flags", "start_date",
                 "datetime(6)", "datetime", true, null, 6L, "");
         assertColumn(jdbcTemplate, "feature_flags", "description",
@@ -225,6 +259,7 @@ final class FlagMigrationSchemaAssertions {
                         "outbox_events:PRIMARY",
                         "outbox_events:" + OUTBOX_DUE_INDEX,
                         "outbox_events:" + OUTBOX_CREATED_INDEX,
+                        "outbox_events:" + OUTBOX_RETENTION_INDEX,
                         "sdk_keys:PRIMARY",
                         "sdk_keys:" + SDK_KEY_HASH_UNIQUE
                 )
@@ -267,6 +302,9 @@ final class FlagMigrationSchemaAssertions {
         assertIndex(jdbcTemplate, "outbox_events", OUTBOX_CREATED_INDEX,
                 List.of("created_at"), false);
         if (migrated) {
+            assertIndex(jdbcTemplate, "outbox_events",
+                    OUTBOX_RETENTION_INDEX,
+                    List.of("status", "published_at", "id"), false);
             assertIndex(jdbcTemplate, "sdk_keys", "PRIMARY",
                     List.of("id"), true);
             assertIndex(jdbcTemplate, "sdk_keys", SDK_KEY_HASH_UNIQUE,

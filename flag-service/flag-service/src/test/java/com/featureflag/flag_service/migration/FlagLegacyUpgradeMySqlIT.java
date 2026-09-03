@@ -69,7 +69,7 @@ class FlagLegacyUpgradeMySqlIT {
 
         MigrateResult firstMigration = flyway.migrate();
 
-        assertEquals(1, firstMigration.migrationsExecuted);
+        assertEquals(3, firstMigration.migrationsExecuted);
         assertMigrationHistory(jdbcTemplate);
         FlagMigrationSchemaAssertions.assertMigratedSchema(jdbcTemplate);
         assertLegacyRowsAfterBaseline(jdbcTemplate);
@@ -154,6 +154,19 @@ class FlagLegacyUpgradeMySqlIT {
                         Integer.class
                 )
         );
+        assertEquals(
+                3,
+                jdbcTemplate.queryForObject(
+                        """
+                        SELECT COUNT(*)
+                        FROM flyway_schema_history
+                        WHERE version IN ('2', '3', '4')
+                          AND type = 'SQL'
+                          AND success = 1
+                        """,
+                        Integer.class
+                )
+        );
     }
 
     private void assertLegacyRowsAfterBaseline(
@@ -174,6 +187,7 @@ class FlagLegacyUpgradeMySqlIT {
                           AND environment = 'DEV'
                           AND flag_key = 'fixture-checkout'
                           AND name = 'Fixture Checkout'
+                          AND version = 0
                         """,
                         Integer.class,
                         Timestamp.valueOf(FLAG_END),
