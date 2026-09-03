@@ -1,8 +1,10 @@
 package com.featureflag.auth_service.exception;
 
+import com.featureflag.auth_service.security.LoginRateLimitExceededException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 
 import java.util.Map;
@@ -33,5 +35,24 @@ class GlobalExceptionHandlerTest {
                 response.getBody().get("message")
         );
         assertNotNull(response.getBody().get("timestamp"));
+    }
+
+    @Test
+    @DisplayName("Login rate limit returns generic HTTP 429 with Retry-After")
+    void loginRateLimitReturnsTooManyRequests() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+        ResponseEntity<Map<String, Object>> response =
+                handler.handleLoginRateLimit(
+                        new LoginRateLimitExceededException(37)
+                );
+
+        assertEquals(HttpStatus.TOO_MANY_REQUESTS, response.getStatusCode());
+        assertEquals("37", response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER));
+        assertNotNull(response.getBody());
+        assertEquals(
+                "Too many login attempts. Try again later.",
+                response.getBody().get("message")
+        );
     }
 }

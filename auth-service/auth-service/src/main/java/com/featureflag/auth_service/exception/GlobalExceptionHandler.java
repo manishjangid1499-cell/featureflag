@@ -1,5 +1,7 @@
 package com.featureflag.auth_service.exception;
 
+import com.featureflag.auth_service.security.LoginRateLimitExceededException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -47,6 +49,23 @@ public class GlobalExceptionHandler {
         response.put("error", "Unauthorized");
         response.put("message", "Invalid email or password");
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+    }
+
+    @ExceptionHandler(LoginRateLimitExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleLoginRateLimit(
+            LoginRateLimitExceededException ex
+    ) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("timestamp", Instant.now().toString());
+        response.put("status", HttpStatus.TOO_MANY_REQUESTS.value());
+        response.put("error", "Too Many Requests");
+        response.put("message", "Too many login attempts. Try again later.");
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(
+                        HttpHeaders.RETRY_AFTER,
+                        Long.toString(ex.getRetryAfterSeconds())
+                )
+                .body(response);
     }
 
     @ExceptionHandler(InvitationConflictException.class)

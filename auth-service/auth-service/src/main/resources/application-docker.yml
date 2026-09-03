@@ -31,7 +31,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:health,metrics,prometheus}
   endpoint:
     health:
       show-details: never
@@ -44,6 +44,11 @@ management:
         readiness:
           include: "readinessState,db"
 
+clients:
+  notification:
+    connect-timeout-ms: ${NOTIFICATION_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${NOTIFICATION_READ_TIMEOUT_MS:5000}
+
 app:
   bootstrap:
     owner:
@@ -55,6 +60,11 @@ app:
     frontend-base-url: ${FRONTEND_BASE_URL}
 
 security:
+  login-rate-limit:
+    enabled: ${LOGIN_RATE_LIMIT_ENABLED:true}
+    max-failures: ${LOGIN_RATE_LIMIT_MAX_FAILURES:5}
+    window: ${LOGIN_RATE_LIMIT_WINDOW:PT5M}
+    max-entries: ${LOGIN_RATE_LIMIT_MAX_ENTRIES:10000}
   jwt:
     private-key-location: ${AUTH_JWT_PRIVATE_KEY_LOCATION}
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION}

@@ -5,7 +5,10 @@ import com.featureflag.auth_service.dto.LoginRequest;
 import com.featureflag.auth_service.entity.Role;
 import com.featureflag.auth_service.entity.User;
 import com.featureflag.auth_service.repository.UserRepository;
+import com.featureflag.auth_service.observability.AuthMetrics;
 import com.featureflag.auth_service.security.JwtService;
+import com.featureflag.auth_service.security.LoginRateLimitExceededException;
+import com.featureflag.auth_service.security.LoginRateLimiter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,6 +37,12 @@ class AuthServiceTest {
 
     @Mock
     private JwtService jwtService;
+
+    @Mock
+    private LoginRateLimiter loginRateLimiter;
+
+    @Mock
+    private AuthMetrics authMetrics;
 
     @InjectMocks
     private AuthService authService;
@@ -68,6 +77,9 @@ class AuthServiceTest {
         assertEquals("mocked_jwt_token", response.getToken());
         assertEquals("test@company.com", response.getEmail());
         assertEquals("DEVELOPER", response.getRole());
+        verify(loginRateLimiter).checkAllowed("test@company.com");
+        verify(loginRateLimiter).recordSuccess("test@company.com");
+        verify(authMetrics).loginSucceeded();
     }
 
     @Test
@@ -85,6 +97,8 @@ class AuthServiceTest {
         );
 
         assertEquals("Invalid email or password", exception.getMessage());
+        verify(loginRateLimiter).recordFailure("unknown@company.com");
+        verify(authMetrics).loginFailed();
     }
 
     @Test
@@ -103,6 +117,44 @@ class AuthServiceTest {
         );
 
         assertEquals("Invalid email or password", exception.getMessage());
+        verify(loginRateLimiter).recordFailure("test@company.com");
+        verify(authMetrics).loginFailed();
+    }
+
+    @Test
+    @DisplayName("Login - an active rate limit stops authentication before lookup")
+    void testLogin_RateLimited_DoesNotQueryRepository() {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("test@company.com");
+        request.setPassword("password123");
+        doThrow(new LoginRateLimitExceededException(42))
+                .when(loginRateLimiter)
+                .checkAllowed("test@company.com");
+
+        assertThrows(
+                LoginRateLimitExceededException.class,
+                () -> authService.login(request)
+        );
+
+        verifyNoInteractions(userRepository, passwordEncoder, jwtService);
+    }
+
+    @Test
+    @DisplayName("Login - infrastructure failure is not recorded as a credential failure")
+    void testLogin_ServerError_NotCountedAsCredentialFailure() {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("test@company.com");
+        request.setPassword("password123");
+        when(userRepository.findByEmail("test@company.com"))
+                .thenThrow(new IllegalStateException("database unavailable"));
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> authService.login(request)
+        );
+
+        verify(loginRateLimiter, never()).recordFailure(anyString());
+        verify(authMetrics, never()).loginFailed();
     }
 
     @Test
