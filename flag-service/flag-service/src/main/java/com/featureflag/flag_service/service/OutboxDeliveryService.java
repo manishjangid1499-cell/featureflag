@@ -1,8 +1,11 @@
 package com.featureflag.flag_service.service;
 
 import com.featureflag.flag_service.entity.OutboxEvent;
+import com.featureflag.flag_service.observability.CorrelationIds;
+import com.featureflag.flag_service.observability.FlagMetrics;
 import com.featureflag.flag_service.repository.OutboxEventRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -10,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -24,6 +28,7 @@ public class OutboxDeliveryService {
     private final long sendTimeoutSeconds;
     private final int maxAttempts;
     private final Clock clock;
+    private final FlagMetrics flagMetrics;
 
     public OutboxDeliveryService(
             OutboxEventRepository outboxEventRepository,
@@ -36,7 +41,8 @@ public class OutboxDeliveryService {
                     "${outbox.publisher.max-attempts:10}"
             )
             int maxAttempts,
-            Clock clock
+            Clock clock,
+            FlagMetrics flagMetrics
     ) {
         if (maxAttempts < 1) {
             throw new IllegalArgumentException(
@@ -50,6 +56,7 @@ public class OutboxDeliveryService {
         this.sendTimeoutSeconds = sendTimeoutSeconds;
         this.maxAttempts = maxAttempts;
         this.clock = clock;
+        this.flagMetrics = flagMetrics;
     }
 
     @Transactional
@@ -66,18 +73,25 @@ public class OutboxDeliveryService {
             return;
         }
 
+        String correlationId = CorrelationIds.resolve(
+                event.getCorrelationId()
+        );
+        event.setCorrelationId(correlationId);
+
         if (event.getAttempts() >= maxAttempts) {
             event.setStatus(
                     OutboxEvent.STATUS_DEAD
             );
+            flagMetrics.outboxMarkedDead(event.getTopic());
             log.error(
                     "Outbox event already exhausted retries; "
                             + "eventId={} topic={} attempts={} "
-                            + "maxAttempts={}",
+                            + "maxAttempts={} correlationId={}",
                     event.getId(),
                     event.getTopic(),
                     event.getAttempts(),
-                    maxAttempts
+                    maxAttempts,
+                    event.getCorrelationId()
             );
             return;
         }
@@ -91,11 +105,18 @@ public class OutboxDeliveryService {
         }
 
         try {
-            kafkaTemplate.send(
-                    event.getTopic(),
-                    event.getMessageKey(),
-                    event.getPayload()
-            ).get(
+            ProducerRecord<String, String> record =
+                    new ProducerRecord<>(
+                            event.getTopic(),
+                            event.getMessageKey(),
+                            event.getPayload()
+                    );
+            record.headers().add(
+                    CorrelationIds.HEADER_NAME,
+                    correlationId.getBytes(StandardCharsets.UTF_8)
+            );
+
+            kafkaTemplate.send(record).get(
                     sendTimeoutSeconds,
                     TimeUnit.SECONDS
             );
@@ -107,11 +128,13 @@ public class OutboxDeliveryService {
                     clock.instant()
             );
             event.setLastErrorType(null);
+            flagMetrics.outboxPublished(event.getTopic());
 
             log.info(
-                    "Outbox event published; eventId={} topic={}",
+                    "Outbox event published; eventId={} topic={} correlationId={}",
                     event.getId(),
-                    event.getTopic()
+                    event.getTopic(),
+                    event.getCorrelationId()
             );
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
@@ -126,6 +149,7 @@ public class OutboxDeliveryService {
             Exception exception
     ) {
         int attempts = event.getAttempts() + 1;
+        flagMetrics.outboxPublishFailed(event.getTopic());
         event.setAttempts(attempts);
         event.setLastErrorType(
                 exception.getClass().getSimpleName()
@@ -134,15 +158,17 @@ public class OutboxDeliveryService {
             event.setStatus(
                     OutboxEvent.STATUS_DEAD
             );
+            flagMetrics.outboxMarkedDead(event.getTopic());
             log.error(
                     "Outbox event exhausted retries; eventId={} "
                             + "topic={} attempts={} maxAttempts={} "
-                            + "errorType={}",
+                            + "errorType={} correlationId={}",
                     event.getId(),
                     event.getTopic(),
                     attempts,
                     maxAttempts,
-                    event.getLastErrorType()
+                    event.getLastErrorType(),
+                    event.getCorrelationId()
             );
             return;
         }
@@ -155,12 +181,13 @@ public class OutboxDeliveryService {
         log.warn(
                 "Outbox publish failed; eventId={} topic={} "
                         + "attempt={} nextRetrySeconds={} "
-                        + "errorType={}",
+                        + "errorType={} correlationId={}",
                 event.getId(),
                 event.getTopic(),
                 attempts,
                 delaySeconds,
-                event.getLastErrorType()
+                event.getLastErrorType(),
+                event.getCorrelationId()
         );
     }
 

@@ -1,6 +1,7 @@
 package com.featureflag.notification_service.service;
 
 import com.featureflag.notification_service.config.NotificationDeliveryProperties;
+import com.featureflag.notification_service.observability.NotificationMetrics;
 import com.featureflag.notification_service.validation.NotificationTypePolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +25,7 @@ public class NotificationDeliveryService {
     private final EmailService emailService;
     private final NotificationDeliveryProperties properties;
     private final Clock clock;
+    private final NotificationMetrics notificationMetrics;
 
     public void processDueNotifications() {
         try {
@@ -31,6 +33,7 @@ public class NotificationDeliveryService {
                     clock.instant()
             );
             if (recovered > 0) {
+                notificationMetrics.leaseRecovery(recovered);
                 log.info(
                         "Recovered expired notification delivery leases; count={}",
                         recovered
@@ -65,6 +68,7 @@ public class NotificationDeliveryService {
                 return;
             }
 
+            notificationMetrics.deliveryClaimed();
             deliver(claim.get());
         }
     }
@@ -93,6 +97,7 @@ public class NotificationDeliveryService {
             );
 
             if (completed) {
+                notificationMetrics.deliverySucceeded("durable");
                 log.info(
                         "Notification delivery completed; notificationId={} attempt={} status=SENT",
                         claim.notificationId(),
@@ -125,6 +130,7 @@ public class NotificationDeliveryService {
             );
 
             if (completed) {
+                notificationMetrics.deliveryDead("unsupported-channel");
                 log.warn(
                         "Notification marked DEAD due to unsupported notification channel; notificationId={} attempt={}",
                         claim.notificationId(),
@@ -180,6 +186,11 @@ public class NotificationDeliveryService {
             }
 
             if (completed) {
+                if ("DEAD".equals(targetStatus)) {
+                    notificationMetrics.deliveryDead("attempts-exhausted");
+                } else {
+                    notificationMetrics.deliveryRetry();
+                }
                 log.warn(
                         "Notification delivery failed; notificationId={} attempt={} status={} errorType={}",
                         claim.notificationId(),

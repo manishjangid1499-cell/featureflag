@@ -6,6 +6,7 @@ import com.featureflag.analytics_service.event.FlagEvent;
 import com.featureflag.analytics_service.kafka.AnalyticsEventConsumer;
 import com.featureflag.analytics_service.repository.AnalyticsEventRepository;
 import com.featureflag.analytics_service.repository.ProcessedEventRepository;
+import com.featureflag.analytics_service.observability.AnalyticsMetrics;
 import com.featureflag.analytics_service.service.AnalyticsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
@@ -26,6 +27,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -58,6 +60,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 )
 @Testcontainers
 class AnalyticsAggregationConcurrencyMySqlIT {
+
+    @MockitoBean
+    private AnalyticsMetrics analyticsMetrics;
 
     private static final Logger LOG = LoggerFactory.getLogger(
             AnalyticsAggregationConcurrencyMySqlIT.class

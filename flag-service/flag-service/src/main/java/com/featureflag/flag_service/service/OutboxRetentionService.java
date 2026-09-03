@@ -1,6 +1,7 @@
 package com.featureflag.flag_service.service;
 
 import com.featureflag.flag_service.entity.OutboxEvent;
+import com.featureflag.flag_service.observability.FlagMetrics;
 import com.featureflag.flag_service.repository.OutboxEventRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,6 +25,7 @@ public class OutboxRetentionService {
     private final Clock clock;
     private final Duration publishedAge;
     private final int batchSize;
+    private final FlagMetrics flagMetrics;
 
     public OutboxRetentionService(
             OutboxEventRepository outboxEventRepository,
@@ -31,7 +33,8 @@ public class OutboxRetentionService {
             @Value("${outbox.retention.published-age:PT168H}")
             Duration publishedAge,
             @Value("${outbox.retention.batch-size:100}")
-            int batchSize
+            int batchSize,
+            FlagMetrics flagMetrics
     ) {
         if (publishedAge == null
                 || publishedAge.isZero()
@@ -50,6 +53,7 @@ public class OutboxRetentionService {
         this.clock = clock;
         this.publishedAge = publishedAge;
         this.batchSize = batchSize;
+        this.flagMetrics = flagMetrics;
     }
 
     @Scheduled(
@@ -76,6 +80,7 @@ public class OutboxRetentionService {
                 eligibleIds
         );
         if (deleted > 0) {
+            flagMetrics.outboxRetentionDeleted(deleted);
             log.info(
                     "Deleted {} expired published outbox event(s)",
                     deleted

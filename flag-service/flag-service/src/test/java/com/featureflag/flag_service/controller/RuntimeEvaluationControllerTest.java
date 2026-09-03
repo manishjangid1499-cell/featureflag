@@ -3,6 +3,7 @@ package com.featureflag.flag_service.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.featureflag.flag_service.entity.FeatureFlag;
 import com.featureflag.flag_service.repository.FeatureFlagRepository;
+import com.featureflag.flag_service.observability.FlagMetrics;
 import com.featureflag.flag_service.security.SdkKeyPrincipal;
 import com.featureflag.flag_service.service.EvaluationTelemetryPublisher;
 import com.featureflag.flag_service.service.FlagEvaluationTelemetryService;
@@ -51,7 +52,8 @@ class RuntimeEvaluationControllerTest {
         controller = new RuntimeEvaluationController(
                 new FlagEvaluationTelemetryService(
                         flagService,
-                        telemetryPublisher
+                        telemetryPublisher,
+                        mock(FlagMetrics.class)
                 )
         );
     }

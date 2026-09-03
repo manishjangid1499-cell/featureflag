@@ -2,6 +2,7 @@ package com.featureflag.analytics_service.service;
 
 import com.featureflag.analytics_service.entity.AnalyticsEvent;
 import com.featureflag.analytics_service.repository.AnalyticsEventRepository;
+import com.featureflag.analytics_service.observability.AnalyticsMetrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,9 @@ class AnalyticsServiceTest {
 
     @Mock
     private AnalyticsEventRepository repository;
+
+    @Mock
+    private AnalyticsMetrics analyticsMetrics;
 
     @InjectMocks
     private AnalyticsService service;

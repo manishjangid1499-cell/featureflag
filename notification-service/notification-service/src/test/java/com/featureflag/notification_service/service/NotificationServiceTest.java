@@ -8,6 +8,7 @@ import com.featureflag.notification_service.exception.NotificationConflictExcept
 import com.featureflag.notification_service.exception.ResourceNotFoundException;
 import com.featureflag.notification_service.exception.UnsupportedNotificationChannelException;
 import com.featureflag.notification_service.repository.NotificationRepository;
+import com.featureflag.notification_service.observability.NotificationMetrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,9 @@ class NotificationServiceTest {
     @Mock
     private AuthRecipientsClient authRecipientsClient;
 
+    @Mock
+    private NotificationMetrics notificationMetrics;
+
     private NotificationService notificationService;
 
     private Notification testNotification;
@@ -54,7 +58,8 @@ class NotificationServiceTest {
                 notificationRepository,
                 mailSender,
                 authRecipientsClient,
-                Clock.fixed(NOW, ZoneOffset.UTC)
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                notificationMetrics
         );
         testNotification = Notification.builder()
                 .id(1L)

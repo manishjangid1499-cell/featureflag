@@ -52,6 +52,9 @@ public class OutboxEvent {
     @Column(name = "message_key", length = 255)
     private String messageKey;
 
+    @Column(name = "correlation_id", length = 64)
+    private String correlationId;
+
     @Column(name = "event_type", nullable = false, length = 100)
     private String eventType;
 

@@ -7,6 +7,7 @@ import com.featureflag.notification_service.entity.Notification;
 import com.featureflag.notification_service.exception.ResourceNotFoundException;
 import com.featureflag.notification_service.exception.ForbiddenException;
 import com.featureflag.notification_service.exception.NotificationConflictException;
+import com.featureflag.notification_service.observability.NotificationMetrics;
 import com.featureflag.notification_service.repository.NotificationRepository;
 import com.featureflag.notification_service.validation.NotificationTypePolicy;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,7 @@ public class NotificationService {
     private final JavaMailSender mailSender;
     private final AuthRecipientsClient authRecipientsClient;
     private final Clock clock;
+    private final NotificationMetrics notificationMetrics;
 
     public Notification createNotification(
             NotificationRequest request
@@ -80,10 +82,12 @@ public class NotificationService {
 
             notification.setStatus("SENT");
             notification.setSentAt(clock.instant());
+            notificationMetrics.deliverySucceeded("synchronous");
             log.info("Email successfully sent; notificationId={}", notification.getId());
 
         } catch (Exception e) {
             notification.setStatus("FAILED");
+            notificationMetrics.deliveryFailed("synchronous");
             log.warn("Email delivery failed; notificationId={} errorType={}", notification.getId(), e.getClass().getSimpleName());
         }
 
@@ -133,10 +137,12 @@ public class NotificationService {
 
                 notification.setStatus("SENT");
                 notification.setSentAt(clock.instant());
+                notificationMetrics.deliverySucceeded("synchronous");
                 log.info("Email notification sent; notificationId={}", notification.getId());
 
             } catch (Exception e) {
                 notification.setStatus("FAILED");
+                notificationMetrics.deliveryFailed("synchronous");
                 log.warn("Email delivery failed; notificationId={} errorType={}", notification.getId(), e.getClass().getSimpleName());
             }
 

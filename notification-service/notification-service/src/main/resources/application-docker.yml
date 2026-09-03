@@ -48,7 +48,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:health,metrics,prometheus}
   endpoint:
     health:
       show-details: never
@@ -60,6 +60,11 @@ management:
           include: "livenessState"
         readiness:
           include: "readinessState,db"
+
+clients:
+  auth-recipients:
+    connect-timeout-ms: ${AUTH_RECIPIENTS_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${AUTH_RECIPIENTS_READ_TIMEOUT_MS:3000}
 
 security:
   jwt:

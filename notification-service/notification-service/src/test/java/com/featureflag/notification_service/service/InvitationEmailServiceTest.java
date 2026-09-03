@@ -5,6 +5,7 @@ import com.featureflag.notification_service.entity.DeliveryMode;
 import com.featureflag.notification_service.entity.Notification;
 import com.featureflag.notification_service.exception.InvitationDeliveryException;
 import com.featureflag.notification_service.repository.NotificationRepository;
+import com.featureflag.notification_service.observability.NotificationMetrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,6 +44,9 @@ class InvitationEmailServiceTest {
     @Mock
     private JavaMailSender mailSender;
 
+    @Mock
+    private NotificationMetrics notificationMetrics;
+
     private InvitationEmailService invitationEmailService;
 
     private InvitationEmailRequest request;
@@ -53,7 +57,8 @@ class InvitationEmailServiceTest {
         invitationEmailService = new InvitationEmailService(
                 notificationRepository,
                 mailSender,
-                Clock.fixed(NOW, ZoneOffset.UTC)
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                notificationMetrics
         );
         persistedStatuses = new ArrayList<>();
 
@@ -120,6 +125,7 @@ class InvitationEmailServiceTest {
         verify(mailSender, times(1)).send(any(SimpleMailMessage.class));
         verify(notificationRepository, times(2))
                 .save(any(Notification.class));
+        verify(notificationMetrics).deliverySucceeded("invitation");
     }
 
     @Test
@@ -166,6 +172,7 @@ class InvitationEmailServiceTest {
         assertFalse(failed.getMessage().contains(ACCEPTANCE_URL));
         verify(mailSender, times(1)).send(any(SimpleMailMessage.class));
         verifyNoMoreInteractions(mailSender);
+        verify(notificationMetrics).deliveryFailed("invitation");
     }
 
     @Test

@@ -10,6 +10,7 @@ import com.featureflag.flag_service.dto.SdkKeyMetadataResponse;
 import com.featureflag.flag_service.service.FlagEvaluationTelemetryService;
 import com.featureflag.flag_service.service.SdkKeyAuthenticationService;
 import com.featureflag.flag_service.service.SdkKeyService;
+import com.featureflag.flag_service.observability.FlagMetrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -86,6 +88,9 @@ class SdkRuntimeSecurityTest {
 
     @MockitoBean
     private JwtDecoder jwtDecoder;
+
+    @MockitoBean
+    private FlagMetrics flagMetrics;
 
     @BeforeEach
     void setUp() {
@@ -193,6 +198,9 @@ class SdkRuntimeSecurityTest {
                 "user-1",
                 "DEV"
         );
+        verify(flagMetrics).sdkAuthenticationFailure("missing");
+        verify(flagMetrics, times(3))
+                .sdkAuthenticationFailure("invalid");
     }
 
     @Test

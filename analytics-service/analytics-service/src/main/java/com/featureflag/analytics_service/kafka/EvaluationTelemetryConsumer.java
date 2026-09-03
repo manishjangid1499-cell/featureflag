@@ -4,6 +4,7 @@ import com.featureflag.analytics_service.entity.AnalyticsEvent;
 import com.featureflag.analytics_service.entity.ProcessedEvent;
 import com.featureflag.analytics_service.event.FlagEvent;
 import com.featureflag.analytics_service.repository.ProcessedEventRepository;
+import com.featureflag.analytics_service.observability.AnalyticsMetrics;
 import com.featureflag.analytics_service.service.AnalyticsService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,6 +31,7 @@ public class EvaluationTelemetryConsumer {
     private final AnalyticsService analyticsService;
     private final ProcessedEventRepository processedEventRepository;
     private final String topic;
+    private final AnalyticsMetrics analyticsMetrics;
 
     public EvaluationTelemetryConsumer(
             AnalyticsService analyticsService,
@@ -39,11 +41,13 @@ public class EvaluationTelemetryConsumer {
                             + DEFAULT_TOPIC
                             + "}"
             )
-            String topic
+            String topic,
+            AnalyticsMetrics analyticsMetrics
     ) {
         this.analyticsService = analyticsService;
         this.processedEventRepository = processedEventRepository;
         this.topic = topic;
+        this.analyticsMetrics = analyticsMetrics;
     }
 
     @KafkaListener(
@@ -78,6 +82,7 @@ public class EvaluationTelemetryConsumer {
         }
 
         if (processedEventRepository.existsById(eventId)) {
+            analyticsMetrics.duplicateIgnored(eventType);
             log.info(
                     "Skipping duplicate evaluation telemetry; "
                             + "eventId={}",

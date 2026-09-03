@@ -38,6 +38,16 @@ eureka:
     service-url:
       defaultZone: http://localhost:8761/eureka
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:health,metrics,prometheus}
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+
 security:
   jwt:
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION}

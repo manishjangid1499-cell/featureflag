@@ -1,9 +1,10 @@
 package com.featureflag.notification_service.config;
 
 import com.featureflag.notification_service.exception.UnsupportedNotificationChannelException;
+import com.featureflag.notification_service.observability.KafkaCorrelationRecordInterceptor;
+import com.featureflag.notification_service.observability.KafkaFailureVisibility;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
@@ -99,15 +100,17 @@ public class KafkaConfig {
 
     @Bean
     public DefaultErrorHandler kafkaErrorHandler(
-            KafkaTemplate<String, String> dltKafkaTemplate
+            KafkaTemplate<String, String> dltKafkaTemplate,
+            KafkaFailureVisibility failureVisibility
     ) {
         DeadLetterPublishingRecoverer recoverer =
                 new DeadLetterPublishingRecoverer(
                         dltKafkaTemplate,
                         (record, exception) ->
-                                new TopicPartition(
-                                        DLT_TOPIC,
-                                        -1
+                                failureVisibility.dltDestination(
+                                        record,
+                                        exception,
+                                        DLT_TOPIC
                                 )
                 );
 
@@ -123,6 +126,9 @@ public class KafkaConfig {
 
         errorHandler.addNotRetryableExceptions(
                 UnsupportedNotificationChannelException.class
+        );
+        errorHandler.setRetryListeners(
+                failureVisibility::recordFailure
         );
 
         return errorHandler;
@@ -140,6 +146,9 @@ public class KafkaConfig {
 
         factory.setConsumerFactory(consumerFactory);
         factory.setCommonErrorHandler(kafkaErrorHandler);
+        factory.setRecordInterceptor(
+                new KafkaCorrelationRecordInterceptor<>()
+        );
         factory.getContainerProperties().setAckMode(
                 ContainerProperties.AckMode.RECORD
         );

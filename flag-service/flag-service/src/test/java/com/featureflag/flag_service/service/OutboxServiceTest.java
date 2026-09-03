@@ -8,7 +8,10 @@ import com.featureflag.flag_service.event.FlagAuditSnapshot;
 import com.featureflag.flag_service.repository.FeatureFlagRepository;
 import com.featureflag.flag_service.repository.OutboxEventRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.MDC;
+import com.featureflag.flag_service.observability.CorrelationIds;
 
 import java.time.LocalDateTime;
 import java.time.Clock;
@@ -24,6 +27,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class OutboxServiceTest {
+
+    @AfterEach
+    void clearMdc() {
+        MDC.clear();
+    }
 
     private final OutboxEventRepository repository =
             mock(OutboxEventRepository.class);
@@ -55,6 +63,8 @@ class OutboxServiceTest {
     void flagEventIsStoredAsPendingWithEventId()
             throws Exception {
 
+        MDC.put(CorrelationIds.MDC_KEY, "request-to-outbox-1");
+
         String eventId =
                 outboxService.enqueueFlagEvent(
                         "FLAG_UPDATED",
@@ -77,6 +87,8 @@ class OutboxServiceTest {
                 .isEqualTo("feature-flag-events");
         assertThat(stored.getMessageKey())
                 .isEqualTo("checkout");
+        assertThat(stored.getCorrelationId())
+                .isEqualTo("request-to-outbox-1");
         assertThat(stored.getStatus())
                 .isEqualTo(
                         OutboxEvent.STATUS_PENDING

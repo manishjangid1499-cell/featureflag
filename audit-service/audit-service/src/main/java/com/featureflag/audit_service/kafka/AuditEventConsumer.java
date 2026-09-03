@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.featureflag.audit_service.entity.AuditLog;
 import com.featureflag.audit_service.entity.ProcessedEvent;
 import com.featureflag.audit_service.event.FlagEvent;
+import com.featureflag.audit_service.observability.AuditMetrics;
 import com.featureflag.audit_service.repository.AuditLogRepository;
 import com.featureflag.audit_service.repository.ProcessedEventRepository;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +41,7 @@ public class AuditEventConsumer {
     private final ProcessedEventRepository
             processedEventRepository;
     private final ObjectMapper objectMapper;
+    private final AuditMetrics auditMetrics;
 
     @KafkaListener(
             topics = TOPIC,
@@ -74,6 +76,7 @@ public class AuditEventConsumer {
         }
 
         if (processedEventRepository.existsById(eventId)) {
+            auditMetrics.duplicateIgnored();
             log.info(
                     "Skipping duplicate audit event; eventId={}",
                     eventId
@@ -103,6 +106,7 @@ public class AuditEventConsumer {
                         .processedAt(Instant.now())
                         .build()
         );
+        auditMetrics.eventPersisted();
 
         log.info(
                 "Audit event persisted; eventId={} "

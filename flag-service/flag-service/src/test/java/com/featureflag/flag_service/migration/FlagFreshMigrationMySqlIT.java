@@ -59,12 +59,12 @@ class FlagFreshMigrationMySqlIT {
 
     private void assertSuccessfulMigrations() {
         assertEquals(
-                4,
+                5,
                 jdbcTemplate.queryForObject(
                         """
                         SELECT COUNT(*)
                         FROM flyway_schema_history
-                        WHERE version IN ('1', '2', '3', '4')
+                        WHERE version IN ('1', '2', '3', '4', '5')
                           AND type = 'SQL'
                           AND success = 1
                         """,

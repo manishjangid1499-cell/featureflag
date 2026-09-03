@@ -9,6 +9,7 @@ import com.featureflag.audit_service.event.FlagEvent;
 import com.featureflag.audit_service.kafka.AuditEventConsumer;
 import com.featureflag.audit_service.repository.AuditLogRepository;
 import com.featureflag.audit_service.repository.ProcessedEventRepository;
+import com.featureflag.audit_service.observability.AuditMetrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -46,6 +48,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 )
 @Testcontainers
 class AuditEnrichedConsumerMySqlIT {
+
+    @MockitoBean
+    private AuditMetrics auditMetrics;
 
     private static final LocalDateTime OCCURRED_AT =
             LocalDateTime.parse("2026-08-27T12:00:00.123456");

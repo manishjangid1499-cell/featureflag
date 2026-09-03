@@ -69,7 +69,7 @@ class FlagLegacyUpgradeMySqlIT {
 
         MigrateResult firstMigration = flyway.migrate();
 
-        assertEquals(3, firstMigration.migrationsExecuted);
+        assertEquals(4, firstMigration.migrationsExecuted);
         assertMigrationHistory(jdbcTemplate);
         FlagMigrationSchemaAssertions.assertMigratedSchema(jdbcTemplate);
         assertLegacyRowsAfterBaseline(jdbcTemplate);
@@ -155,12 +155,12 @@ class FlagLegacyUpgradeMySqlIT {
                 )
         );
         assertEquals(
-                3,
+                4,
                 jdbcTemplate.queryForObject(
                         """
                         SELECT COUNT(*)
                         FROM flyway_schema_history
-                        WHERE version IN ('2', '3', '4')
+                        WHERE version IN ('2', '3', '4', '5')
                           AND type = 'SQL'
                           AND success = 1
                         """,
@@ -238,6 +238,7 @@ class FlagLegacyUpgradeMySqlIT {
                           AND topic = 'feature-flag-events'
                           AND last_error_type = 'ExecutionException'
                           AND message_key = 'fixture-checkout'
+                          AND correlation_id IS NULL
                         """,
                         Integer.class
                 )
@@ -263,6 +264,7 @@ class FlagLegacyUpgradeMySqlIT {
                           AND topic = 'feature-flag-events'
                           AND last_error_type IS NULL
                           AND message_key = 'fixture-checkout'
+                          AND correlation_id IS NULL
                         """,
                         Integer.class
                 )
@@ -287,6 +289,7 @@ class FlagLegacyUpgradeMySqlIT {
                           AND last_error_type = 'ExecutionException'
                           AND message_key =
                               '33333333-3333-3333-3333-333333333333'
+                          AND correlation_id IS NULL
                         """,
                         Integer.class
                 )

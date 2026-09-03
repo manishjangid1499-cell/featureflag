@@ -6,6 +6,7 @@ import com.featureflag.notification_service.dto.NotificationRequest;
 import com.featureflag.notification_service.entity.ProcessedEvent;
 import com.featureflag.notification_service.exception.UnsupportedNotificationChannelException;
 import com.featureflag.notification_service.repository.ProcessedEventRepository;
+import com.featureflag.notification_service.observability.NotificationMetrics;
 import com.featureflag.notification_service.service.NotificationIngestionService;
 import com.featureflag.notification_service.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,6 +46,9 @@ class NotificationKafkaConsumerTest {
     @Mock
     private ProcessedEventRepository processedRepository;
 
+    @Mock
+    private NotificationMetrics notificationMetrics;
+
     private NotificationKafkaConsumer consumer;
 
     @BeforeEach
@@ -53,7 +57,8 @@ class NotificationKafkaConsumerTest {
                 notificationService,
                 ingestionService,
                 new ObjectMapper(),
-                processedRepository
+                processedRepository,
+                notificationMetrics
         );
     }
 
@@ -82,6 +87,7 @@ class NotificationKafkaConsumerTest {
         verify(processedRepository, never()).save(
                 any(ProcessedEvent.class)
         );
+        verify(notificationMetrics).eventIngested();
     }
 
     @Test
@@ -199,6 +205,7 @@ class NotificationKafkaConsumerTest {
         verify(processedRepository, never()).save(
                 any(ProcessedEvent.class)
         );
+        verify(notificationMetrics).eventIngested();
     }
 
     @Test
@@ -216,6 +223,7 @@ class NotificationKafkaConsumerTest {
         verify(processedRepository, never()).save(
                 any(ProcessedEvent.class)
         );
+        verify(notificationMetrics).duplicateIgnored();
     }
 
     @Test

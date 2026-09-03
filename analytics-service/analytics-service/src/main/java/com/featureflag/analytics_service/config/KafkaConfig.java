@@ -1,9 +1,10 @@
 package com.featureflag.analytics_service.config;
 
 import com.featureflag.analytics_service.event.FlagEvent;
+import com.featureflag.analytics_service.observability.KafkaCorrelationRecordInterceptor;
+import com.featureflag.analytics_service.observability.KafkaFailureVisibility;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -119,27 +120,33 @@ public class KafkaConfig {
 
     @Bean
     public DefaultErrorHandler kafkaErrorHandler(
-            KafkaTemplate<String, Object> dltKafkaTemplate
+            KafkaTemplate<String, Object> dltKafkaTemplate,
+            KafkaFailureVisibility failureVisibility
     ) {
         DeadLetterPublishingRecoverer recoverer =
                 new DeadLetterPublishingRecoverer(
                         dltKafkaTemplate,
                         (record, exception) ->
-                                new TopicPartition(
-                                        DLT_TOPIC,
-                                        -1
+                                failureVisibility.dltDestination(
+                                        record,
+                                        exception,
+                                        DLT_TOPIC
                                 )
                 );
 
         recoverer.setFailIfSendResultIsError(true);
 
-        return new DefaultErrorHandler(
+        DefaultErrorHandler errorHandler = new DefaultErrorHandler(
                 recoverer,
                 new FixedBackOff(
                         RETRY_BACKOFF_MS,
                         MAX_RETRIES
                 )
         );
+        errorHandler.setRetryListeners(
+                failureVisibility::recordFailure
+        );
+        return errorHandler;
     }
 
     @Bean
@@ -154,6 +161,9 @@ public class KafkaConfig {
 
         factory.setConsumerFactory(consumerFactory);
         factory.setCommonErrorHandler(kafkaErrorHandler);
+        factory.setRecordInterceptor(
+                new KafkaCorrelationRecordInterceptor<>()
+        );
         factory.getContainerProperties().setAckMode(
                 ContainerProperties.AckMode.RECORD
         );

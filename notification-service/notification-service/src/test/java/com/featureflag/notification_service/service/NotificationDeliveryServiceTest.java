@@ -1,6 +1,7 @@
 package com.featureflag.notification_service.service;
 
 import com.featureflag.notification_service.config.NotificationDeliveryProperties;
+import com.featureflag.notification_service.observability.NotificationMetrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,6 +43,9 @@ class NotificationDeliveryServiceTest {
     @Mock
     private EmailService emailService;
 
+    @Mock
+    private NotificationMetrics notificationMetrics;
+
     private NotificationDeliveryProperties properties;
     private NotificationDeliveryService deliveryService;
 
@@ -52,7 +56,8 @@ class NotificationDeliveryServiceTest {
                 stateService,
                 emailService,
                 properties,
-                Clock.fixed(NOW, ZoneOffset.UTC)
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                notificationMetrics
         );
     }
 
@@ -83,6 +88,7 @@ class NotificationDeliveryServiceTest {
                 any()
         );
         verify(stateService, never()).markDead(any(), any());
+        verify(notificationMetrics).deliverySucceeded("durable");
     }
 
     @Test
@@ -110,6 +116,7 @@ class NotificationDeliveryServiceTest {
         );
         assertEquals(NOW.plusSeconds(60), nextAttemptCaptor.getValue());
         verify(stateService, never()).markDead(any(), any());
+        verify(notificationMetrics).deliveryRetry();
     }
 
     @Test
@@ -137,6 +144,7 @@ class NotificationDeliveryServiceTest {
                 any(),
                 any()
         );
+        verify(notificationMetrics).deliveryDead("attempts-exhausted");
     }
 
     @Test

@@ -5,6 +5,7 @@ import com.featureflag.flag_service.dto.FlagEvaluationResponse;
 import com.featureflag.flag_service.entity.FeatureFlag;
 import com.featureflag.flag_service.exception.ResourceNotFoundException;
 import com.featureflag.flag_service.repository.FeatureFlagRepository;
+import com.featureflag.flag_service.observability.FlagMetrics;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -12,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import io.micrometer.core.instrument.Timer;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -37,6 +39,9 @@ class FlagEvaluationTelemetryServiceTest {
     @Mock
     private EvaluationTelemetryPublisher telemetryPublisher;
 
+    @Mock
+    private FlagMetrics flagMetrics;
+
     @InjectMocks
     private FlagEvaluationTelemetryService service;
 
@@ -60,6 +65,10 @@ class FlagEvaluationTelemetryServiceTest {
         assertSame(evaluation, result);
         assertTrue(result.isEnabled());
         verify(telemetryPublisher, times(1)).publish(evaluation);
+        verify(flagMetrics).evaluationCompleted(
+                org.mockito.ArgumentMatchers.<Timer.Sample>any(),
+                org.mockito.ArgumentMatchers.eq(true)
+        );
     }
 
     @Test
@@ -104,6 +113,9 @@ class FlagEvaluationTelemetryServiceTest {
         );
 
         verify(telemetryPublisher, never()).publish(any());
+        verify(flagMetrics).evaluationFailed(
+                org.mockito.ArgumentMatchers.<Timer.Sample>any()
+        );
     }
 
     @Test
@@ -142,6 +154,7 @@ class FlagEvaluationTelemetryServiceTest {
         OutboxService outboxService = mock(OutboxService.class);
         EvaluationTelemetryPublisher publisher =
                 mock(EvaluationTelemetryPublisher.class);
+        FlagMetrics metrics = mock(FlagMetrics.class);
 
         FeatureFlag cachedFlag = FeatureFlag.builder()
                 .id(10L)
@@ -172,7 +185,8 @@ class FlagEvaluationTelemetryServiceTest {
         FlagEvaluationTelemetryService cachedEvaluationService =
                 new FlagEvaluationTelemetryService(
                         cachedFlagService,
-                        publisher
+                        publisher,
+                        metrics
                 );
 
         FlagEvaluationResponse result =

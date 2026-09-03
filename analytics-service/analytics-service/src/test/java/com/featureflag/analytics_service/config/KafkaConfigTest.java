@@ -2,6 +2,7 @@ package com.featureflag.analytics_service.config;
 
 import com.featureflag.analytics_service.event.FlagEvent;
 import com.featureflag.analytics_service.kafka.AnalyticsEventConsumer;
+import com.featureflag.analytics_service.observability.KafkaFailureVisibility;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -256,7 +257,8 @@ class KafkaConfigTest {
 
         DefaultErrorHandler errorHandler =
                 config.kafkaErrorHandler(
-                        mock(KafkaTemplate.class)
+                        mock(KafkaTemplate.class),
+                        mock(KafkaFailureVisibility.class)
                 );
 
         ConcurrentKafkaListenerContainerFactory<String, FlagEvent>

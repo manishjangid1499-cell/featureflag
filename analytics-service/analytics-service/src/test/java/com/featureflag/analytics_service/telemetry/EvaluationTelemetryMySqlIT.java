@@ -6,6 +6,7 @@ import com.featureflag.analytics_service.event.FlagEvent;
 import com.featureflag.analytics_service.kafka.EvaluationTelemetryConsumer;
 import com.featureflag.analytics_service.repository.AnalyticsEventRepository;
 import com.featureflag.analytics_service.repository.ProcessedEventRepository;
+import com.featureflag.analytics_service.observability.AnalyticsMetrics;
 import com.featureflag.analytics_service.service.AnalyticsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -38,6 +40,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 )
 @Testcontainers
 class EvaluationTelemetryMySqlIT {
+
+    @MockitoBean
+    private AnalyticsMetrics analyticsMetrics;
 
     @Container
     @ServiceConnection

@@ -17,6 +17,8 @@ import java.util.Optional;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
+    long countByStatus(String status);
+
     List<Notification> findAllByOrderByCreatedAtDesc();
 
     Page<Notification> findAllByOrderByCreatedAtDescIdDesc(Pageable pageable);

@@ -3,6 +3,7 @@ package com.featureflag.notification_service.service;
 import com.featureflag.notification_service.dto.InvitationEmailRequest;
 import com.featureflag.notification_service.entity.Notification;
 import com.featureflag.notification_service.exception.InvitationDeliveryException;
+import com.featureflag.notification_service.observability.NotificationMetrics;
 import com.featureflag.notification_service.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +32,7 @@ public class InvitationEmailService {
     private final NotificationRepository notificationRepository;
     private final JavaMailSender mailSender;
     private final Clock clock;
+    private final NotificationMetrics notificationMetrics;
 
     public Notification sendInvitationEmail(InvitationEmailRequest request) {
         String recipient = normalizeEmail(request.getRecipient());
@@ -61,6 +63,7 @@ public class InvitationEmailService {
             notification.setStatus("SENT");
             notification.setSentAt(clock.instant());
         } catch (Exception exception) {
+            notificationMetrics.deliveryFailed("invitation");
             notification.setStatus("FAILED");
 
             notification = notificationRepository.save(notification);
@@ -77,6 +80,7 @@ public class InvitationEmailService {
         }
 
         notification = notificationRepository.save(notification);
+        notificationMetrics.deliverySucceeded("invitation");
 
         log.info(
                 "Invitation email delivered; notificationId={}",

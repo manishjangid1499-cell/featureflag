@@ -75,7 +75,7 @@ final class FlagMigrationSchemaAssertions {
         );
         assertFeatureFlagColumns(jdbcTemplate, migrated);
         assertTargetUserColumns(jdbcTemplate);
-        assertOutboxColumns(jdbcTemplate);
+        assertOutboxColumns(jdbcTemplate, migrated);
         if (migrated) {
             assertSdkKeyColumns(jdbcTemplate);
         }
@@ -168,9 +168,26 @@ final class FlagMigrationSchemaAssertions {
                 "varchar(255)", "varchar", true, 255L, null, "");
     }
 
-    private static void assertOutboxColumns(JdbcTemplate jdbcTemplate) {
-        assertEquals(
-                List.of(
+    private static void assertOutboxColumns(
+            JdbcTemplate jdbcTemplate,
+            boolean migrated
+    ) {
+        List<String> expectedColumns = migrated
+                ? List.of(
+                        "attempts",
+                        "created_at",
+                        "next_attempt_at",
+                        "published_at",
+                        "status",
+                        "id",
+                        "event_type",
+                        "topic",
+                        "last_error_type",
+                        "message_key",
+                        "correlation_id",
+                        "payload"
+                )
+                : List.of(
                         "attempts",
                         "created_at",
                         "next_attempt_at",
@@ -182,7 +199,9 @@ final class FlagMigrationSchemaAssertions {
                         "last_error_type",
                         "message_key",
                         "payload"
-                ),
+                );
+        assertEquals(
+                expectedColumns,
                 columnNames(jdbcTemplate, "outbox_events")
         );
 
@@ -206,6 +225,10 @@ final class FlagMigrationSchemaAssertions {
                 "varchar(255)", "varchar", true, 255L, null, "");
         assertColumn(jdbcTemplate, "outbox_events", "message_key",
                 "varchar(255)", "varchar", true, 255L, null, "");
+        if (migrated) {
+            assertColumn(jdbcTemplate, "outbox_events", "correlation_id",
+                    "varchar(64)", "varchar", true, 64L, null, "");
+        }
         assertColumn(jdbcTemplate, "outbox_events", "payload",
                 "longtext", "longtext", false, 4294967295L, null, "");
     }

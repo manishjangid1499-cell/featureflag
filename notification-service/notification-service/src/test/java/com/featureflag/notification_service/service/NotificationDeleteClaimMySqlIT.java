@@ -7,6 +7,7 @@ import com.featureflag.notification_service.entity.DeliveryMode;
 import com.featureflag.notification_service.entity.Notification;
 import com.featureflag.notification_service.exception.NotificationConflictException;
 import com.featureflag.notification_service.repository.NotificationRepository;
+import com.featureflag.notification_service.observability.NotificationMetrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -87,6 +88,9 @@ class NotificationDeleteClaimMySqlIT {
 
     @MockitoBean
     private AuthRecipientsClient authRecipientsClient;
+
+    @MockitoBean
+    private NotificationMetrics notificationMetrics;
 
     @BeforeEach
     void setUp() {

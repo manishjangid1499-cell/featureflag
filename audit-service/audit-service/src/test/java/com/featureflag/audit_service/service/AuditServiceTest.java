@@ -6,6 +6,7 @@ import com.featureflag.audit_service.event.FlagEvent;
 import com.featureflag.audit_service.kafka.AuditEventConsumer;
 import com.featureflag.audit_service.repository.AuditLogRepository;
 import com.featureflag.audit_service.repository.ProcessedEventRepository;
+import com.featureflag.audit_service.observability.AuditMetrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
 class AuditServiceTest {
@@ -145,7 +147,8 @@ class AuditServiceTest {
                 new AuditEventConsumer(
                         repository,
                         processedEventRepository,
-                        new ObjectMapper().findAndRegisterModules()
+                        new ObjectMapper().findAndRegisterModules(),
+                        mock(AuditMetrics.class)
                 );
 
         FlagEvent event =

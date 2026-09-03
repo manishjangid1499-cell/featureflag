@@ -6,6 +6,7 @@ import com.featureflag.flag_service.dto.NotificationEvent;
 import com.featureflag.flag_service.entity.OutboxEvent;
 import com.featureflag.flag_service.event.FlagAuditSnapshot;
 import com.featureflag.flag_service.event.FlagEvent;
+import com.featureflag.flag_service.observability.CorrelationIds;
 import com.featureflag.flag_service.repository.FeatureFlagRepository;
 import com.featureflag.flag_service.repository.OutboxEventRepository;
 import lombok.RequiredArgsConstructor;
@@ -159,6 +160,9 @@ public class OutboxService {
                         .id(eventId)
                         .topic(topic)
                         .messageKey(messageKey)
+                        .correlationId(
+                                CorrelationIds.currentOrGenerate()
+                        )
                         .eventType(eventType)
                         .payload(payload)
                         .status(

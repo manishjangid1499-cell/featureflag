@@ -2,6 +2,7 @@ package com.featureflag.flag_service.service;
 
 import com.featureflag.flag_service.entity.OutboxEvent;
 import com.featureflag.flag_service.repository.OutboxEventRepository;
+import com.featureflag.flag_service.observability.FlagMetrics;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -32,7 +33,8 @@ class OutboxRetentionServiceTest {
                         repository,
                         CLOCK,
                         Duration.ofDays(7),
-                        25
+                        25,
+                        mock(FlagMetrics.class)
                 );
         List<String> ids = List.of("event-1", "event-2");
         when(repository.findPublishedIdsBefore(
@@ -64,18 +66,21 @@ class OutboxRetentionServiceTest {
     void invalidRetentionConfigurationFailsFast() {
         OutboxEventRepository repository =
                 mock(OutboxEventRepository.class);
+        FlagMetrics metrics = mock(FlagMetrics.class);
 
         assertThatThrownBy(() -> new OutboxRetentionService(
                 repository,
                 CLOCK,
                 Duration.ZERO,
-                25
+                25,
+                metrics
         )).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new OutboxRetentionService(
                 repository,
                 CLOCK,
                 Duration.ofDays(7),
-                1_001
+                1_001,
+                metrics
         )).isInstanceOf(IllegalArgumentException.class);
     }
 }

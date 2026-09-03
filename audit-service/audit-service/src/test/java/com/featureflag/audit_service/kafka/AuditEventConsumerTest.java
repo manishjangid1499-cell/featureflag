@@ -8,6 +8,7 @@ import com.featureflag.audit_service.event.FlagAuditSnapshot;
 import com.featureflag.audit_service.event.FlagEvent;
 import com.featureflag.audit_service.repository.AuditLogRepository;
 import com.featureflag.audit_service.repository.ProcessedEventRepository;
+import com.featureflag.audit_service.observability.AuditMetrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +37,9 @@ class AuditEventConsumerTest {
     private ProcessedEventRepository
             processedEventRepository;
 
+    @Mock
+    private AuditMetrics auditMetrics;
+
     private AuditEventConsumer consumer;
 
     private final ObjectMapper objectMapper =
@@ -46,7 +50,8 @@ class AuditEventConsumerTest {
         consumer = new AuditEventConsumer(
                 auditLogRepository,
                 processedEventRepository,
-                objectMapper
+                objectMapper,
+                auditMetrics
         );
     }
 

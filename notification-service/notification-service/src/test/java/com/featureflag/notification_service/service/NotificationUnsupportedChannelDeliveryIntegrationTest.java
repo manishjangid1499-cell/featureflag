@@ -5,6 +5,7 @@ import com.featureflag.notification_service.config.TimeConfiguration;
 import com.featureflag.notification_service.entity.DeliveryMode;
 import com.featureflag.notification_service.entity.Notification;
 import com.featureflag.notification_service.repository.NotificationRepository;
+import com.featureflag.notification_service.observability.NotificationMetrics;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,6 +51,9 @@ class NotificationUnsupportedChannelDeliveryIntegrationTest {
 
     @MockitoBean
     private EmailService emailService;
+
+    @MockitoBean
+    private NotificationMetrics notificationMetrics;
 
     @BeforeEach
     void setUp() {

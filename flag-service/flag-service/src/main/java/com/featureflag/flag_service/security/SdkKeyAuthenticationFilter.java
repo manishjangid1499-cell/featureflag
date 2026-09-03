@@ -1,5 +1,6 @@
 package com.featureflag.flag_service.security;
 
+import com.featureflag.flag_service.observability.FlagMetrics;
 import com.featureflag.flag_service.service.SdkKeyAuthenticationService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -22,11 +23,14 @@ final class SdkKeyAuthenticationFilter extends OncePerRequestFilter {
     static final String HEADER_NAME = "X-Feature-Flag-Key";
 
     private final SdkKeyAuthenticationService authenticationService;
+    private final FlagMetrics flagMetrics;
 
     SdkKeyAuthenticationFilter(
-            SdkKeyAuthenticationService authenticationService
+            SdkKeyAuthenticationService authenticationService,
+            FlagMetrics flagMetrics
     ) {
         this.authenticationService = authenticationService;
+        this.flagMetrics = flagMetrics;
     }
 
     @Override
@@ -44,6 +48,7 @@ final class SdkKeyAuthenticationFilter extends OncePerRequestFilter {
                 request.getHeaders(HEADER_NAME)
         );
         if (credentials.size() != 1) {
+            flagMetrics.sdkAuthenticationFailure("missing");
             unauthorized(response);
             return;
         }
@@ -52,6 +57,7 @@ final class SdkKeyAuthenticationFilter extends OncePerRequestFilter {
                 credentials.getFirst()
         );
         if (principal.isEmpty()) {
+            flagMetrics.sdkAuthenticationFailure("invalid");
             unauthorized(response);
             return;
         }

@@ -3,6 +3,7 @@ package com.featureflag.notification_service.kafka;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.featureflag.notification_service.dto.NotificationEvent;
+import com.featureflag.notification_service.observability.NotificationMetrics;
 import com.featureflag.notification_service.repository.ProcessedEventRepository;
 import com.featureflag.notification_service.service.NotificationIngestionService;
 import com.featureflag.notification_service.service.NotificationService;
@@ -28,6 +29,7 @@ public class NotificationKafkaConsumer {
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository
             processedEventRepository;
+    private final NotificationMetrics notificationMetrics;
 
     @KafkaListener(
             topics = TOPIC,
@@ -46,6 +48,7 @@ public class NotificationKafkaConsumer {
                 requireEventId(event.getEventId());
 
         if (processedEventRepository.existsById(eventId)) {
+            notificationMetrics.duplicateIgnored();
             log.info(
                     "Skipping duplicate notification event; "
                             + "eventId={}",
@@ -95,6 +98,7 @@ public class NotificationKafkaConsumer {
                         + "eventId={}",
                 eventId
         );
+        notificationMetrics.eventIngested();
     }
 
     private String requireEventId(String eventId) {

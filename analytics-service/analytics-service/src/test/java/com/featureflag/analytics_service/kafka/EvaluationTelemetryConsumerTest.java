@@ -5,6 +5,7 @@ import com.featureflag.analytics_service.entity.ProcessedEvent;
 import com.featureflag.analytics_service.event.FlagEvent;
 import com.featureflag.analytics_service.repository.ProcessedEventRepository;
 import com.featureflag.analytics_service.service.AnalyticsService;
+import com.featureflag.analytics_service.observability.AnalyticsMetrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,6 +39,9 @@ class EvaluationTelemetryConsumerTest {
     @Mock
     private ProcessedEventRepository processedEventRepository;
 
+    @Mock
+    private AnalyticsMetrics analyticsMetrics;
+
     private EvaluationTelemetryConsumer consumer;
 
     @BeforeEach
@@ -45,7 +49,8 @@ class EvaluationTelemetryConsumerTest {
         consumer = new EvaluationTelemetryConsumer(
                 analyticsService,
                 processedEventRepository,
-                TOPIC
+                TOPIC,
+                analyticsMetrics
         );
     }
 
@@ -133,6 +138,9 @@ class EvaluationTelemetryConsumerTest {
                 .processEvent(anyString(), anyString(), anyString());
         verify(processedEventRepository, never())
                 .save(any(ProcessedEvent.class));
+        verify(analyticsMetrics).duplicateIgnored(
+                FlagEvent.EVALUATION_ENABLED
+        );
     }
 
     @Test

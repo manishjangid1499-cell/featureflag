@@ -1,6 +1,7 @@
 package com.featureflag.analytics_service.service;
 
 import com.featureflag.analytics_service.entity.AnalyticsEvent;
+import com.featureflag.analytics_service.observability.AnalyticsMetrics;
 import com.featureflag.analytics_service.repository.AnalyticsEventRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ import java.util.List;
 public class AnalyticsService {
 
     private final AnalyticsEventRepository analyticsEventRepository;
+    private final AnalyticsMetrics analyticsMetrics;
 
     /**
      * Get all analytics records.
@@ -71,21 +73,28 @@ public class AnalyticsService {
             String environment,
             String eventType
     ) {
-        analyticsEventRepository.incrementOrCreate(
-                flagKey,
-                environment,
-                eventType
-        );
+        try {
+            analyticsEventRepository.incrementOrCreate(
+                    flagKey,
+                    environment,
+                    eventType
+            );
 
-        return analyticsEventRepository
-                .findByFlagKeyAndEnvironmentAndEventType(
-                        flagKey,
-                        environment,
-                        eventType
-                )
-                .orElseThrow(() -> new IllegalStateException(
-                        "Atomic analytics update did not produce a row"
-                ));
+            AnalyticsEvent result = analyticsEventRepository
+                    .findByFlagKeyAndEnvironmentAndEventType(
+                            flagKey,
+                            environment,
+                            eventType
+                    )
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Atomic analytics update did not produce a row"
+                    ));
+            analyticsMetrics.ingestionSucceeded(eventType);
+            return result;
+        } catch (RuntimeException exception) {
+            analyticsMetrics.aggregationFailed(eventType);
+            throw exception;
+        }
     }
 
     /**

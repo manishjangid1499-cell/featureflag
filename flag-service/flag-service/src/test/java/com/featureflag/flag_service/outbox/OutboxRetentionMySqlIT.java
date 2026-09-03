@@ -1,6 +1,7 @@
 package com.featureflag.flag_service.outbox;
 
 import com.featureflag.flag_service.service.OutboxRetentionService;
+import com.featureflag.flag_service.observability.FlagMetrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +16,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.MySQLContainer;
@@ -60,6 +62,9 @@ class OutboxRetentionMySqlIT {
 
     @Autowired
     private OutboxRetentionService retentionService;
+
+    @MockitoBean
+    private FlagMetrics flagMetrics;
 
     @BeforeEach
     void setUp() {

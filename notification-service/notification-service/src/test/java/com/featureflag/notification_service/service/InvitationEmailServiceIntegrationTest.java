@@ -6,6 +6,7 @@ import com.featureflag.notification_service.entity.DeliveryMode;
 import com.featureflag.notification_service.entity.Notification;
 import com.featureflag.notification_service.exception.InvitationDeliveryException;
 import com.featureflag.notification_service.repository.NotificationRepository;
+import com.featureflag.notification_service.observability.NotificationMetrics;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,6 +50,9 @@ class InvitationEmailServiceIntegrationTest {
 
     @MockitoBean
     private JavaMailSender mailSender;
+
+    @MockitoBean
+    private NotificationMetrics notificationMetrics;
 
     @BeforeEach
     void setUp() {

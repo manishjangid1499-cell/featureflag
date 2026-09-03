@@ -1,5 +1,6 @@
 package com.featureflag.flag_service.security;
 
+import com.featureflag.flag_service.observability.FlagMetrics;
 import com.featureflag.flag_service.service.SdkKeyAuthenticationService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,7 +28,8 @@ public class SecurityConfig {
     @Order(1)
     public SecurityFilterChain runtimeSecurityFilterChain(
             HttpSecurity http,
-            SdkKeyAuthenticationService authenticationService
+            SdkKeyAuthenticationService authenticationService,
+            FlagMetrics flagMetrics
     ) throws Exception {
         http
                 .securityMatcher("/runtime/**")
@@ -56,7 +58,8 @@ public class SecurityConfig {
                 )
                 .addFilterBefore(
                         new SdkKeyAuthenticationFilter(
-                                authenticationService
+                                authenticationService,
+                                flagMetrics
                         ),
                         AnonymousAuthenticationFilter.class
                 );

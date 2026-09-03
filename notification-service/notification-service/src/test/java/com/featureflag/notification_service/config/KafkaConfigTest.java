@@ -1,6 +1,7 @@
 package com.featureflag.notification_service.config;
 
 import com.featureflag.notification_service.exception.UnsupportedNotificationChannelException;
+import com.featureflag.notification_service.observability.KafkaFailureVisibility;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.Test;
@@ -62,7 +63,8 @@ class KafkaConfigTest {
 
         DefaultErrorHandler errorHandler =
                 config.kafkaErrorHandler(
-                        mock(KafkaTemplate.class)
+                        mock(KafkaTemplate.class),
+                        mock(KafkaFailureVisibility.class)
                 );
 
         ConcurrentKafkaListenerContainerFactory<String, String>
@@ -83,7 +85,8 @@ class KafkaConfigTest {
         DefaultErrorHandler errorHandler =
                 new KafkaConfig(kafkaProperties())
                         .kafkaErrorHandler(
-                                mock(KafkaTemplate.class)
+                                mock(KafkaTemplate.class),
+                                mock(KafkaFailureVisibility.class)
                         );
 
         assertThat(

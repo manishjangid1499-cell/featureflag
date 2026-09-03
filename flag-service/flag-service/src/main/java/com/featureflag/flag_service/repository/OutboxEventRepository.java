@@ -16,6 +16,8 @@ import java.util.Optional;
 public interface OutboxEventRepository
         extends JpaRepository<OutboxEvent, String> {
 
+    long countByStatus(String status);
+
     List<OutboxEvent>
     findTop50ByStatusAndNextAttemptAtLessThanEqualOrderByCreatedAtAsc(
             String status,
