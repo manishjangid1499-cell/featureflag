@@ -2,20 +2,17 @@ package com.featureflag.notification_service.kafka;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.featureflag.notification_service.dto.NotificationEvent;
-import com.featureflag.notification_service.dto.NotificationRequest;
 import com.featureflag.notification_service.entity.ProcessedEvent;
 import com.featureflag.notification_service.exception.UnsupportedNotificationChannelException;
 import com.featureflag.notification_service.repository.ProcessedEventRepository;
 import com.featureflag.notification_service.observability.NotificationMetrics;
 import com.featureflag.notification_service.service.NotificationIngestionService;
-import com.featureflag.notification_service.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -24,11 +21,8 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -36,9 +30,6 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationKafkaConsumerTest {
-
-    @Mock
-    private NotificationService notificationService;
 
     @Mock
     private NotificationIngestionService ingestionService;
@@ -54,7 +45,6 @@ class NotificationKafkaConsumerTest {
     @BeforeEach
     void setUp() {
         consumer = new NotificationKafkaConsumer(
-                notificationService,
                 ingestionService,
                 new ObjectMapper(),
                 processedRepository,
@@ -83,7 +73,6 @@ class NotificationKafkaConsumerTest {
                 "event-creator@company.com",
                 eventCaptor.getValue().getCreatorEmail()
         );
-        verifyNoInteractions(notificationService);
         verify(processedRepository, never()).save(
                 any(ProcessedEvent.class)
         );
@@ -104,7 +93,6 @@ class NotificationKafkaConsumerTest {
                 eventCaptor.capture()
         );
         assertEquals("EMAIL", eventCaptor.getValue().getType());
-        verifyNoInteractions(notificationService);
     }
 
     @Test
@@ -121,7 +109,6 @@ class NotificationKafkaConsumerTest {
                 eventCaptor.capture()
         );
         assertEquals("EMAIL", eventCaptor.getValue().getType());
-        verifyNoInteractions(notificationService);
     }
 
     @ParameterizedTest
@@ -152,7 +139,6 @@ class NotificationKafkaConsumerTest {
         verify(processedRepository)
                 .existsById("event-unsupported-type-1");
         verifyNoInteractions(
-                notificationService,
                 ingestionService
         );
         verify(processedRepository, never()).save(
@@ -161,29 +147,16 @@ class NotificationKafkaConsumerTest {
     }
 
     @Test
-    void roleEventResolvesRecipientsBeforeDurableIngestion()
+    void roleEventUsesRecipientsFromTheNotificationCommand()
             throws Exception {
         List<String> recipients = List.of(
                 "owner@company.com",
                 "admin@company.com"
         );
-        when(
-                notificationService.resolveRoleRecipientEmails(
-                        List.of("OWNER", "ADMIN")
-                )
-        ).thenReturn(recipients);
 
         consumer.consumeNotificationEvent(roleEventJson());
 
-        InOrder order = inOrder(
-                notificationService,
-                ingestionService
-        );
-        order.verify(notificationService)
-                .resolveRoleRecipientEmails(
-                        List.of("OWNER", "ADMIN")
-                );
-        order.verify(ingestionService)
+        verify(ingestionService)
                 .ingestRoleNotificationEvent(
                         eq("event-role-1"),
                         any(NotificationEvent.class),
@@ -191,17 +164,6 @@ class NotificationKafkaConsumerTest {
                 );
         verify(processedRepository)
                 .existsById("event-role-1");
-        verify(notificationService, never())
-                .createNotification(
-                        any(NotificationRequest.class)
-                );
-        verify(notificationService, never())
-                .sendToRoleRecipients(
-                        anyString(),
-                        anyString(),
-                        anyString(),
-                        anyList()
-                );
         verify(processedRepository, never()).save(
                 any(ProcessedEvent.class)
         );
@@ -217,7 +179,6 @@ class NotificationKafkaConsumerTest {
         consumer.consumeNotificationEvent(roleEventJson());
 
         verifyNoInteractions(
-                notificationService,
                 ingestionService
         );
         verify(processedRepository, never()).save(
@@ -229,13 +190,7 @@ class NotificationKafkaConsumerTest {
     @Test
     void emptyRoleRecipientsAreDurablyIngestedAsNoOp()
             throws Exception {
-        when(
-                notificationService.resolveRoleRecipientEmails(
-                        List.of("OWNER", "ADMIN")
-                )
-        ).thenReturn(List.of());
-
-        consumer.consumeNotificationEvent(roleEventJson());
+        consumer.consumeNotificationEvent(emptyRoleEventJson());
 
         verify(ingestionService)
                 .ingestRoleNotificationEvent(
@@ -257,7 +212,6 @@ class NotificationKafkaConsumerTest {
         );
 
         verifyNoInteractions(
-                notificationService,
                 ingestionService,
                 processedRepository
         );
@@ -310,29 +264,20 @@ class NotificationKafkaConsumerTest {
                 )
         ).isSameAs(ingestionFailure);
 
-        verifyNoInteractions(notificationService);
         verify(processedRepository, never()).save(
                 any(ProcessedEvent.class)
         );
     }
 
     @Test
-    void roleRecipientLookupFailurePropagatesWithoutIngestion() {
-        IllegalStateException lookupFailure =
-                new IllegalStateException(
-                        "Failed to retrieve notification recipients from Auth Service"
-                );
-        when(
-                notificationService.resolveRoleRecipientEmails(
-                        List.of("OWNER", "ADMIN")
-                )
-        ).thenThrow(lookupFailure);
-
+    void roleEventWithoutEnrichedRecipientsIsRejected() {
         assertThatThrownBy(
                 () -> consumer.consumeNotificationEvent(
-                        roleEventJson()
+                        roleEventJsonWithoutRecipients()
                 )
-        ).isSameAs(lookupFailure);
+        )
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Kafka notification recipients are required");
 
         verifyNoInteractions(ingestionService);
         verify(processedRepository, never()).save(
@@ -350,7 +295,6 @@ class NotificationKafkaConsumerTest {
                 .hasMessage("Kafka eventId is required");
 
         verifyNoInteractions(
-                notificationService,
                 ingestionService,
                 processedRepository
         );
@@ -375,7 +319,35 @@ class NotificationKafkaConsumerTest {
                   "eventId": "event-role-1",
                   "subject": "Flag changed",
                   "message": "A flag changed",
+                  "type": "EMAIL",
+                  "recipients": [
+                    " OWNER@company.com ",
+                    "admin@company.com",
+                    "owner@company.com"
+                  ]
+                }
+                """;
+    }
+
+    private String roleEventJsonWithoutRecipients() {
+        return """
+                {
+                  "eventId": "event-role-missing-recipients",
+                  "subject": "Flag changed",
+                  "message": "A flag changed",
                   "type": "EMAIL"
+                }
+                """;
+    }
+
+    private String emptyRoleEventJson() {
+        return """
+                {
+                  "eventId": "event-role-1",
+                  "subject": "Flag changed",
+                  "message": "A flag changed",
+                  "type": "EMAIL",
+                  "recipients": []
                 }
                 """;
     }

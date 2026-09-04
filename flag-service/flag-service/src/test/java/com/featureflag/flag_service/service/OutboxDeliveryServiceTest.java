@@ -5,6 +5,7 @@ import com.featureflag.flag_service.observability.CorrelationIds;
 import com.featureflag.flag_service.observability.FlagMetrics;
 import com.featureflag.flag_service.repository.OutboxEventRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
@@ -37,6 +38,9 @@ class OutboxDeliveryServiceTest {
 
     private final FlagMetrics flagMetrics = mock(FlagMetrics.class);
 
+    private final OutboxPayloadEnricher outboxPayloadEnricher =
+            mock(OutboxPayloadEnricher.class);
+
     private final OutboxDeliveryService service =
             new OutboxDeliveryService(
                     repository,
@@ -44,8 +48,17 @@ class OutboxDeliveryServiceTest {
                     1L,
                     10,
                     CLOCK,
-                    flagMetrics
+                    flagMetrics,
+                    outboxPayloadEnricher
             );
+
+    @BeforeEach
+    void passThroughPayload() {
+        when(outboxPayloadEnricher.enrich(any(OutboxEvent.class)))
+                .thenAnswer(invocation ->
+                        invocation.<OutboxEvent>getArgument(0).getPayload()
+                );
+    }
 
     @Test
     void successfulKafkaAckMarksEventPublished()
@@ -126,6 +139,27 @@ class OutboxDeliveryServiceTest {
     }
 
     @Test
+    void recipientEnrichmentFailureUsesOutboxRetryWithoutKafkaSend() {
+        OutboxEvent event = pendingEvent();
+        event.setTopic(OutboxService.NOTIFICATION_TOPIC);
+        when(repository.findByIdForUpdate(event.getId()))
+                .thenReturn(Optional.of(event));
+        when(outboxPayloadEnricher.enrich(event))
+                .thenThrow(new IllegalStateException("auth unavailable"));
+
+        service.publishById(event.getId());
+
+        assertThat(event.getStatus())
+                .isEqualTo(OutboxEvent.STATUS_PENDING);
+        assertThat(event.getAttempts()).isEqualTo(1);
+        assertThat(event.getNextAttemptAt())
+                .isEqualTo(NOW.plusSeconds(1));
+        assertThat(event.getLastErrorType())
+                .isEqualTo("IllegalStateException");
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
+    }
+
+    @Test
     void failedKafkaAckAtMaxAttemptsMarksEventDead() {
         OutboxEvent event = pendingEvent();
         // Nine previous failed deliveries.
@@ -195,7 +229,8 @@ class OutboxDeliveryServiceTest {
                         1L,
                         3,
                         CLOCK,
-                        flagMetrics
+                        flagMetrics,
+                        outboxPayloadEnricher
                 );
         OutboxEvent event = pendingEvent();
         event.setAttempts(2);

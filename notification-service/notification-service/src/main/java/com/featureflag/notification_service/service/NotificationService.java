@@ -1,6 +1,5 @@
 package com.featureflag.notification_service.service;
 
-import com.featureflag.notification_service.client.AuthRecipientsClient;
 import com.featureflag.notification_service.dto.NotificationRequest;
 import com.featureflag.notification_service.entity.DeliveryMode;
 import com.featureflag.notification_service.entity.Notification;
@@ -20,11 +19,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.time.Clock;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -33,7 +29,6 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final JavaMailSender mailSender;
-    private final AuthRecipientsClient authRecipientsClient;
     private final Clock clock;
     private final NotificationMetrics notificationMetrics;
 
@@ -92,93 +87,6 @@ public class NotificationService {
         }
 
         return notificationRepository.save(notification);
-    }
-
-    public List<Notification> sendToRoleRecipients(
-            String subject,
-            String message,
-            String type,
-            List<String> targetRoles
-    ) {
-        String resolvedType =
-                NotificationTypePolicy.resolveInternalType(type);
-
-        List<String> recipients =
-                resolveRoleRecipientEmails(targetRoles);
-
-        if (recipients.isEmpty()) {
-            log.warn("No active notification recipients found for configured roles; email dispatch skipped");
-            return List.of();
-        }
-
-        log.info("Dispatching notification to {} database recipient(s)", recipients.size());
-
-        List<Notification> dispatched = new ArrayList<>();
-
-        for (String recipientEmail : recipients) {
-            Notification notification = Notification.builder()
-                    .recipient(recipientEmail)
-                    .subject(subject)
-                    .message(message)
-                    .type(resolvedType)
-                    .status("PENDING")
-                    .createdAt(clock.instant())
-                    .build();
-
-            notification = notificationRepository.save(notification);
-
-            try {
-                SimpleMailMessage mailMessage = new SimpleMailMessage();
-                mailMessage.setTo(recipientEmail);
-                mailMessage.setSubject(subject);
-                mailMessage.setText(message);
-
-                mailSender.send(mailMessage);
-
-                notification.setStatus("SENT");
-                notification.setSentAt(clock.instant());
-                notificationMetrics.deliverySucceeded("synchronous");
-                log.info("Email notification sent; notificationId={}", notification.getId());
-
-            } catch (Exception e) {
-                notification.setStatus("FAILED");
-                notificationMetrics.deliveryFailed("synchronous");
-                log.warn("Email delivery failed; notificationId={} errorType={}", notification.getId(), e.getClass().getSimpleName());
-            }
-
-            dispatched.add(notificationRepository.save(notification));
-        }
-
-        return dispatched;
-    }
-
-    public List<String> resolveRoleRecipientEmails(
-            List<String> targetRoles
-    ) {
-        List<String> recipients = new ArrayList<>();
-
-        try {
-            List<String> fetched = authRecipientsClient.getNotificationRecipients(targetRoles);
-            if (fetched != null) {
-                recipients = fetched.stream()
-                        .filter(Objects::nonNull)
-                        .map(String::trim)
-                        .filter(email -> !email.isBlank())
-                        .distinct()
-                        .collect(Collectors.toList());
-            }
-        } catch (Exception e) {
-            log.error(
-                    "Failed to retrieve notification recipients from Auth Service; errorType={}",
-                    e.getClass().getSimpleName()
-            );
-            throw new IllegalStateException(
-                    "Failed to retrieve notification recipients from Auth Service",
-                    e
-            );
-        }
-
-        return recipients;
     }
 
     public List<Notification> getNotificationsForUser(String userEmail, String userRole) {

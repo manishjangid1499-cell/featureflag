@@ -54,11 +54,6 @@ management:
       show-details: never
       show-components: never
 
-clients:
-  auth-recipients:
-    connect-timeout-ms: ${AUTH_RECIPIENTS_CONNECT_TIMEOUT_MS:2000}
-    read-timeout-ms: ${AUTH_RECIPIENTS_READ_TIMEOUT_MS:3000}
-
 security:
   jwt:
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION}

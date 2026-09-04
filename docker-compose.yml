@@ -160,6 +160,7 @@ services:
       JWT_PUBLIC_KEY_LOCATION: "file:/run/secrets/jwt-public.pem"
       JWT_ISSUER: "${JWT_ISSUER:?JWT_ISSUER is required}"
       JWT_AUDIENCE: "${JWT_AUDIENCE:?JWT_AUDIENCE is required}"
+      AUTH_RECIPIENTS_SERVICE_KEY: "${AUTH_RECIPIENTS_SERVICE_KEY:?AUTH_RECIPIENTS_SERVICE_KEY is required}"
     volumes:
       - type: bind
         source: "${JWT_PUBLIC_KEY_FILE:?JWT_PUBLIC_KEY_FILE is required}"
@@ -181,6 +182,8 @@ services:
       kafka-init:
         condition: service_completed_successfully
       eureka-server:
+        condition: service_healthy
+      auth-service:
         condition: service_healthy
 
   audit-service:
@@ -294,7 +297,6 @@ services:
       NOTIFICATION_MAIL_CONNECTION_TIMEOUT_MS: "${NOTIFICATION_MAIL_CONNECTION_TIMEOUT_MS:-10000}"
       NOTIFICATION_MAIL_READ_TIMEOUT_MS: "${NOTIFICATION_MAIL_READ_TIMEOUT_MS:-10000}"
       NOTIFICATION_MAIL_WRITE_TIMEOUT_MS: "${NOTIFICATION_MAIL_WRITE_TIMEOUT_MS:-10000}"
-      AUTH_RECIPIENTS_SERVICE_KEY: "${AUTH_RECIPIENTS_SERVICE_KEY:?AUTH_RECIPIENTS_SERVICE_KEY is required}"
       NOTIFICATION_INTERNAL_SERVICE_KEY: "${NOTIFICATION_INTERNAL_SERVICE_KEY:?NOTIFICATION_INTERNAL_SERVICE_KEY is required}"
       JWT_PUBLIC_KEY_LOCATION: "file:/run/secrets/jwt-public.pem"
       JWT_ISSUER: "${JWT_ISSUER:?JWT_ISSUER is required}"

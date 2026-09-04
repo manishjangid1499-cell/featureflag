@@ -1,6 +1,5 @@
 package com.featureflag.notification_service.service;
 
-import com.featureflag.notification_service.client.AuthRecipientsClient;
 import com.featureflag.notification_service.dto.NotificationRequest;
 import com.featureflag.notification_service.entity.DeliveryMode;
 import com.featureflag.notification_service.entity.Notification;
@@ -43,9 +42,6 @@ class NotificationServiceTest {
     private JavaMailSender mailSender;
 
     @Mock
-    private AuthRecipientsClient authRecipientsClient;
-
-    @Mock
     private NotificationMetrics notificationMetrics;
 
     private NotificationService notificationService;
@@ -57,7 +53,6 @@ class NotificationServiceTest {
         notificationService = new NotificationService(
                 notificationRepository,
                 mailSender,
-                authRecipientsClient,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 notificationMetrics
         );
@@ -198,7 +193,6 @@ class NotificationServiceTest {
 
         verifyNoInteractions(
                 notificationRepository,
-                authRecipientsClient,
                 mailSender
         );
     }
@@ -218,177 +212,6 @@ class NotificationServiceTest {
 
         assertEquals("EMAIL", result.getType());
         verify(mailSender).send(any(SimpleMailMessage.class));
-    }
-
-    @Test
-    @DisplayName("Send To Role Recipients - Dispatches email to each resolved recipient")
-    void testSendToRoleRecipients_Success() {
-        when(authRecipientsClient.getNotificationRecipients(List.of("OWNER", "ADMIN")))
-                .thenReturn(List.of("owner@company.com", "admin@company.com"));
-        when(notificationRepository.save(any(Notification.class))).thenAnswer(i -> i.getArgument(0));
-
-        List<Notification> dispatched = notificationService.sendToRoleRecipients(
-                "Flag Deleted",
-                "Flag was removed",
-                "EMAIL",
-                List.of("OWNER", "ADMIN")
-        );
-
-        assertNotNull(dispatched);
-        assertEquals(2, dispatched.size());
-        verify(mailSender, times(2)).send(any(SimpleMailMessage.class));
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {
-            "SMS",
-            "PUSH",
-            "FAX",
-            "email",
-            "Email",
-            "",
-            "   "
-    })
-    @DisplayName("Send To Role Recipients - Unsupported type is rejected before lookup")
-    void testSendToRoleRecipients_UnsupportedTypeRejectedBeforeSideEffects(
-            String type
-    ) {
-        assertThrows(
-                UnsupportedNotificationChannelException.class,
-                () -> notificationService.sendToRoleRecipients(
-                        "Flag changed",
-                        "Message",
-                        type,
-                        List.of("OWNER", "ADMIN")
-                )
-        );
-
-        verifyNoInteractions(
-                notificationRepository,
-                authRecipientsClient,
-                mailSender
-        );
-    }
-
-    @Test
-    @DisplayName("Send To Role Recipients - Null internal type preserves EMAIL default")
-    void testSendToRoleRecipients_NullInternalTypeDefaultsToEmail() {
-        when(authRecipientsClient.getNotificationRecipients(
-                List.of("OWNER")
-        )).thenReturn(List.of("owner@company.com"));
-        when(notificationRepository.save(any(Notification.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        List<Notification> notifications =
-                notificationService.sendToRoleRecipients(
-                        "Flag changed",
-                        "Message",
-                        null,
-                        List.of("OWNER")
-                );
-
-        assertEquals("EMAIL", notifications.getFirst().getType());
-        verify(mailSender).send(any(SimpleMailMessage.class));
-    }
-
-    @Test
-    @DisplayName("Send To Role Recipients - Auth lookup failure propagates for Kafka retry")
-    void testSendToRoleRecipients_AuthLookupFailurePropagates() {
-        RuntimeException authFailure =
-                new RuntimeException(
-                        "auth service unavailable"
-                );
-        when(
-                authRecipientsClient
-                        .getNotificationRecipients(
-                                List.of(
-                                        "OWNER",
-                                        "ADMIN"
-                                )
-                        )
-        ).thenThrow(authFailure);
-        IllegalStateException exception =
-                assertThrows(
-                        IllegalStateException.class,
-                        () -> notificationService
-                                .sendToRoleRecipients(
-                                        "Flag Updated",
-                                        "Flag changed",
-                                        "EMAIL",
-                                        List.of(
-                                                "OWNER",
-                                                "ADMIN"
-                                        )
-                                )
-                );
-        assertSame(
-                authFailure,
-                exception.getCause()
-        );
-        verify(
-                mailSender,
-                never()
-        ).send(
-                any(SimpleMailMessage.class)
-        );
-        verify(
-                notificationRepository,
-                never()
-        ).save(
-                any(Notification.class)
-        );
-    }
-
-    @Test
-    @DisplayName("Send To Role Recipients - Empty recipient list skips mail delivery")
-    void testSendToRoleRecipients_EmptyList() {
-        when(authRecipientsClient.getNotificationRecipients(anyList())).thenReturn(List.of());
-
-        List<Notification> dispatched = notificationService.sendToRoleRecipients(
-                "Flag Created",
-                "Message",
-                "EMAIL",
-                List.of("OWNER")
-        );
-
-        assertNotNull(dispatched);
-        assertTrue(dispatched.isEmpty());
-        verify(mailSender, never()).send(any(SimpleMailMessage.class));
-    }
-
-    @Test
-    @DisplayName("Resolve Role Recipients - Normalizes without saving or sending")
-    void testResolveRoleRecipientEmails_NormalizesWithoutDelivery() {
-        when(
-                authRecipientsClient.getNotificationRecipients(
-                        List.of("OWNER", "ADMIN")
-                )
-        ).thenReturn(
-                java.util.Arrays.asList(
-                        " owner@company.com ",
-                        null,
-                        "   ",
-                        "owner@company.com",
-                        "admin@company.com"
-                )
-        );
-
-        List<String> recipients =
-                notificationService.resolveRoleRecipientEmails(
-                        List.of("OWNER", "ADMIN")
-                );
-
-        assertEquals(
-                List.of(
-                        "owner@company.com",
-                        "admin@company.com"
-                ),
-                recipients
-        );
-        verifyNoInteractions(
-                notificationRepository,
-                mailSender
-        );
     }
 
     @Test

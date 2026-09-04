@@ -1,6 +1,5 @@
 package com.featureflag.notification_service.service;
 
-import com.featureflag.notification_service.client.AuthRecipientsClient;
 import com.featureflag.notification_service.config.NotificationDeliveryProperties;
 import com.featureflag.notification_service.config.TimeConfiguration;
 import com.featureflag.notification_service.entity.DeliveryMode;
@@ -85,9 +84,6 @@ class NotificationDeleteClaimMySqlIT {
 
     @MockitoBean
     private JavaMailSender mailSender;
-
-    @MockitoBean
-    private AuthRecipientsClient authRecipientsClient;
 
     @MockitoBean
     private NotificationMetrics notificationMetrics;

@@ -29,6 +29,7 @@ public class OutboxDeliveryService {
     private final int maxAttempts;
     private final Clock clock;
     private final FlagMetrics flagMetrics;
+    private final OutboxPayloadEnricher outboxPayloadEnricher;
 
     public OutboxDeliveryService(
             OutboxEventRepository outboxEventRepository,
@@ -42,7 +43,8 @@ public class OutboxDeliveryService {
             )
             int maxAttempts,
             Clock clock,
-            FlagMetrics flagMetrics
+            FlagMetrics flagMetrics,
+            OutboxPayloadEnricher outboxPayloadEnricher
     ) {
         if (maxAttempts < 1) {
             throw new IllegalArgumentException(
@@ -57,6 +59,7 @@ public class OutboxDeliveryService {
         this.maxAttempts = maxAttempts;
         this.clock = clock;
         this.flagMetrics = flagMetrics;
+        this.outboxPayloadEnricher = outboxPayloadEnricher;
     }
 
     @Transactional
@@ -105,11 +108,12 @@ public class OutboxDeliveryService {
         }
 
         try {
+            String payload = outboxPayloadEnricher.enrich(event);
             ProducerRecord<String, String> record =
                     new ProducerRecord<>(
                             event.getTopic(),
                             event.getMessageKey(),
-                            event.getPayload()
+                            payload
                     );
             record.headers().add(
                     CorrelationIds.HEADER_NAME,

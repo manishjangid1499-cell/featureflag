@@ -1,6 +1,6 @@
-package com.featureflag.notification_service.client;
+package com.featureflag.flag_service.client;
 
-import com.featureflag.notification_service.config.AuthRecipientsFeignConfig;
+import com.featureflag.flag_service.config.AuthRecipientsFeignConfig;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
