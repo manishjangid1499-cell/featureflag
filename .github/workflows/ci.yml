@@ -1,0 +1,137 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend - ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: auth
+            directory: auth-service/auth-service
+          - service: flag
+            directory: flag-service/flag-service
+          - service: audit
+            directory: audit-service/audit-service
+          - service: analytics
+            directory: analytics-service/analytics-service
+          - service: notification
+            directory: notification-service/notification-service
+          - service: gateway
+            directory: api-gateway/api-gateway
+          - service: eureka
+            directory: eureka-server/eureka-server
+    defaults:
+      run:
+        working-directory: ${{ matrix.directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: ${{ matrix.directory }}/pom.xml
+      - name: Test and package
+        run: mvn -B -ntp clean verify
+      - name: Reject test material in production JAR
+        shell: bash
+        run: |
+          jar_file="$(find target -maxdepth 1 -type f -name '*.jar' ! -name '*.original' -print -quit)"
+          test -n "$jar_file"
+          if jar tf "$jar_file" | grep -E '(MySqlIT|InfrastructureIT|application-(test|mysql-it)|test-(public|private)-key)'; then
+            echo "Production JAR contains test-only material" >&2
+            exit 1
+          fi
+
+  integration:
+    name: Integration - ${{ matrix.service }} (${{ matrix.profile }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: auth
+            directory: auth-service/auth-service
+            profile: mysql-it
+          - service: flag
+            directory: flag-service/flag-service
+            profile: mysql-it
+          - service: flag
+            directory: flag-service/flag-service
+            profile: infrastructure-it
+          - service: audit
+            directory: audit-service/audit-service
+            profile: mysql-it
+          - service: analytics
+            directory: analytics-service/analytics-service
+            profile: mysql-it
+          - service: notification
+            directory: notification-service/notification-service
+            profile: mysql-it
+    defaults:
+      run:
+        working-directory: ${{ matrix.directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: ${{ matrix.directory }}/pom.xml
+      - name: Run disposable infrastructure integration suite
+        run: mvn -B -ntp clean verify -P${{ matrix.profile }}
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Frontend/feature-flag-ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.18.1"
+          cache: npm
+          cache-dependency-path: Frontend/feature-flag-ui/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - run: npm run build
+
+  sdk:
+    name: Java SDK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/java-sdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: sdk/java-sdk/pom.xml
+      - run: mvn -B -ntp clean verify
+      - name: Reject test material in SDK JAR
+        shell: bash
+        run: |
+          jar_file="$(find target -maxdepth 1 -type f -name '*.jar' ! -name '*sources*' ! -name '*javadoc*' -print -quit)"
+          test -n "$jar_file"
+          if jar tf "$jar_file" | grep -E '(Test.class|application-test|test-key)'; then
+            echo "SDK JAR contains test-only material" >&2
+            exit 1
+          fi

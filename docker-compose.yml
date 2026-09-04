@@ -176,7 +176,7 @@ services:
       mysql:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_healthy
       kafka-init:
@@ -274,9 +274,15 @@ services:
       start_period: 60s
     depends_on:
       auth-service:
-        condition: service_started
+        condition: service_healthy
       flag-service:
-        condition: service_started
+        condition: service_healthy
+      audit-service:
+        condition: service_healthy
+      analytics-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
 
