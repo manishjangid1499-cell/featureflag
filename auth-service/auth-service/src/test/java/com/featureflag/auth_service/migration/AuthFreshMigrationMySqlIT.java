@@ -50,7 +50,7 @@ class AuthFreshMigrationMySqlIT {
     @Test
     void freshSchemaMigratesAndValidates() {
         assertNotNull(entityManagerFactory);
-        assertSuccessfulV1();
+        assertSuccessfulMigrations();
         AuthMigrationSchemaAssertions.assertMigratedSchema(jdbcTemplate);
         assertEquals(
                 0,
@@ -68,18 +68,19 @@ class AuthFreshMigrationMySqlIT {
         );
 
         assertUniqueConstraintsRejectDuplicates();
+        assertNewUsersDefaultEnabled();
 
         assertEquals(0, flyway.migrate().migrationsExecuted);
     }
 
-    private void assertSuccessfulV1() {
+    private void assertSuccessfulMigrations() {
         assertEquals(
-                1,
+                2,
                 jdbcTemplate.queryForObject(
                         """
                         SELECT COUNT(*)
                         FROM flyway_schema_history
-                        WHERE version = '1'
+                        WHERE version IN ('1', '2')
                           AND type = 'SQL'
                           AND success = 1
                         """,
@@ -93,6 +94,20 @@ class AuthFreshMigrationMySqlIT {
                         SELECT COUNT(*)
                         FROM flyway_schema_history
                         WHERE success = 0
+                        """,
+                        Integer.class
+                )
+        );
+    }
+
+    private void assertNewUsersDefaultEnabled() {
+        assertEquals(
+                1,
+                jdbcTemplate.queryForObject(
+                        """
+                        SELECT enabled
+                        FROM users
+                        WHERE email = 'member@example.test'
                         """,
                         Integer.class
                 )

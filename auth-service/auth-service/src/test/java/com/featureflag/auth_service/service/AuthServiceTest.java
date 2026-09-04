@@ -122,6 +122,56 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("Login - disabled user returns generic bad credentials")
+    void testLogin_DisabledUser_ThrowsBadCredentials() {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("test@company.com");
+        request.setPassword("password123");
+        testUser.setEnabled(false);
+
+        when(userRepository.findByEmail("test@company.com"))
+                .thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches(
+                "password123",
+                "encoded_password"
+        )).thenReturn(true);
+
+        BadCredentialsException exception = assertThrows(
+                BadCredentialsException.class,
+                () -> authService.login(request)
+        );
+
+        assertEquals("Invalid email or password", exception.getMessage());
+        verify(loginRateLimiter).recordFailure("test@company.com");
+        verify(authMetrics).loginFailed();
+        verifyNoInteractions(jwtService);
+    }
+
+    @Test
+    @DisplayName("Login - re-enabled user can authenticate")
+    void testLogin_ReEnabledUser_Succeeds() {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("test@company.com");
+        request.setPassword("password123");
+        testUser.setEnabled(false);
+        testUser.setEnabled(true);
+
+        when(userRepository.findByEmail("test@company.com"))
+                .thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches(
+                "password123",
+                "encoded_password"
+        )).thenReturn(true);
+        when(jwtService.generateToken(
+                "test@company.com",
+                "DEVELOPER"
+        )).thenReturn("new-token");
+
+        assertEquals("new-token", authService.login(request).getToken());
+        verify(loginRateLimiter).recordSuccess("test@company.com");
+    }
+
+    @Test
     @DisplayName("Login - an active rate limit stops authentication before lookup")
     void testLogin_RateLimited_DoesNotQueryRepository() {
         LoginRequest request = new LoginRequest();
@@ -162,8 +212,14 @@ class AuthServiceTest {
     void testGetNotificationRecipients() {
         User owner = User.builder().email(" OWNER@Company.COM ").role(Role.OWNER).build();
         User admin = User.builder().email("admin@company.com").role(Role.ADMIN).build();
+        User disabledAdmin = User.builder()
+                .email("disabled@company.com")
+                .role(Role.ADMIN)
+                .enabled(false)
+                .build();
 
-        when(userRepository.findByRoleIn(anyCollection())).thenReturn(List.of(owner, admin));
+        when(userRepository.findByRoleIn(anyCollection()))
+                .thenReturn(List.of(owner, admin, disabledAdmin));
 
         List<String> recipients = authService.getNotificationRecipients(List.of("OWNER", "ADMIN"));
 

@@ -24,11 +24,12 @@ export function Login() {
       });
       navigate("/dashboard");
     } catch (err: any) {
-      console.error("Login failed:", err);
       const status = err?.response?.status;
       const backendMessage = err?.response?.data?.message?.toLowerCase() || "";
 
-      if (
+      if (status === 429) {
+        setError("Too many sign-in attempts. Please wait and try again.");
+      } else if (
         status === 400 ||
         status === 401 ||
         backendMessage.includes("password") ||

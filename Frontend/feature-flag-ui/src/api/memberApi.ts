@@ -46,6 +46,16 @@ export const updateMemberRole = async (id: number, role: UserRole): Promise<Memb
   return response.data;
 };
 
+export const updateMemberStatus = async (
+  id: number,
+  enabled: boolean,
+): Promise<MemberResponse> => {
+  const response = await api.patch<MemberResponse>(`/members/${id}/status`, {
+    enabled,
+  });
+  return response.data;
+};
+
 export const deleteMember = async (id: number): Promise<void> => {
   await api.delete(`/members/${id}`);
 };

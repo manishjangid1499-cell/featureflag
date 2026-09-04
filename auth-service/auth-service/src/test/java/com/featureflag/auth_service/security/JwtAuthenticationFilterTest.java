@@ -13,6 +13,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -50,6 +51,37 @@ class JwtAuthenticationFilterTest {
         assertEquals("user@company.com", authentication.getName());
         assertTrue(authentication.getAuthorities().stream()
                 .anyMatch(authority -> authority.getAuthority().equals("ROLE_OWNER")));
+        verify(chain).doFilter(request, response);
+    }
+
+    @Test
+    void disabledUserIsNotAuthenticatedByAnExistingToken() throws Exception {
+        JwtService jwtService = mock(JwtService.class);
+        CustomUserDetailsService userDetailsService =
+                mock(CustomUserDetailsService.class);
+        JwtAuthenticationFilter filter =
+                new JwtAuthenticationFilter(jwtService, userDetailsService);
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        HttpServletResponse response = mock(HttpServletResponse.class);
+        FilterChain chain = mock(FilterChain.class);
+        User disabledUser = User.builder()
+                .email("disabled@company.com")
+                .password("encoded")
+                .role(Role.ADMIN)
+                .enabled(false)
+                .build();
+
+        when(request.getHeader("Authorization"))
+                .thenReturn("Bearer existing-token");
+        when(jwtService.extractEmail("existing-token"))
+                .thenReturn("disabled@company.com");
+        when(userDetailsService.loadUserByUsername(
+                "disabled@company.com"
+        )).thenReturn(disabledUser);
+
+        filter.doFilterInternal(request, response, chain);
+
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
         verify(chain).doFilter(request, response);
     }
 }

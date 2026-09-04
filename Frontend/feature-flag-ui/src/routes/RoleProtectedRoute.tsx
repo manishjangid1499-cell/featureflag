@@ -2,6 +2,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import type { UserRole } from "../types/auth";
 import type { ReactNode } from "react";
+import { resolveRoleProtectedRoute } from "../auth/authPolicy";
 
 interface RoleProtectedRouteProps {
   allowedRoles: UserRole[];
@@ -9,13 +10,23 @@ interface RoleProtectedRouteProps {
 }
 
 export function RoleProtectedRoute({ allowedRoles, children }: RoleProtectedRouteProps) {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isAuthResolved } = useAuth();
 
-  if (!isAuthenticated || !user) {
+  const decision = resolveRoleProtectedRoute(
+    isAuthResolved,
+    user?.role ?? null,
+    allowedRoles,
+  );
+
+  if (decision === "pending") {
+    return null;
+  }
+
+  if (decision === "login" || !isAuthenticated || !user) {
     return <Navigate to="/login" replace />;
   }
 
-  if (!allowedRoles.includes(user.role)) {
+  if (decision === "forbidden") {
     return (
       <div style={{
         padding: "60px 40px",

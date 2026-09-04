@@ -102,6 +102,39 @@ public class MemberService {
     }
 
     /**
+     * Enable or disable a member account without deleting it.
+     */
+    public MemberResponse updateEnabled(
+            Long id,
+            boolean enabled,
+            User currentUser
+    ) {
+        requireMemberManager(currentUser);
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException(
+                        "Member not found with id: " + id
+                ));
+
+        if (!enabled && user.getId().equals(currentUser.getId())) {
+            throw new RuntimeException(
+                    "You cannot disable your own account"
+            );
+        }
+
+        if (currentUser.getRole() == Role.ADMIN
+                && user.getRole() != Role.DEVELOPER
+                && user.getRole() != Role.VIEWER) {
+            throw new RuntimeException(
+                    "ADMIN can only enable or disable DEVELOPER or VIEWER"
+            );
+        }
+
+        user.setEnabled(enabled);
+        return toResponse(userRepository.save(user));
+    }
+
+    /**
      * Delete a member.
      */
     public void deleteMember(
@@ -194,13 +227,24 @@ public class MemberService {
         );
     }
 
+    private void requireMemberManager(User currentUser) {
+        if (currentUser == null
+                || (currentUser.getRole() != Role.OWNER
+                && currentUser.getRole() != Role.ADMIN)) {
+            throw new RuntimeException(
+                    "You do not have permission to manage members"
+            );
+        }
+    }
+
     private MemberResponse toResponse(User user) {
 
         return new MemberResponse(
                 user.getId(),
                 user.getName(),
                 user.getEmail(),
-                user.getRole()
+                user.getRole(),
+                user.isEnabled()
         );
     }
 }

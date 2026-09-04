@@ -35,7 +35,6 @@ export function Flags() {
       const data = await getAllFlags();
       setFlags(Array.isArray(data) ? data : []);
     } catch (err: any) {
-      console.error("Failed to load flags:", err);
       const msg = err?.response?.data?.message || err?.message || "Unable to connect to FeatureFlag service.";
       setError(msg);
     } finally {
@@ -55,7 +54,6 @@ export function Flags() {
         current.map((flag) => (flag.id === id ? updated : flag))
       );
     } catch (err: any) {
-      console.error("Failed to toggle flag:", err);
       alert(err?.response?.data?.message || "Failed to toggle feature flag.");
     } finally {
       setTogglingId(null);

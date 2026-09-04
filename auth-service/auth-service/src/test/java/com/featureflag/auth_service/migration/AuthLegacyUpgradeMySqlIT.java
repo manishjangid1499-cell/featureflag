@@ -64,7 +64,7 @@ class AuthLegacyUpgradeMySqlIT {
 
         MigrateResult firstMigration = flyway.migrate();
 
-        assertEquals(0, firstMigration.migrationsExecuted);
+        assertEquals(1, firstMigration.migrationsExecuted);
         assertBaselineHistory(jdbcTemplate);
         AuthMigrationSchemaAssertions.assertMigratedSchema(jdbcTemplate);
         assertLegacyRowsAfterBaseline(jdbcTemplate);
@@ -130,6 +130,19 @@ class AuthLegacyUpgradeMySqlIT {
                         Integer.class
                 )
         );
+        assertEquals(
+                1,
+                jdbcTemplate.queryForObject(
+                        """
+                        SELECT COUNT(*)
+                        FROM flyway_schema_history
+                        WHERE version = '2'
+                          AND type = 'SQL'
+                          AND success = 1
+                        """,
+                        Integer.class
+                )
+        );
     }
 
     private void assertLegacyRowsAfterBaseline(
@@ -145,6 +158,7 @@ class AuthLegacyUpgradeMySqlIT {
                           AND email = 'owner@example.test'
                           AND name = 'Fixture Owner'
                           AND role = 'OWNER'
+                          AND enabled = b'1'
                         """,
                         Integer.class
                 )

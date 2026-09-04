@@ -27,17 +27,14 @@ export function Dashboard() {
       if (flagsRes.status === "fulfilled" && Array.isArray(flagsRes.value)) {
         setFlags(flagsRes.value);
       } else if (flagsRes.status === "rejected") {
-        console.error("Flags load error:", flagsRes.reason);
         setError("Could not load flags from backend.");
       }
 
       if (auditRes.status === "fulfilled" && Array.isArray(auditRes.value)) {
         setAuditLogs(auditRes.value.slice(0, 5));
       } else if (auditRes.status === "rejected") {
-        console.error("Audit load error:", auditRes.reason);
       }
-    } catch (e) {
-      console.error("Dashboard error:", e);
+    } catch {
       setError("Failed to communicate with API Gateway.");
     } finally {
       setLoading(false);

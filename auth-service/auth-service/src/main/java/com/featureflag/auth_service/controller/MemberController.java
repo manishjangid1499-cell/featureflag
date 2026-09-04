@@ -4,6 +4,7 @@ import com.featureflag.auth_service.dto.InvitationResponse;
 import com.featureflag.auth_service.dto.InviteMemberRequest;
 import com.featureflag.auth_service.dto.MemberResponse;
 import com.featureflag.auth_service.dto.PageResponse;
+import com.featureflag.auth_service.dto.UpdateMemberStatusRequest;
 import com.featureflag.auth_service.entity.Role;
 import com.featureflag.auth_service.entity.User;
 import com.featureflag.auth_service.service.InvitationService;
@@ -108,6 +109,21 @@ public class MemberController {
     ) {
         User currentUser = (User) authentication.getPrincipal();
         return memberService.updateRole(id, role, currentUser);
+    }
+
+    @Operation(summary = "Enable or disable a platform member")
+    @PatchMapping("/{id}/status")
+    public MemberResponse updateStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateMemberStatusRequest request,
+            Authentication authentication
+    ) {
+        User currentUser = (User) authentication.getPrincipal();
+        return memberService.updateEnabled(
+                id,
+                request.enabled(),
+                currentUser
+        );
     }
 
     @Operation(summary = "Delete platform member")

@@ -26,15 +26,18 @@ final class AuthMigrationSchemaAssertions {
 
     static void assertPreFlywayLegacySchema(JdbcTemplate jdbcTemplate) {
         assertFalse(tableExists(jdbcTemplate, "flyway_schema_history"));
-        assertBaseSchema(jdbcTemplate);
+        assertBaseSchema(jdbcTemplate, false);
     }
 
     static void assertMigratedSchema(JdbcTemplate jdbcTemplate) {
         assertTrue(tableExists(jdbcTemplate, "flyway_schema_history"));
-        assertBaseSchema(jdbcTemplate);
+        assertBaseSchema(jdbcTemplate, true);
     }
 
-    private static void assertBaseSchema(JdbcTemplate jdbcTemplate) {
+    private static void assertBaseSchema(
+            JdbcTemplate jdbcTemplate,
+            boolean enabledColumnExpected
+    ) {
         assertEquals(
                 Set.of("users", "invitations"),
                 Set.copyOf(jdbcTemplate.queryForList(
@@ -51,15 +54,33 @@ final class AuthMigrationSchemaAssertions {
 
         assertTable(jdbcTemplate, "users");
         assertTable(jdbcTemplate, "invitations");
-        assertUserColumns(jdbcTemplate);
+        assertUserColumns(jdbcTemplate, enabledColumnExpected);
         assertInvitationColumns(jdbcTemplate);
         assertIndexes(jdbcTemplate);
         assertConstraints(jdbcTemplate);
     }
 
-    private static void assertUserColumns(JdbcTemplate jdbcTemplate) {
+    private static void assertUserColumns(
+            JdbcTemplate jdbcTemplate,
+            boolean enabledColumnExpected
+    ) {
         assertEquals(
-                List.of("id", "email", "name", "password", "role"),
+                enabledColumnExpected
+                        ? List.of(
+                                "id",
+                                "email",
+                                "name",
+                                "password",
+                                "role",
+                                "enabled"
+                        )
+                        : List.of(
+                                "id",
+                                "email",
+                                "name",
+                                "password",
+                                "role"
+                        ),
                 columnNames(jdbcTemplate, "users")
         );
 
@@ -74,6 +95,24 @@ final class AuthMigrationSchemaAssertions {
                 "varchar(255)", "varchar", false, 255L, null, "");
         assertColumn(jdbcTemplate, "users", "role",
                 ROLE_ENUM, "enum", false, 9L, null, "");
+
+        if (enabledColumnExpected) {
+            assertColumn(jdbcTemplate, "users", "enabled",
+                    "bit(1)", "bit", false, null, null, "");
+            assertEquals(
+                    "b'1'",
+                    jdbcTemplate.queryForObject(
+                            """
+                            SELECT column_default
+                            FROM information_schema.columns
+                            WHERE table_schema = DATABASE()
+                              AND table_name = 'users'
+                              AND column_name = 'enabled'
+                            """,
+                            String.class
+                    )
+            );
+        }
     }
 
     private static void assertInvitationColumns(

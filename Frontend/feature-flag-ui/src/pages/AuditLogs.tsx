@@ -15,7 +15,6 @@ export function AuditLogs() {
       const data = await getAllAuditLogs();
       setLogs(Array.isArray(data) ? data : []);
     } catch (err: any) {
-      console.error("Failed to load audit logs:", err);
       const msg = err?.response?.data?.message || err?.message || "Failed to connect to Audit Service.";
       setError(msg);
     } finally {

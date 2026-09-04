@@ -23,7 +23,6 @@ export function Notifications() {
       const data = await getAllNotifications();
       setNotifications(Array.isArray(data) ? data : []);
     } catch (err: any) {
-      console.error("Failed to load notifications:", err);
       const msg = err?.response?.data?.message || err?.message || "Failed to connect to Notification Service.";
       setError(msg);
     } finally {

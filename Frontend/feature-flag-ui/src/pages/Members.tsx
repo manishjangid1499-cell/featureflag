@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import {
   getAllMembers,
   updateMemberRole,
+  updateMemberStatus,
   deleteMember,
   inviteMember,
   getAllInvitations,
@@ -43,7 +44,6 @@ export function Members() {
       setMembers(Array.isArray(membersData) ? membersData : []);
       setInvitations(Array.isArray(invitationsData) ? invitationsData : []);
     } catch (err: any) {
-      console.error("Failed to load members or invitations:", err);
       const msg =
         err?.response?.data?.message ||
         err?.message ||
@@ -84,7 +84,6 @@ export function Members() {
       setSuccessMessage(`Invitation successfully sent to ${created.email}.`);
       setTimeout(() => setSuccessMessage(""), 6000);
     } catch (err: any) {
-      console.error("Invite member error:", err);
       setFormError(
         err?.response?.data?.message ||
           "Failed to send invitation. Please verify permissions."
@@ -127,6 +126,30 @@ export function Members() {
       setTimeout(() => setSuccessMessage(""), 4000);
     } catch (err: any) {
       alert(err?.response?.data?.message || "Failed to update member role.");
+    }
+  };
+
+  const handleStatusChange = async (
+    memberId: number,
+    memberEmail: string,
+    enabled: boolean,
+  ) => {
+    const action = enabled ? "enable" : "disable";
+    if (!window.confirm(`${action[0].toUpperCase()}${action.slice(1)} ${memberEmail}?`)) {
+      return;
+    }
+
+    try {
+      const updated = await updateMemberStatus(memberId, enabled);
+      setMembers((previous) =>
+        previous.map((member) => (member.id === memberId ? updated : member)),
+      );
+      setSuccessMessage(
+        `${updated.email} is now ${updated.enabled ? "enabled" : "disabled"}.`,
+      );
+      setTimeout(() => setSuccessMessage(""), 4000);
+    } catch (err: any) {
+      alert(err?.response?.data?.message || `Failed to ${action} member.`);
     }
   };
 
@@ -258,7 +281,7 @@ export function Members() {
       <div style={{ marginBottom: "36px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
           <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#1e293b" }}>
-            Active Platform Members ({members.length})
+            Platform Members ({members.length})
           </h2>
         </div>
 
@@ -351,6 +374,10 @@ export function Members() {
                 {members.map((m) => {
                   const isSelf = m.email === user?.email;
                   const isTargetOwner = m.role === "OWNER";
+                  const canModifyTarget =
+                    !isSelf &&
+                    !isTargetOwner &&
+                    (isOwner || m.role === "DEVELOPER" || m.role === "VIEWER");
 
                   return (
                     <tr key={m.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
@@ -377,6 +404,20 @@ export function Members() {
                           }}
                         >
                           {m.email}
+                        </div>
+                        <div
+                          style={{
+                            display: "inline-block",
+                            marginTop: "6px",
+                            padding: "2px 8px",
+                            borderRadius: "12px",
+                            fontSize: "10px",
+                            fontWeight: 700,
+                            background: m.enabled ? "#dcfce7" : "#fee2e2",
+                            color: m.enabled ? "#15803d" : "#b91c1c",
+                          }}
+                        >
+                          {m.enabled ? "ENABLED" : "DISABLED"}
                         </div>
                       </td>
 
@@ -426,7 +467,7 @@ export function Members() {
                       </td>
 
                       <td style={{ padding: "16px 20px", textAlign: "right" }}>
-                        {!isSelf && !isTargetOwner && (
+                        {canModifyTarget && (
                           <div
                             style={{
                               display: "inline-flex",
@@ -451,6 +492,24 @@ export function Members() {
                               <option value="DEVELOPER">DEVELOPER</option>
                               <option value="VIEWER">VIEWER</option>
                             </select>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleStatusChange(m.id, m.email, !m.enabled)
+                              }
+                              style={{
+                                padding: "5px 10px",
+                                border: "1px solid #d1d5db",
+                                background: "white",
+                                color: "#374151",
+                                borderRadius: "6px",
+                                fontSize: "12px",
+                                cursor: "pointer",
+                              }}
+                            >
+                              {m.enabled ? "Disable" : "Enable"}
+                            </button>
 
                             <button
                               type="button"

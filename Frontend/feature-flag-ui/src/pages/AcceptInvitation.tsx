@@ -36,7 +36,6 @@ export function AcceptInvitation() {
           setValidationError(res.errorMessage || "This invitation link is invalid or expired.");
         }
       } catch (err: any) {
-        console.error("Token validation error:", err);
         setValidationError(err?.response?.data?.message || "Failed to validate invitation.");
       } finally {
         setValidating(false);
@@ -69,7 +68,6 @@ export function AcceptInvitation() {
       });
       setSuccessMessage(msg || "Account created successfully! You can now sign in.");
     } catch (err: any) {
-      console.error("Accept invitation failed:", err);
       setSubmitError(err?.response?.data?.message || "Failed to create account. Please try again.");
     } finally {
       setSubmitting(false);

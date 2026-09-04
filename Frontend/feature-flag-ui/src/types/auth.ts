@@ -22,6 +22,7 @@ export interface MemberResponse {
   name?: string;
   email: string;
   role: UserRole;
+  enabled: boolean;
 }
 
 export type InvitationStatus = "PENDING" | "ACCEPTED" | "EXPIRED" | "REVOKED";

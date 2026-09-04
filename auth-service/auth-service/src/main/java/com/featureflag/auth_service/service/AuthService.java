@@ -38,11 +38,15 @@ public class AuthService {
 
         User user = userRepository.findByEmail(normalizedEmail).orElse(null);
 
-        if (user == null
-                || !passwordEncoder.matches(
+        boolean passwordMatches = user != null
+                && passwordEncoder.matches(
                         request.getPassword(),
                         user.getPassword()
-                )) {
+                );
+
+        if (user == null
+                || !passwordMatches
+                || !user.isEnabled()) {
             loginRateLimiter.recordFailure(normalizedEmail);
             authMetrics.loginFailed();
             throw new BadCredentialsException("Invalid email or password");

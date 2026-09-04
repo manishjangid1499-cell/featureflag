@@ -17,7 +17,6 @@ export function Analytics() {
       const data = await getAllAnalytics();
       setEvents(Array.isArray(data) ? data : []);
     } catch (err: any) {
-      console.error("Failed to load analytics:", err);
       const msg = err?.response?.data?.message || err?.message || "Failed to connect to Analytics Service.";
       setError(msg);
     } finally {
