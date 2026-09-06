@@ -388,6 +388,13 @@ For local JWT resources, use `AUTH_JWT_PRIVATE_KEY_LOCATION` and
 `JWT_PUBLIC_KEY_LOCATION` with `file:` resource locations instead of Compose's
 host `*_FILE` variables. Set the invitation frontend origin to the Vite origin.
 
+In IntelliJ, set `JWT_ISSUER` and `JWT_AUDIENCE` in every resource service's run
+configuration, including Flag Service, to the same values used by Auth Service
+(`feature-flag-auth` and `feature-flag-api` in `.env.example`). Each also needs
+`JWT_PUBLIC_KEY_LOCATION` pointing to Auth's public key. Run configurations do not
+inherit another service's environment variables. Flag Service rejects unresolved
+JWT configuration placeholders at startup.
+
 Start Eureka, then the service modules, then Gateway in separate terminals:
 
 ```sh
