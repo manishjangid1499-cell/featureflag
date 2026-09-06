@@ -169,7 +169,11 @@ class SdkRuntimeSecurityTest {
                 .andReturn().getResponse().getContentAsString();
 
         assertThat(missingResponse)
-                .isEqualTo("{\"error\":\"Unauthorized\"}");
+                .contains(
+                        "\"status\":401",
+                        "\"title\":\"Unauthorized\"",
+                        "\"code\":\"invalid-sdk-key\""
+                );
         for (String rejectedKey : List.of(
                 MALFORMED_KEY,
                 INVALID_KEY,
@@ -186,7 +190,10 @@ class SdkRuntimeSecurityTest {
                     .andReturn().getResponse().getContentAsString();
 
             assertThat(response)
-                    .isEqualTo("{\"error\":\"Unauthorized\"}")
+                    .contains(
+                            "\"status\":401",
+                            "\"title\":\"Unauthorized\""
+                    )
                     .doesNotContain(
                             rejectedKey,
                             "revoked",

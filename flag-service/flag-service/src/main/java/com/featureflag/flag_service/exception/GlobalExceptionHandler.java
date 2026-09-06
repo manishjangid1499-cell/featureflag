@@ -1,169 +1,68 @@
 package com.featureflag.flag_service.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.validation.ConstraintViolationException;
-import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
-import org.springframework.validation.FieldError;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-
-import java.time.Clock;
-import java.util.stream.Collectors;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 @RestControllerAdvice
-@RequiredArgsConstructor
-public class GlobalExceptionHandler {
+@Import(ApiProblemDetails.class)
+public class GlobalExceptionHandler extends ApiExceptionHandler {
 
-    private final Clock clock;
+    public GlobalExceptionHandler(ApiProblemDetails problems) {
+        super(problems);
+    }
 
     @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNotFound(
-            ResourceNotFoundException ex,
-            HttpServletRequest request
+    public ResponseEntity<ProblemDetail> handleNotFound(
+            ResourceNotFoundException exception, HttpServletRequest request
     ) {
-
-        ErrorResponse response = ErrorResponse.builder()
-                .timestamp(clock.instant())
-                .status(HttpStatus.NOT_FOUND.value())
-                .error("Not Found")
-                .message(ex.getMessage())
-                .path(request.getRequestURI())
-                .build();
-
-        return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
-                .body(response);
-    }
-
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidation(
-            MethodArgumentNotValidException ex,
-            HttpServletRequest request
-    ) {
-
-        String message = ex.getBindingResult()
-                .getAllErrors()
-                .stream()
-                .map(error -> error instanceof FieldError fieldError
-                        ? fieldError.getField()
-                        + ": "
-                        + fieldError.getDefaultMessage()
-                        : error.getDefaultMessage())
-                .collect(Collectors.joining(", "));
-
-        ErrorResponse response = ErrorResponse.builder()
-                .timestamp(clock.instant())
-                .status(HttpStatus.BAD_REQUEST.value())
-                .error("Validation Failed")
-                .message(message)
-                .path(request.getRequestURI())
-                .build();
-
-        return ResponseEntity
-                .badRequest()
-                .body(response);
-    }
-
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ErrorResponse> handleBadRequest(
-            IllegalArgumentException ex,
-            HttpServletRequest request
-    ) {
-
-        ErrorResponse response = ErrorResponse.builder()
-                .timestamp(clock.instant())
-                .status(HttpStatus.BAD_REQUEST.value())
-                .error("Bad Request")
-                .message(ex.getMessage())
-                .path(request.getRequestURI())
-                .build();
-
-        return ResponseEntity
-                .badRequest()
-                .body(response);
+        return problems.response(HttpStatus.NOT_FOUND, "resource-not-found", "Not Found",
+                "The requested resource was not found", request);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(
-            DataIntegrityViolationException ex,
-            HttpServletRequest request
+    public ResponseEntity<ProblemDetail> handleDataIntegrityViolation(
+            DataIntegrityViolationException exception, HttpServletRequest request
     ) {
-
-        ErrorResponse response = ErrorResponse.builder()
-                .timestamp(clock.instant())
-                .status(HttpStatus.CONFLICT.value())
-                .error("Conflict")
-                .message(
-                        "Feature flag conflicts with existing key and environment"
-                )
-                .path(request.getRequestURI())
-                .build();
-
-        return ResponseEntity
-                .status(HttpStatus.CONFLICT)
-                .body(response);
-    }
-
-    @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<ErrorResponse> handleConstraintViolation(
-            ConstraintViolationException ex,
-            HttpServletRequest request
-    ) {
-        String message = ex.getConstraintViolations().stream()
-                .map(violation -> violation.getMessage())
-                .sorted()
-                .collect(Collectors.joining(", "));
-
-        return ResponseEntity.badRequest().body(
-                ErrorResponse.builder()
-                        .timestamp(clock.instant())
-                        .status(HttpStatus.BAD_REQUEST.value())
-                        .error("Validation Failed")
-                        .message(message)
-                        .path(request.getRequestURI())
-                        .build()
-        );
+        return problems.response(HttpStatus.CONFLICT, "feature-flag-conflict", "Conflict",
+                "Feature flag conflicts with existing key and environment", request);
     }
 
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
-    public ResponseEntity<ErrorResponse> handleOptimisticLock(
-            ObjectOptimisticLockingFailureException ex,
-            HttpServletRequest request
+    public ResponseEntity<ProblemDetail> handleOptimisticLock(
+            ObjectOptimisticLockingFailureException exception, HttpServletRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(
-                ErrorResponse.builder()
-                        .timestamp(clock.instant())
-                        .status(HttpStatus.CONFLICT.value())
-                        .error("Conflict")
-                        .message(
-                                "Feature flag was modified by another request"
-                        )
-                        .path(request.getRequestURI())
-                        .build()
-        );
+        return problems.response(HttpStatus.CONFLICT, "optimistic-lock-conflict", "Conflict",
+                "Feature flag was modified by another request", request);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ProblemDetail> handleBadRequest(
+            IllegalArgumentException exception, HttpServletRequest request
+    ) {
+        return problems.response(HttpStatus.BAD_REQUEST, "invalid-request", "Bad Request",
+                "Invalid request", request);
+    }
+
+    @ExceptionHandler(InvalidOperationException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidOperation(
+            InvalidOperationException exception, HttpServletRequest request
+    ) {
+        return problems.response(HttpStatus.BAD_REQUEST, "invalid-operation", "Invalid Operation",
+                exception.getMessage(), request);
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGeneralException(
-            Exception ex,
-            HttpServletRequest request
+    public ResponseEntity<ProblemDetail> handleGeneralException(
+            Exception exception, HttpServletRequest request
     ) {
-
-        ErrorResponse response = ErrorResponse.builder()
-                .timestamp(clock.instant())
-                .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
-                .error("Internal Server Error")
-                .message("An unexpected error occurred")
-                .path(request.getRequestURI())
-                .build();
-
-        return ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(response);
+        return problems.response(HttpStatus.INTERNAL_SERVER_ERROR, "internal-error", "Internal Server Error",
+                "An unexpected error occurred", request);
     }
 }

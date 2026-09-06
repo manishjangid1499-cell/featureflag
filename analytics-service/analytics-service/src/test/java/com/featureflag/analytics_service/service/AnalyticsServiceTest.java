@@ -1,6 +1,7 @@
 package com.featureflag.analytics_service.service;
 
 import com.featureflag.analytics_service.entity.AnalyticsEvent;
+import com.featureflag.analytics_service.exception.ResourceNotFoundException;
 import com.featureflag.analytics_service.repository.AnalyticsEventRepository;
 import com.featureflag.analytics_service.observability.AnalyticsMetrics;
 import org.junit.jupiter.api.BeforeEach;
@@ -11,6 +12,9 @@ import org.mockito.InjectMocks;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 import java.util.List;
 import java.util.Optional;
@@ -45,27 +49,32 @@ class AnalyticsServiceTest {
     }
 
     @Test
-    @DisplayName("Get All Analytics - Returns list of records")
+    @DisplayName("Get All Analytics - Returns a database-backed page")
     void testGetAllAnalytics() {
-        when(repository.findAll()).thenReturn(List.of(testEvent));
+        PageRequest pageable = PageRequest.of(0, 20);
+        when(repository.findAll(pageable))
+                .thenReturn(new PageImpl<>(List.of(testEvent), pageable, 1));
 
-        List<AnalyticsEvent> results = service.getAllAnalytics();
+        Page<AnalyticsEvent> results = service.getAllAnalytics(pageable);
 
         assertNotNull(results);
-        assertEquals(1, results.size());
-        assertEquals("NEW_CHECKOUT", results.get(0).getFlagKey());
+        assertEquals(1, results.getTotalElements());
+        assertEquals("NEW_CHECKOUT", results.getContent().getFirst().getFlagKey());
     }
 
     @Test
-    @DisplayName("Get Analytics By Flag Key - Returns matching events")
+    @DisplayName("Get Analytics By Flag Key - Returns matching page")
     void testGetAnalyticsByFlagKey() {
-        when(repository.findByFlagKey("NEW_CHECKOUT")).thenReturn(List.of(testEvent));
+        PageRequest pageable = PageRequest.of(0, 20);
+        when(repository.findByFlagKey("NEW_CHECKOUT", pageable))
+                .thenReturn(new PageImpl<>(List.of(testEvent), pageable, 1));
 
-        List<AnalyticsEvent> results = service.getAnalyticsByFlagKey("NEW_CHECKOUT");
+        Page<AnalyticsEvent> results =
+                service.getAnalyticsByFlagKey("NEW_CHECKOUT", pageable);
 
         assertNotNull(results);
-        assertEquals(1, results.size());
-        assertEquals(5L, results.get(0).getCount());
+        assertEquals(1, results.getTotalElements());
+        assertEquals(5L, results.getContent().getFirst().getCount());
     }
 
     @Test
@@ -80,11 +89,11 @@ class AnalyticsServiceTest {
     }
 
     @Test
-    @DisplayName("Get Analytics By ID - Not Found Throws RuntimeException")
+    @DisplayName("Get Analytics By ID - Not Found Throws Domain Exception")
     void testGetAnalyticsById_NotFound() {
         when(repository.findById(999L)).thenReturn(Optional.empty());
 
-        assertThrows(RuntimeException.class, () -> service.getAnalyticsById(999L));
+        assertThrows(ResourceNotFoundException.class, () -> service.getAnalyticsById(999L));
     }
 
     @Test
@@ -206,19 +215,19 @@ class AnalyticsServiceTest {
     @Test
     @DisplayName("Delete Analytics - Success")
     void testDeleteAnalytics_Success() {
-        when(repository.existsById(1L)).thenReturn(true);
+        when(repository.findById(1L)).thenReturn(Optional.of(testEvent));
 
         service.deleteAnalytics(1L);
 
-        verify(repository, times(1)).deleteById(1L);
+        verify(repository, times(1)).delete(testEvent);
     }
 
     @Test
-    @DisplayName("Delete Analytics - Not Found Throws RuntimeException")
+    @DisplayName("Delete Analytics - Not Found Throws Domain Exception")
     void testDeleteAnalytics_NotFound() {
-        when(repository.existsById(999L)).thenReturn(false);
+        when(repository.findById(999L)).thenReturn(Optional.empty());
 
-        assertThrows(RuntimeException.class, () -> service.deleteAnalytics(999L));
-        verify(repository, never()).deleteById(anyLong());
+        assertThrows(ResourceNotFoundException.class, () -> service.deleteAnalytics(999L));
+        verify(repository, never()).delete(any(AnalyticsEvent.class));
     }
 }

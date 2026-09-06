@@ -54,7 +54,8 @@ class NotificationServiceTest {
                 notificationRepository,
                 mailSender,
                 Clock.fixed(NOW, ZoneOffset.UTC),
-                notificationMetrics
+                notificationMetrics,
+                new NotificationAccessPolicy()
         );
         testNotification = Notification.builder()
                 .id(1L)

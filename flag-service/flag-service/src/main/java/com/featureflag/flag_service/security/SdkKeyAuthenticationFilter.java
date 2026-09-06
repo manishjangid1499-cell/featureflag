@@ -1,5 +1,6 @@
 package com.featureflag.flag_service.security;
 
+import com.featureflag.flag_service.exception.ApiProblemDetails;
 import com.featureflag.flag_service.observability.FlagMetrics;
 import com.featureflag.flag_service.service.SdkKeyAuthenticationService;
 import jakarta.servlet.FilterChain;
@@ -7,7 +8,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -24,13 +25,16 @@ final class SdkKeyAuthenticationFilter extends OncePerRequestFilter {
 
     private final SdkKeyAuthenticationService authenticationService;
     private final FlagMetrics flagMetrics;
+    private final ApiProblemDetails problems;
 
     SdkKeyAuthenticationFilter(
             SdkKeyAuthenticationService authenticationService,
-            FlagMetrics flagMetrics
+            FlagMetrics flagMetrics,
+            ApiProblemDetails problems
     ) {
         this.authenticationService = authenticationService;
         this.flagMetrics = flagMetrics;
+        this.problems = problems;
     }
 
     @Override
@@ -49,7 +53,7 @@ final class SdkKeyAuthenticationFilter extends OncePerRequestFilter {
         );
         if (credentials.size() != 1) {
             flagMetrics.sdkAuthenticationFailure("missing");
-            unauthorized(response);
+            unauthorized(request, response);
             return;
         }
 
@@ -58,7 +62,7 @@ final class SdkKeyAuthenticationFilter extends OncePerRequestFilter {
         );
         if (principal.isEmpty()) {
             flagMetrics.sdkAuthenticationFailure("invalid");
-            unauthorized(response);
+            unauthorized(request, response);
             return;
         }
         authenticate(principal.orElseThrow(), request);
@@ -88,13 +92,14 @@ final class SdkKeyAuthenticationFilter extends OncePerRequestFilter {
                 .setAuthentication(authentication);
     }
 
-    private void unauthorized(HttpServletResponse response) {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+    private void unauthorized(
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) {
         try {
-            response.getWriter().write(
-                    "{\"error\":\"Unauthorized\"}"
-            );
+            problems.write(request, response, HttpStatus.UNAUTHORIZED,
+                    "invalid-sdk-key", "Unauthorized",
+                    "A valid SDK key is required");
         } catch (IOException exception) {
             throw new IllegalStateException(
                     "Unable to write authentication response",

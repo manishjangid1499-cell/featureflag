@@ -94,13 +94,14 @@ class InternalNotificationControllerTest {
                         .header(
                                 InternalNotificationServiceKeyFilter.HEADER_NAME,
                                 INTERNAL_KEY
-                        )
+                )
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequestJson()))
                 .andExpect(status().isBadGateway())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.status").value(502))
-                .andExpect(jsonPath("$.error").value("Bad Gateway"))
-                .andExpect(jsonPath("$.message").value(
+                .andExpect(jsonPath("$.title").value("Bad Gateway"))
+                .andExpect(jsonPath("$.detail").value(
                         "Invitation email delivery failed"
                 ))
                 .andReturn()

@@ -20,7 +20,6 @@ import org.springframework.data.domain.Pageable;
 
 import java.time.Clock;
 import java.util.List;
-import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +30,7 @@ public class NotificationService {
     private final JavaMailSender mailSender;
     private final Clock clock;
     private final NotificationMetrics notificationMetrics;
+    private final NotificationAccessPolicy accessPolicy;
 
     public Notification createNotification(
             NotificationRequest request
@@ -57,7 +57,7 @@ public class NotificationService {
 
         Notification notification = Notification.builder()
                 .recipient(request.getRecipient().trim())
-                .creatorEmail(normalizeNullableEmail(creatorEmail))
+                .creatorEmail(accessPolicy.normalizeNullableEmail(creatorEmail))
                 .subject(request.getSubject())
                 .message(request.getMessage())
                 .type(type)
@@ -170,7 +170,7 @@ public class NotificationService {
                         )
                 );
 
-        if (!canAccessNotification(notification, userEmail, userRole)) {
+        if (!accessPolicy.canAccess(notification, userEmail, userRole)) {
             throw new ResourceNotFoundException(
                     "Notification not found with id: " + id
             );
@@ -185,11 +185,11 @@ public class NotificationService {
             String userRole
     ) {
 
-        String normalizedRole = normalizeRole(userRole);
-        String normalizedRecipient = normalizeEmail(recipient);
+        String normalizedRole = accessPolicy.normalizeRole(userRole);
+        String normalizedRecipient = accessPolicy.normalizeEmail(recipient);
 
         if (!"OWNER".equals(normalizedRole)
-                && !emailsEqual(normalizedRecipient, userEmail)) {
+                && !accessPolicy.emailsEqual(normalizedRecipient, userEmail)) {
             throw new ForbiddenException(
                     "You do not have permission to query this recipient"
             );
@@ -205,11 +205,11 @@ public class NotificationService {
             String userRole,
             Pageable pageable
     ) {
-        String normalizedRole = normalizeRole(userRole);
-        String normalizedRecipient = normalizeEmail(recipient);
+        String normalizedRole = accessPolicy.normalizeRole(userRole);
+        String normalizedRecipient = accessPolicy.normalizeEmail(recipient);
 
         if (!"OWNER".equals(normalizedRole)
-                && !emailsEqual(normalizedRecipient, userEmail)) {
+                && !accessPolicy.emailsEqual(normalizedRecipient, userEmail)) {
             throw new ForbiddenException(
                     "You do not have permission to query this recipient"
             );
@@ -251,7 +251,7 @@ public class NotificationService {
                         "Notification not found with id: " + id
                 ));
 
-        if (!canAccessNotification(notification, userEmail, userRole)) {
+        if (!accessPolicy.canAccess(notification, userEmail, userRole)) {
             throw new ResourceNotFoundException(
                     "Notification not found with id: " + id
             );
@@ -279,41 +279,4 @@ public class NotificationService {
                 || "PROCESSING".equals(notification.getStatus());
     }
 
-    private boolean canAccessNotification(
-            Notification notification,
-            String userEmail,
-            String userRole
-    ) {
-        String normalizedRole = normalizeRole(userRole);
-
-        if ("OWNER".equals(normalizedRole)) {
-            return true;
-        }
-
-        boolean isRecipient = emailsEqual(notification.getRecipient(), userEmail);
-
-        if ("ADMIN".equals(normalizedRole)) {
-            return isRecipient || emailsEqual(notification.getCreatorEmail(), userEmail);
-        }
-
-        return isRecipient;
-    }
-
-    private boolean emailsEqual(String first, String second) {
-        return first != null
-                && second != null
-                && first.trim().equalsIgnoreCase(second.trim());
-    }
-
-    private String normalizeEmail(String email) {
-        return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private String normalizeNullableEmail(String email) {
-        return email == null ? null : email.trim();
-    }
-
-    private String normalizeRole(String role) {
-        return role == null ? "VIEWER" : role.trim().toUpperCase(Locale.ROOT);
-    }
 }

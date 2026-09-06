@@ -3,6 +3,9 @@ package com.featureflag.auth_service.service;
 import com.featureflag.auth_service.dto.MemberResponse;
 import com.featureflag.auth_service.entity.Role;
 import com.featureflag.auth_service.entity.User;
+import com.featureflag.auth_service.exception.ForbiddenException;
+import com.featureflag.auth_service.exception.InvalidOperationException;
+import com.featureflag.auth_service.exception.ResourceNotFoundException;
 import com.featureflag.auth_service.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -39,7 +42,7 @@ public class MemberService {
         User user =
                 userRepository.findById(id)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new ResourceNotFoundException(
                                         "Member not found with id: "
                                                 + id
                                 )
@@ -60,7 +63,7 @@ public class MemberService {
         User user =
                 userRepository.findById(id)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new ResourceNotFoundException(
                                         "Member not found with id: "
                                                 + id
                                 )
@@ -72,7 +75,7 @@ public class MemberService {
          */
         if (user.getId().equals(currentUser.getId())) {
 
-            throw new RuntimeException(
+            throw new InvalidOperationException(
                     "You cannot change your own role"
             );
         }
@@ -88,7 +91,7 @@ public class MemberService {
         if (user.getRole() == Role.OWNER
                 && currentUser.getRole() != Role.OWNER) {
 
-            throw new RuntimeException(
+            throw new ForbiddenException(
                     "Only OWNER can modify OWNER"
             );
         }
@@ -112,12 +115,12 @@ public class MemberService {
         requireMemberManager(currentUser);
 
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "Member not found with id: " + id
                 ));
 
         if (!enabled && user.getId().equals(currentUser.getId())) {
-            throw new RuntimeException(
+            throw new InvalidOperationException(
                     "You cannot disable your own account"
             );
         }
@@ -125,7 +128,7 @@ public class MemberService {
         if (currentUser.getRole() == Role.ADMIN
                 && user.getRole() != Role.DEVELOPER
                 && user.getRole() != Role.VIEWER) {
-            throw new RuntimeException(
+            throw new ForbiddenException(
                     "ADMIN can only enable or disable DEVELOPER or VIEWER"
             );
         }
@@ -145,7 +148,7 @@ public class MemberService {
         User user =
                 userRepository.findById(id)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new ResourceNotFoundException(
                                         "Member not found with id: "
                                                 + id
                                 )
@@ -156,7 +159,7 @@ public class MemberService {
          */
         if (user.getId().equals(currentUser.getId())) {
 
-            throw new RuntimeException(
+            throw new InvalidOperationException(
                     "You cannot delete yourself"
             );
         }
@@ -167,7 +170,7 @@ public class MemberService {
         if (user.getRole() == Role.OWNER
                 && currentUser.getRole() != Role.OWNER) {
 
-            throw new RuntimeException(
+            throw new ForbiddenException(
                     "Only OWNER can delete OWNER"
             );
         }
@@ -180,7 +183,7 @@ public class MemberService {
                 && user.getRole() != Role.DEVELOPER
                 && user.getRole() != Role.VIEWER) {
 
-            throw new RuntimeException(
+            throw new ForbiddenException(
                     "ADMIN can only delete DEVELOPER or VIEWER"
             );
         }
@@ -201,7 +204,7 @@ public class MemberService {
 
             if (requestedRole == Role.OWNER) {
 
-                throw new RuntimeException(
+                throw new InvalidOperationException(
                         "OWNER cannot create another OWNER"
                 );
             }
@@ -214,7 +217,7 @@ public class MemberService {
             if (requestedRole == Role.ADMIN
                     || requestedRole == Role.OWNER) {
 
-                throw new RuntimeException(
+                throw new ForbiddenException(
                         "ADMIN cannot create or assign ADMIN/OWNER"
                 );
             }
@@ -222,7 +225,7 @@ public class MemberService {
             return;
         }
 
-        throw new RuntimeException(
+        throw new ForbiddenException(
                 "You do not have permission to manage members"
         );
     }
@@ -231,7 +234,7 @@ public class MemberService {
         if (currentUser == null
                 || (currentUser.getRole() != Role.OWNER
                 && currentUser.getRole() != Role.ADMIN)) {
-            throw new RuntimeException(
+            throw new ForbiddenException(
                     "You do not have permission to manage members"
             );
         }

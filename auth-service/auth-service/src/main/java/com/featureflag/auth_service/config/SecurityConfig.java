@@ -1,5 +1,6 @@
 package com.featureflag.auth_service.config;
 
+import com.featureflag.auth_service.exception.ApiProblemDetails;
 import com.featureflag.auth_service.security.JwtAuthenticationFilter;
 import com.featureflag.auth_service.security.AuthRecipientsServiceKeyFilter;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+
 @Configuration
 @RequiredArgsConstructor
 public class SecurityConfig {
@@ -23,7 +25,8 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(
-            HttpSecurity http
+            HttpSecurity http,
+            ApiProblemDetails problems
     ) throws Exception {
 
         http
@@ -49,7 +52,14 @@ public class SecurityConfig {
 
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint((request, response, exception) ->
-                                response.sendError(HttpStatus.UNAUTHORIZED.value())
+                                problems.write(request, response, HttpStatus.UNAUTHORIZED,
+                                        "unauthenticated", "Unauthorized",
+                                        "Authentication is required")
+                        )
+                        .accessDeniedHandler((request, response, exception) ->
+                                problems.write(request, response, HttpStatus.FORBIDDEN,
+                                        "forbidden", "Forbidden",
+                                        "You do not have permission to access this resource")
                         )
                 )
 
@@ -136,4 +146,5 @@ public class SecurityConfig {
 
         return new BCryptPasswordEncoder();
     }
+
 }

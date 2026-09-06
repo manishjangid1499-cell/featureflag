@@ -1,5 +1,6 @@
 package com.featureflag.flag_service.security;
 
+import com.featureflag.flag_service.exception.ApiProblemDetails;
 import com.featureflag.flag_service.observability.FlagMetrics;
 import com.featureflag.flag_service.service.SdkKeyAuthenticationService;
 import org.springframework.context.annotation.Bean;
@@ -12,7 +13,6 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
-import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -29,7 +29,8 @@ public class SecurityConfig {
     public SecurityFilterChain runtimeSecurityFilterChain(
             HttpSecurity http,
             SdkKeyAuthenticationService authenticationService,
-            FlagMetrics flagMetrics
+            FlagMetrics flagMetrics,
+            ApiProblemDetails problems
     ) throws Exception {
         http
                 .securityMatcher("/runtime/**")
@@ -51,15 +52,18 @@ public class SecurityConfig {
                 )
                 .exceptionHandling(exceptions ->
                         exceptions.authenticationEntryPoint(
-                                new HttpStatusEntryPoint(
-                                        HttpStatus.UNAUTHORIZED
+                                (request, response, exception) -> problems.write(
+                                        request, response, HttpStatus.UNAUTHORIZED,
+                                        "invalid-sdk-key", "Unauthorized",
+                                        "A valid SDK key is required"
                                 )
                         )
                 )
                 .addFilterBefore(
                         new SdkKeyAuthenticationFilter(
                                 authenticationService,
-                                flagMetrics
+                                flagMetrics,
+                                problems
                         ),
                         AnonymousAuthenticationFilter.class
                 );
@@ -71,7 +75,8 @@ public class SecurityConfig {
     @Order(2)
     public SecurityFilterChain controlPlaneSecurityFilterChain(
             HttpSecurity http,
-            Converter<Jwt, ? extends AbstractAuthenticationToken> jwtAuthenticationConverter
+            Converter<Jwt, ? extends AbstractAuthenticationToken> jwtAuthenticationConverter,
+            ApiProblemDetails problems
     ) throws Exception {
 
         http
@@ -118,8 +123,22 @@ public class SecurityConfig {
                         // EVERYTHING ELSE
                         .anyRequest().authenticated()
                 )
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint((request, response, exception) ->
+                                problems.write(request, response, HttpStatus.UNAUTHORIZED,
+                                        "unauthenticated", "Unauthorized",
+                                        "Authentication is required"))
+                        .accessDeniedHandler((request, response, exception) ->
+                                problems.write(request, response, HttpStatus.FORBIDDEN,
+                                        "forbidden", "Forbidden",
+                                        "You do not have permission to access this resource"))
+                )
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter))
+                        .authenticationEntryPoint((request, response, exception) ->
+                                problems.write(request, response, HttpStatus.UNAUTHORIZED,
+                                        "unauthenticated", "Unauthorized",
+                                        "Authentication is required"))
                 );
 
         return http.build();

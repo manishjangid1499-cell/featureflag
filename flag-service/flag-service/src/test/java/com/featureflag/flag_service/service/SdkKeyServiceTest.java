@@ -1,5 +1,7 @@
 package com.featureflag.flag_service.service;
 
+import com.featureflag.flag_service.exception.InvalidOperationException;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.featureflag.flag_service.dto.CreateSdkKeyRequest;
 import com.featureflag.flag_service.entity.SdkKey;
@@ -129,7 +131,7 @@ class SdkKeyServiceTest {
         assertThatThrownBy(() -> service.create(
                 new CreateSdkKeyRequest("Backend", "UNKNOWN"),
                 "owner@example.com"
-        )).isInstanceOf(IllegalArgumentException.class);
+        )).isInstanceOf(InvalidOperationException.class);
     }
 
     private SdkKey sdkKey(boolean active) {

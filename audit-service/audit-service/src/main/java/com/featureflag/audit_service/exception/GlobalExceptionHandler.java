@@ -1,4 +1,4 @@
-package com.featureflag.analytics_service.exception;
+package com.featureflag.audit_service.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.context.annotation.Import;
@@ -17,7 +17,7 @@ public class GlobalExceptionHandler extends ApiExceptionHandler {
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ProblemDetail> handleResourceNotFound(
+    public ResponseEntity<ProblemDetail> handleNotFound(
             ResourceNotFoundException exception, HttpServletRequest request
     ) {
         return problems.response(HttpStatus.NOT_FOUND, "resource-not-found", "Not Found",
@@ -25,7 +25,7 @@ public class GlobalExceptionHandler extends ApiExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ProblemDetail> handleGeneralException(
+    public ResponseEntity<ProblemDetail> handleUnexpected(
             Exception exception, HttpServletRequest request
     ) {
         return problems.response(HttpStatus.INTERNAL_SERVER_ERROR, "internal-error", "Internal Server Error",

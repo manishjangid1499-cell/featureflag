@@ -1,5 +1,7 @@
 package com.featureflag.flag_service.service;
 
+import com.featureflag.flag_service.exception.InvalidOperationException;
+
 import com.featureflag.flag_service.dto.CreateSdkKeyRequest;
 import com.featureflag.flag_service.dto.SdkKeyCreatedResponse;
 import com.featureflag.flag_service.dto.SdkKeyMetadataResponse;
@@ -113,7 +115,7 @@ public class SdkKeyService {
         String normalized = environment.trim()
                 .toUpperCase(Locale.ROOT);
         if (!SUPPORTED_ENVIRONMENTS.contains(normalized)) {
-            throw new IllegalArgumentException(
+            throw new InvalidOperationException(
                     "Unsupported environment: " + environment
             );
         }
@@ -122,7 +124,7 @@ public class SdkKeyService {
 
     private String requireActor(String actor) {
         if (actor == null || actor.isBlank()) {
-            throw new IllegalArgumentException(
+            throw new InvalidOperationException(
                     "Authenticated actor is required"
             );
         }

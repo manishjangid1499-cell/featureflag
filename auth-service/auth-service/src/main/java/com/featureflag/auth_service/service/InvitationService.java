@@ -6,7 +6,9 @@ import com.featureflag.auth_service.entity.InvitationStatus;
 import com.featureflag.auth_service.entity.Role;
 import com.featureflag.auth_service.entity.User;
 import com.featureflag.auth_service.exception.ForbiddenException;
+import com.featureflag.auth_service.exception.InvalidOperationException;
 import com.featureflag.auth_service.exception.InvitationConflictException;
+import com.featureflag.auth_service.exception.ResourceNotFoundException;
 import com.featureflag.auth_service.repository.InvitationRepository;
 import com.featureflag.auth_service.repository.UserRepository;
 import com.featureflag.auth_service.util.EmailNormalizer;
@@ -66,7 +68,9 @@ public class InvitationService {
                 );
 
         if (userRepository.findByEmail(email).isPresent()) {
-            throw new RuntimeException("User already exists with email: " + email);
+            throw new InvitationConflictException(
+                    "A user already exists for this invitation"
+            );
         }
 
         for (Invitation previous : pendingInvitations) {
@@ -166,12 +170,12 @@ public class InvitationService {
     public InvitationResponse resendInvitation(Long id, User currentUser) {
         Invitation invitation = invitationRepository.findByIdForUpdate(id)
                 .orElseThrow(() ->
-                        new RuntimeException("Invitation not found with id: " + id));
+                        new ResourceNotFoundException("Invitation not found with id: " + id));
 
         validateInvitePermission(currentUser.getRole(), invitation.getInvitedRole());
 
         if (invitation.getStatus() == InvitationStatus.ACCEPTED) {
-            throw new RuntimeException("This invitation has already been accepted.");
+            throw new InvalidOperationException("This invitation has already been accepted.");
         }
 
         invitation.setStatus(InvitationStatus.REVOKED);
@@ -190,12 +194,12 @@ public class InvitationService {
     public String revokeInvitation(Long id, User currentUser) {
         Invitation invitation = invitationRepository.findByIdForUpdate(id)
                 .orElseThrow(() ->
-                        new RuntimeException("Invitation not found with id: " + id));
+                        new ResourceNotFoundException("Invitation not found with id: " + id));
 
         validateInvitePermission(currentUser.getRole(), invitation.getInvitedRole());
 
         if (invitation.getStatus() == InvitationStatus.ACCEPTED) {
-            throw new RuntimeException("Cannot revoke an already accepted invitation.");
+            throw new InvalidOperationException("Cannot revoke an already accepted invitation.");
         }
 
         invitation.setStatus(InvitationStatus.REVOKED);
@@ -258,17 +262,17 @@ public class InvitationService {
     @Transactional
     public String acceptInvitation(AcceptInvitationRequest request) {
         if (!request.getPassword().equals(request.getConfirmPassword())) {
-            throw new RuntimeException("Password and confirm password do not match.");
+            throw new InvalidOperationException("Password and confirm password do not match.");
         }
 
         if (request.getPassword().length() < 8) {
-            throw new RuntimeException("Password must be at least 8 characters long.");
+            throw new InvalidOperationException("Password must be at least 8 characters long.");
         }
 
         String tokenHash = hashToken(request.getToken().trim());
         Invitation invitation = invitationRepository.findByTokenHashForUpdate(tokenHash)
                 .orElseThrow(() ->
-                        new RuntimeException("Invalid or non-existent invitation token."));
+                        new InvalidOperationException("Invalid or non-existent invitation token."));
 
         if (invitation.getStatus() == InvitationStatus.ACCEPTED) {
             throw new InvitationConflictException(
@@ -277,12 +281,12 @@ public class InvitationService {
         }
 
         if (invitation.getStatus() == InvitationStatus.REVOKED) {
-            throw new RuntimeException("This invitation has been revoked.");
+            throw new InvalidOperationException("This invitation has been revoked.");
         }
 
         if (clock.instant().isAfter(invitation.getExpiresAt())
                 || invitation.getStatus() == InvitationStatus.EXPIRED) {
-            throw new RuntimeException(
+            throw new InvalidOperationException(
                     "This invitation has expired. Please request a new invitation."
             );
         }
