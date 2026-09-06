@@ -30,4 +30,9 @@ boolean enabled = client.isEnabled(
 
 The SDK key is sent only in the `X-Feature-Flag-Key` header. Keep it in a
 secret manager or environment variable; never commit it to source control.
-The third argument is returned when evaluation cannot be completed.
+The third argument is returned for network failures, timeouts, non-200 responses,
+or invalid evaluation responses. A valid response is a single JSON object with a
+boolean `enabled` field. Duplicate fields and extra content after the JSON object
+cause the SDK to return the default. Unknown fields and surrounding JSON whitespace
+are accepted. If present, `flagKey` must match the requested flag and `environment`
+must be a nonblank string.

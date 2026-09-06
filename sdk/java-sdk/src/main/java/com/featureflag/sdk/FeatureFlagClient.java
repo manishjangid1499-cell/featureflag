@@ -1,5 +1,6 @@
 package com.featureflag.sdk;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -39,7 +40,9 @@ public final class FeatureFlagClient {
                         "connectTimeout"
                 ))
                 .build();
-        this.objectMapper = new ObjectMapper();
+        this.objectMapper = new ObjectMapper()
+                .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                .enable(DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY);
     }
 
     public static Builder builder() {

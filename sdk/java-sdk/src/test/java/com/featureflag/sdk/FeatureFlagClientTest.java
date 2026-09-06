@@ -5,6 +5,8 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -170,6 +172,63 @@ class FeatureFlagClientTest {
                 "user-1",
                 false
         )).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void trailingResponseContentReturnsCallerDefault(boolean defaultValue) {
+        FeatureFlagClient client = client();
+        for (String trailingContent : List.of(
+                "{\"enabled\":" + defaultValue + "}",
+                "[]",
+                "true",
+                "null",
+                "0",
+                "\"extra\"",
+                "not-json"
+        )) {
+            response.set("{\"enabled\":" + !defaultValue + "} "
+                    + trailingContent);
+
+            assertThat(client.isEnabled("checkout", "user-1", defaultValue))
+                    .as("response with trailing content: %s", trailingContent)
+                    .isEqualTo(defaultValue);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void duplicateResponseFieldsReturnCallerDefault(boolean defaultValue) {
+        FeatureFlagClient client = client();
+        for (String duplicateFields : List.of(
+                "\"enabled\":" + defaultValue + ",",
+                "\"flagKey\":\"another-flag\",\"flagKey\":\"checkout\",",
+                "\"environment\":null,\"environment\":\"PROD\","
+        )) {
+            response.set("{" + duplicateFields
+                    + "\"enabled\":" + !defaultValue + "}");
+
+            assertThat(client.isEnabled("checkout", "user-1", defaultValue))
+                    .as("response with duplicate fields: %s", duplicateFields)
+                    .isEqualTo(defaultValue);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void validMetadataUnknownFieldsAndWhitespaceAreAccepted(boolean enabled) {
+        response.set("""
+                {
+                  "flagKey": "checkout",
+                  "environment": "PROD",
+                  "enabled": %s,
+                  "metadata": {"reason": "rollout"}
+                }
+
+                """.formatted(enabled));
+
+        assertThat(client().isEnabled("checkout", "user-1", !enabled))
+                .isEqualTo(enabled);
     }
 
     @Test
