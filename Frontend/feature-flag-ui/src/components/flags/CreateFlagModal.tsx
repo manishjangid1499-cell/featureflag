@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import type { FlagRequest, FeatureFlag } from "../../types/featureFlag";
 import { createFlag } from "../../api/flagApi";
+import { getApiErrorMessage } from "../../api/errors";
 
 interface CreateFlagModalProps {
   isOpen: boolean;
@@ -76,9 +77,8 @@ export function CreateFlagModal({ isOpen, onClose, onSuccess }: CreateFlagModalP
       const created = await createFlag(payload);
       onSuccess(created);
       onClose();
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || "Failed to create feature flag.";
-      setError(msg);
+    } catch (error: unknown) {
+      setError(getApiErrorMessage(error, "Failed to create feature flag."));
     } finally {
       setLoading(false);
     }

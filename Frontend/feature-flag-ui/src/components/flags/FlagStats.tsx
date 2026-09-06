@@ -22,13 +22,13 @@ export function FlagStats({ total, enabled, disabled, prodCount = 0, avgRollout 
         boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
       }}>
         <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          Total Flags
+          Flags on this page
         </span>
         <div style={{ fontSize: "28px", fontWeight: 800, color: "#111827", marginTop: "6px" }}>
           {total}
         </div>
         <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "4px" }}>
-          Configured across all environments
+          Summary of the current page
         </div>
       </div>
 
@@ -46,7 +46,7 @@ export function FlagStats({ total, enabled, disabled, prodCount = 0, avgRollout 
           {enabled}
         </div>
         <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "4px" }}>
-          Active and serving traffic
+          Enabled on the current page
         </div>
       </div>
 

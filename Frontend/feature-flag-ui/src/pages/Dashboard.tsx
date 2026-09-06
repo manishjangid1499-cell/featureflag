@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../hooks/useAuth";
 import { getAllFlags } from "../api/flagApi";
 import { getAllAuditLogs } from "../api/auditApi";
 import type { FeatureFlag } from "../types/featureFlag";
 import type { AuditLog } from "../types/audit";
+import { collectAllPages } from "../types/page";
 
 export function Dashboard() {
   const { user, isViewer, canManageMembers } = useAuth();
@@ -20,18 +21,18 @@ export function Dashboard() {
       setLoading(true);
       setError("");
       const [flagsRes, auditRes] = await Promise.allSettled([
-        getAllFlags(),
-        getAllAuditLogs(),
+        collectAllPages(getAllFlags),
+        getAllAuditLogs(0, 5),
       ]);
 
-      if (flagsRes.status === "fulfilled" && Array.isArray(flagsRes.value)) {
+      if (flagsRes.status === "fulfilled") {
         setFlags(flagsRes.value);
       } else if (flagsRes.status === "rejected") {
         setError("Could not load flags from backend.");
       }
 
-      if (auditRes.status === "fulfilled" && Array.isArray(auditRes.value)) {
-        setAuditLogs(auditRes.value.slice(0, 5));
+      if (auditRes.status === "fulfilled") {
+        setAuditLogs(auditRes.value.content);
       } else if (auditRes.status === "rejected") {
       }
     } catch {

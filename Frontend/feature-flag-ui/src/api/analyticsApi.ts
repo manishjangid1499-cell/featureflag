@@ -1,19 +1,27 @@
 import api from "./axios";
 import type { AnalyticsEvent } from "../types/analytics";
-import type { PageResponse } from "../types/page";
+import { DEFAULT_PAGE_SIZE, type PageResponse } from "../types/page";
 
-export const getAllAnalytics = async (): Promise<AnalyticsEvent[]> => {
-  const response = await api.get<PageResponse<AnalyticsEvent>>(
-    "/analytics?page=0&size=100"
-  );
-  return response.data.content;
+export const getAllAnalytics = async (
+  page = 0,
+  size = DEFAULT_PAGE_SIZE,
+): Promise<PageResponse<AnalyticsEvent>> => {
+  const response = await api.get<PageResponse<AnalyticsEvent>>("/analytics", {
+    params: { page, size },
+  });
+  return response.data;
 };
 
-export const getAnalyticsByFlagKey = async (flagKey: string): Promise<AnalyticsEvent[]> => {
+export const getAnalyticsByFlagKey = async (
+  flagKey: string,
+  page = 0,
+  size = DEFAULT_PAGE_SIZE,
+): Promise<PageResponse<AnalyticsEvent>> => {
   const response = await api.get<PageResponse<AnalyticsEvent>>(
-    `/analytics/${encodeURIComponent(flagKey)}?page=0&size=100`
+    `/analytics/${encodeURIComponent(flagKey)}`,
+    { params: { page, size } },
   );
-  return response.data.content;
+  return response.data;
 };
 
 export const deleteAnalytics = async (id: number): Promise<string> => {

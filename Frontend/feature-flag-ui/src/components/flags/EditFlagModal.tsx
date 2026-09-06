@@ -1,6 +1,7 @@
 import { useState, useEffect, type FormEvent } from "react";
 import type { FlagRequest, FeatureFlag } from "../../types/featureFlag";
 import { updateFlag } from "../../api/flagApi";
+import { getApiErrorMessage } from "../../api/errors";
 
 interface EditFlagModalProps {
   flag: FeatureFlag | null;
@@ -80,9 +81,8 @@ export function EditFlagModal({ flag, isOpen, onClose, onSuccess }: EditFlagModa
       const updated = await updateFlag(flag.id, payload);
       onSuccess(updated);
       onClose();
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || "Failed to update feature flag.";
-      setError(msg);
+    } catch (error: unknown) {
+      setError(getApiErrorMessage(error, "Failed to update feature flag."));
     } finally {
       setLoading(false);
     }

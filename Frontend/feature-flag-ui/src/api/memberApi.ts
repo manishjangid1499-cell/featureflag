@@ -5,13 +5,16 @@ import type {
   MemberResponse,
   UserRole
 } from "../types/auth";
-import type { PageResponse } from "../types/page";
+import { DEFAULT_PAGE_SIZE, type PageResponse } from "../types/page";
 
-export const getAllMembers = async (): Promise<MemberResponse[]> => {
-  const response = await api.get<PageResponse<MemberResponse>>(
-    "/members?page=0&size=100"
-  );
-  return response.data.content;
+export const getAllMembers = async (
+  page = 0,
+  size = DEFAULT_PAGE_SIZE,
+): Promise<PageResponse<MemberResponse>> => {
+  const response = await api.get<PageResponse<MemberResponse>>("/members", {
+    params: { page, size },
+  });
+  return response.data;
 };
 
 export const getMemberById = async (id: number): Promise<MemberResponse> => {
@@ -24,11 +27,15 @@ export const inviteMember = async (request: InviteMemberRequest): Promise<Invita
   return response.data;
 };
 
-export const getAllInvitations = async (): Promise<InvitationResponse[]> => {
+export const getAllInvitations = async (
+  page = 0,
+  size = DEFAULT_PAGE_SIZE,
+): Promise<PageResponse<InvitationResponse>> => {
   const response = await api.get<PageResponse<InvitationResponse>>(
-    "/members/invitations?page=0&size=100"
+    "/members/invitations",
+    { params: { page, size } },
   );
-  return response.data.content;
+  return response.data;
 };
 
 export const resendInvitation = async (id: number): Promise<InvitationResponse> => {

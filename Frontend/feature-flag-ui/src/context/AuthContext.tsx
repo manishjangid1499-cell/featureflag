@@ -1,7 +1,5 @@
 import {
-  createContext,
   useEffect,
-  useContext,
   useState,
   type ReactNode,
 } from "react";
@@ -10,8 +8,9 @@ import type {
   AuthUser,
   LoginRequest,
   LoginResponse,
-  UserRole,
 } from "../types/auth";
+
+import { AuthContext } from "./AuthState";
 
 import { login as loginApi } from "../api/authApi";
 import {
@@ -22,24 +21,6 @@ import {
   readAuthSession,
   writeAuthSession,
 } from "../auth/authStorage";
-
-interface AuthContextType {
-  user: AuthUser | null;
-  isAuthResolved: boolean;
-  isAuthenticated: boolean;
-  role: UserRole | null;
-  isOwner: boolean;
-  isAdmin: boolean;
-  isDeveloper: boolean;
-  isViewer: boolean;
-  canManageFlags: boolean;
-  canDeleteFlags: boolean;
-  canManageMembers: boolean;
-  login: (request: LoginRequest) => Promise<void>;
-  logout: () => void;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -141,12 +122,4 @@ export function AuthProvider({ children }: AuthProviderProps) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth(): AuthContextType {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used inside AuthProvider");
-  }
-  return context;
 }

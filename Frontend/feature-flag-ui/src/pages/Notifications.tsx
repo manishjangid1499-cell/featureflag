@@ -1,13 +1,17 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { useAuth } from "../context/AuthContext";
+import { useState, type FormEvent } from "react";
+import { useAuth } from "../hooks/useAuth";
 import { getAllNotifications, createNotification, deleteNotification } from "../api/notificationApi";
+import { getApiErrorMessage } from "../api/errors";
+import { PaginationControls } from "../components/PaginationControls";
 import type { Notification, NotificationRequest } from "../types/notification";
+import { usePagedResource } from "../hooks/usePagedResource";
 
 export function Notifications() {
+  const { items: notifications, data: pageData, page, setPage,
+    loading, error, reload: loadNotifications } = usePagedResource<Notification>(
+      getAllNotifications, "Failed to connect to Notification Service.",
+    );
   const { canManageMembers } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Form
@@ -15,24 +19,6 @@ export function Notifications() {
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
-
-  const loadNotifications = async () => {
-    try {
-      setLoading(true);
-      setError("");
-      const data = await getAllNotifications();
-      setNotifications(Array.isArray(data) ? data : []);
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || "Failed to connect to Notification Service.";
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadNotifications();
-  }, []);
 
   const handleSend = async (e: FormEvent) => {
     e.preventDefault();
@@ -46,14 +32,14 @@ export function Notifications() {
         message: message.trim(),
         type: "EMAIL",
       };
-      const created = await createNotification(payload);
-      setNotifications((prev) => [created, ...prev]);
+      await createNotification(payload);
+      await loadNotifications(0);
       setIsModalOpen(false);
       setRecipient("");
       setSubject("");
       setMessage("");
-    } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to dispatch notification.");
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, "Failed to dispatch notification."));
     } finally {
       setSending(false);
     }
@@ -63,9 +49,9 @@ export function Notifications() {
     if (!window.confirm("Delete this notification record?")) return;
     try {
       await deleteNotification(id);
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
-    } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to delete notification.");
+      await loadNotifications();
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, "Failed to delete notification."));
     }
   };
 
@@ -84,7 +70,7 @@ export function Notifications() {
         <div style={{ display: "flex", gap: "10px" }}>
           <button
             type="button"
-            onClick={loadNotifications}
+            onClick={() => void loadNotifications(page)}
             style={{
               padding: "9px 15px",
               border: "1px solid #d1d5db",
@@ -143,7 +129,7 @@ export function Notifications() {
                 <th style={{ padding: "12px 20px", fontSize: "11px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>Recipient</th>
                 <th style={{ padding: "12px 20px", fontSize: "11px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>Subject</th>
                 <th style={{ padding: "12px 20px", fontSize: "11px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>Status</th>
-                <th style={{ padding: "12px 20px", fontSize: "11px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>Dispatched At</th>
+                <th style={{ padding: "12px 20px", fontSize: "11px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>Created At</th>
                 {canManageMembers && <th style={{ padding: "12px 20px", fontSize: "11px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", textAlign: "right" }}>Action</th>}
               </tr>
             </thead>
@@ -197,6 +183,14 @@ export function Notifications() {
           </table>
         </div>
       )}
+
+      <PaginationControls
+        page={pageData.page}
+        totalPages={pageData.totalPages}
+        totalElements={pageData.totalElements}
+        disabled={loading}
+        onPageChange={setPage}
+      />
 
       {/* SEND MODAL */}
       {isModalOpen && (

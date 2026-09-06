@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { useAuth } from "../context/AuthContext";
+import { useState, type FormEvent } from "react";
+import { useAuth } from "../hooks/useAuth";
 import {
   getAllMembers,
   updateMemberRole,
@@ -10,19 +10,30 @@ import {
   resendInvitation,
   revokeInvitation,
 } from "../api/memberApi";
+import { getApiErrorMessage } from "../api/errors";
+import { PaginationControls } from "../components/PaginationControls";
 import type {
   MemberResponse,
   InvitationResponse,
   InviteMemberRequest,
   UserRole,
 } from "../types/auth";
+import { usePagedResource } from "../hooks/usePagedResource";
 
 export function Members() {
   const { user, isOwner } = useAuth();
-  const [members, setMembers] = useState<MemberResponse[]>([]);
-  const [invitations, setInvitations] = useState<InvitationResponse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { items: members, setItems: setMembers, data: memberPageData,
+    setPage: setMemberPage, loading: membersLoading,
+    error: membersError, reload: reloadMembers } = usePagedResource<MemberResponse>(
+      getAllMembers, "Failed to load members.",
+    );
+  const { items: invitations, setItems: setInvitations, data: invitationPageData,
+    setPage: setInvitationPage, loading: invitationsLoading,
+    error: invitationsError, reload: reloadInvitations } = usePagedResource<InvitationResponse>(
+      getAllInvitations, "Failed to load invitations.",
+    );
+  const loading = membersLoading || invitationsLoading;
+  const error = membersError || invitationsError;
   const [successMessage, setSuccessMessage] = useState("");
 
   // Modal
@@ -34,29 +45,8 @@ export function Members() {
   const [formError, setFormError] = useState("");
 
   const loadData = async () => {
-    try {
-      setLoading(true);
-      setError("");
-      const [membersData, invitationsData] = await Promise.all([
-        getAllMembers(),
-        getAllInvitations().catch(() => [] as InvitationResponse[]),
-      ]);
-      setMembers(Array.isArray(membersData) ? membersData : []);
-      setInvitations(Array.isArray(invitationsData) ? invitationsData : []);
-    } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.message ||
-        "Failed to load organization data.";
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
+    await Promise.all([reloadMembers(), reloadInvitations()]);
   };
-
-  useEffect(() => {
-    loadData();
-  }, []);
 
   const handleInvite = async (e: FormEvent) => {
     e.preventDefault();
@@ -76,18 +66,18 @@ export function Members() {
         role,
       };
       const created = await inviteMember(payload);
-      setInvitations((prev) => [created, ...prev.filter((i) => i.id !== created.id)]);
+      await reloadInvitations(0);
       setIsInviteOpen(false);
       setName("");
       setEmail("");
       setRole("DEVELOPER");
-      setSuccessMessage(`Invitation successfully sent to ${created.email}.`);
+      setSuccessMessage(`Invitation created for ${created.email}.`);
       setTimeout(() => setSuccessMessage(""), 6000);
-    } catch (err: any) {
-      setFormError(
-        err?.response?.data?.message ||
-          "Failed to send invitation. Please verify permissions."
-      );
+    } catch (error: unknown) {
+      setFormError(getApiErrorMessage(
+        error,
+        "Failed to send invitation. Please verify permissions.",
+      ));
     } finally {
       setSubmitting(false);
     }
@@ -95,12 +85,12 @@ export function Members() {
 
   const handleResend = async (invitationId: number, memberEmail: string) => {
     try {
-      const resent = await resendInvitation(invitationId);
-      setInvitations((prev) => [resent, ...prev.filter((i) => i.id !== invitationId)]);
-      setSuccessMessage(`New invitation email sent to ${memberEmail}.`);
+      await resendInvitation(invitationId);
+      await reloadInvitations();
+      setSuccessMessage(`Invitation renewed for ${memberEmail}.`);
       setTimeout(() => setSuccessMessage(""), 5000);
-    } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to resend invitation.");
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, "Failed to resend invitation."));
     }
   };
 
@@ -113,8 +103,8 @@ export function Members() {
       );
       setSuccessMessage(`Invitation for ${memberEmail} has been revoked.`);
       setTimeout(() => setSuccessMessage(""), 5000);
-    } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to revoke invitation.");
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, "Failed to revoke invitation."));
     }
   };
 
@@ -124,8 +114,8 @@ export function Members() {
       setMembers((prev) => prev.map((m) => (m.id === memberId ? updated : m)));
       setSuccessMessage(`Role updated for ${updated.email}.`);
       setTimeout(() => setSuccessMessage(""), 4000);
-    } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to update member role.");
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, "Failed to update member role."));
     }
   };
 
@@ -148,8 +138,8 @@ export function Members() {
         `${updated.email} is now ${updated.enabled ? "enabled" : "disabled"}.`,
       );
       setTimeout(() => setSuccessMessage(""), 4000);
-    } catch (err: any) {
-      alert(err?.response?.data?.message || `Failed to ${action} member.`);
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, `Failed to ${action} member.`));
     }
   };
 
@@ -163,11 +153,11 @@ export function Members() {
 
     try {
       await deleteMember(memberId);
-      setMembers((prev) => prev.filter((m) => m.id !== memberId));
+      await reloadMembers();
       setSuccessMessage(`Member ${memberEmail} removed from platform.`);
       setTimeout(() => setSuccessMessage(""), 4000);
-    } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to remove member.");
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, "Failed to remove member."));
     }
   };
 
@@ -207,7 +197,7 @@ export function Members() {
         <div style={{ display: "flex", gap: "10px" }}>
           <button
             type="button"
-            onClick={loadData}
+            onClick={() => void loadData()}
             style={{
               padding: "9px 15px",
               border: "1px solid #d1d5db",
@@ -281,7 +271,7 @@ export function Members() {
       <div style={{ marginBottom: "36px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
           <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#1e293b" }}>
-            Platform Members ({members.length})
+            Platform Members ({memberPageData.totalElements})
           </h2>
         </div>
 
@@ -536,13 +526,20 @@ export function Members() {
             </table>
           </div>
         )}
+        <PaginationControls
+          page={memberPageData.page}
+          totalPages={memberPageData.totalPages}
+          totalElements={memberPageData.totalElements}
+          disabled={loading}
+          onPageChange={setMemberPage}
+        />
       </div>
 
       {/* INVITATIONS SECTION */}
       <div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
           <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#1e293b" }}>
-            Member Invitations ({invitations.length})
+            Member Invitations ({invitationPageData.totalElements})
           </h2>
         </div>
 
@@ -785,6 +782,13 @@ export function Members() {
             </table>
           </div>
         )}
+        <PaginationControls
+          page={invitationPageData.page}
+          totalPages={invitationPageData.totalPages}
+          totalElements={invitationPageData.totalElements}
+          disabled={loading}
+          onPageChange={setInvitationPage}
+        />
       </div>
 
       {/* INVITE MEMBER MODAL */}

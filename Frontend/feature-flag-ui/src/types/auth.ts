@@ -19,7 +19,7 @@ export interface AuthUser {
 
 export interface MemberResponse {
   id: number;
-  name?: string;
+  name: string | null;
   email: string;
   role: UserRole;
   enabled: boolean;
@@ -36,24 +36,24 @@ export interface InviteMemberRequest {
 export interface InvitationResponse {
   id: number;
   email: string;
-  fullName?: string;
+  fullName: string | null;
   invitedRole: UserRole;
-  invitedByUserId?: number;
-  invitedByEmail?: string;
-  invitedByName?: string;
+  invitedByUserId: number | null;
+  invitedByEmail: string | null;
+  invitedByName: string | null;
   status: InvitationStatus;
   expiresAt: string;
   createdAt: string;
-  acceptedAt?: string;
+  acceptedAt: string | null;
 }
 
 export interface ValidateInvitationResponse {
   valid: boolean;
-  email?: string;
-  fullName?: string;
-  role?: UserRole;
-  invitedByName?: string;
-  errorMessage?: string;
+  email: string | null;
+  fullName: string | null;
+  role: UserRole | null;
+  invitedByName: string | null;
+  errorMessage: string | null;
 }
 
 export interface AcceptInvitationRequest {

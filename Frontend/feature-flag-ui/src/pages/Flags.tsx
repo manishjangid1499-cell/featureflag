@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useAuth } from "../context/AuthContext";
+import { useState } from "react";
+import { useAuth } from "../hooks/useAuth";
 import FlagStats from "../components/flags/FlagStats";
 import FlagTable from "../components/flags/FlagTable";
 import CreateFlagModal from "../components/flags/CreateFlagModal";
@@ -7,14 +7,18 @@ import EditFlagModal from "../components/flags/EditFlagModal";
 import DeleteFlagModal from "../components/flags/DeleteFlagModal";
 import FlagEvaluationModal from "../components/flags/FlagEvaluationModal";
 import { getAllFlags, toggleFlag } from "../api/flagApi";
+import { getApiErrorMessage } from "../api/errors";
+import { PaginationControls } from "../components/PaginationControls";
 import type { FeatureFlag } from "../types/featureFlag";
+import { usePagedResource } from "../hooks/usePagedResource";
 
 export function Flags() {
+  const { items: flags, setItems: setFlags, data: pageData, page, setPage,
+    loading, error, reload: loadFlags } = usePagedResource<FeatureFlag>(
+      getAllFlags, "Unable to connect to FeatureFlag service.",
+    );
   const { canManageFlags } = useAuth();
 
-  const [flags, setFlags] = useState<FeatureFlag[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [togglingId, setTogglingId] = useState<number | null>(null);
 
   // Filters
@@ -28,24 +32,6 @@ export function Flags() {
   const [deletingFlag, setDeletingFlag] = useState<FeatureFlag | null>(null);
   const [evaluatingFlag, setEvaluatingFlag] = useState<FeatureFlag | null>(null);
 
-  const loadFlags = async () => {
-    try {
-      setLoading(true);
-      setError("");
-      const data = await getAllFlags();
-      setFlags(Array.isArray(data) ? data : []);
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || "Unable to connect to FeatureFlag service.";
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadFlags();
-  }, []);
-
   const handleToggle = async (id: number) => {
     try {
       setTogglingId(id);
@@ -53,15 +39,15 @@ export function Flags() {
       setFlags((current) =>
         current.map((flag) => (flag.id === id ? updated : flag))
       );
-    } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to toggle feature flag.");
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, "Failed to toggle feature flag."));
     } finally {
       setTogglingId(null);
     }
   };
 
-  const handleCreateSuccess = (newFlag: FeatureFlag) => {
-    setFlags((prev) => [newFlag, ...prev]);
+  const handleCreateSuccess = () => {
+    void loadFlags(0);
   };
 
   const handleEditSuccess = (updatedFlag: FeatureFlag) => {
@@ -70,8 +56,8 @@ export function Flags() {
     );
   };
 
-  const handleDeleteSuccess = (deletedId: number) => {
-    setFlags((prev) => prev.filter((f) => f.id !== deletedId));
+  const handleDeleteSuccess = () => {
+    void loadFlags();
   };
 
   // Metrics
@@ -101,8 +87,8 @@ export function Flags() {
 
     const matchesStatus =
       selectedStatus === "ALL" ||
-      (selectedStatus === "ENABLED" && Boolean(flag.enabled)) ||
-      (selectedStatus === "DISABLED" && !Boolean(flag.enabled));
+      (selectedStatus === "ENABLED" && flag.enabled) ||
+      (selectedStatus === "DISABLED" && !flag.enabled);
 
     return matchesSearch && matchesEnv && matchesStatus;
   });
@@ -130,7 +116,7 @@ export function Flags() {
         <div style={{ display: "flex", gap: "10px" }}>
           <button
             type="button"
-            onClick={loadFlags}
+            onClick={() => void loadFlags(page)}
             style={{
               padding: "9px 15px",
               border: "1px solid #d1d5db",
@@ -192,7 +178,7 @@ export function Flags() {
         <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: "260px" }}>
           <input
             type="text"
-            placeholder="Search by flag name or key..."
+            placeholder="Filter this page by flag name or key..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -267,7 +253,7 @@ export function Flags() {
           </div>
           <button
             type="button"
-            onClick={loadFlags}
+            onClick={() => void loadFlags(page)}
             style={{
               padding: "6px 14px",
               background: "#be123c",
@@ -315,6 +301,14 @@ export function Flags() {
           togglingId={togglingId}
         />
       )}
+
+      <PaginationControls
+        page={pageData.page}
+        totalPages={pageData.totalPages}
+        totalElements={pageData.totalElements}
+        disabled={loading}
+        onPageChange={setPage}
+      />
 
       {/* MODALS */}
       <CreateFlagModal

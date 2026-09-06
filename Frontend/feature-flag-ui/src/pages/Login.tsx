@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../hooks/useAuth";
+import { getApiStatus } from "../api/errors";
 
 export function Login() {
   const navigate = useNavigate();
@@ -23,23 +24,17 @@ export function Login() {
         password,
       });
       navigate("/dashboard");
-    } catch (err: any) {
-      const status = err?.response?.status;
-      const backendMessage = err?.response?.data?.message?.toLowerCase() || "";
+    } catch (error: unknown) {
+      const status = getApiStatus(error);
 
       if (status === 429) {
         setError("Too many sign-in attempts. Please wait and try again.");
       } else if (
         status === 400 ||
-        status === 401 ||
-        backendMessage.includes("password") ||
-        backendMessage.includes("user not found") ||
-        backendMessage.includes("credentials") ||
-        backendMessage.includes("invalid") ||
-        backendMessage.includes("bad request")
+        status === 401
       ) {
         setError("Invalid email or password.");
-      } else if (err?.message?.includes("Network Error") || !err?.response) {
+      } else if (status === undefined) {
         setError("Unable to connect to the service. Please try again.");
       } else {
         setError("Unable to sign in. Please try again.");
