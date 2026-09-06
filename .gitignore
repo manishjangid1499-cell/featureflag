@@ -5,3 +5,26 @@
 # IDE files
 .idea/
 *.iml
+
+# Build output and local runtime data
+**/target/
+**/node_modules/
+**/dist/
+**/dist-ssr/
+**/coverage/
+**/logs/
+*.log
+*.tsbuildinfo
+*.mv.db
+*.trace.db
+/runtime-data/
+/secrets/
+
+# Local editor and operating system files
+.vscode/*
+!.vscode/extensions.json
+*.iws
+*.ipr
+.DS_Store
+Thumbs.db
+Desktop.ini
