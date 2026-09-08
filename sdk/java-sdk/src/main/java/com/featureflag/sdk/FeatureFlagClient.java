@@ -226,7 +226,7 @@ public final class FeatureFlagClient {
         JsonNode returnedFlagKey = response.get("flagKey");
         if (returnedFlagKey != null
                 && (!returnedFlagKey.isTextual()
-                || !requestedFlagKey.equals(returnedFlagKey.textValue()))) {
+                || !requestedFlagKey.equalsIgnoreCase(returnedFlagKey.textValue()))) {
             return defaultValue;
         }
 

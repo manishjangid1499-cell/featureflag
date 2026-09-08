@@ -169,7 +169,7 @@ class FlagApiHardeningTest {
                 .andExpect(jsonPath("$.content[0].flagKey")
                         .value("checkout"))
                 .andExpect(jsonPath("$.content[0].version")
-                        .doesNotExist())
+                        .value(7))
                 .andExpect(jsonPath("$.page").value(0))
                 .andExpect(jsonPath("$.size").value(20))
                 .andExpect(jsonPath("$.totalElements").value(1));

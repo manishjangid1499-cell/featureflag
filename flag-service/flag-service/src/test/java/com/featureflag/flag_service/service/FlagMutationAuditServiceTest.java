@@ -36,8 +36,10 @@ class FlagMutationAuditServiceTest {
     @Test
     void createRunsWithActorAndNullBeforeState() {
         FlagRequest request = new FlagRequest();
+        request.setFlagKey("CHECKOUT");
         FeatureFlag created = flag(true);
         when(flagService.createFlag(request)).thenAnswer(invocation -> {
+            assertThat(request.getFlagKey()).isEqualTo("checkout");
             assertContext("actor-123", null);
             return created;
         });
@@ -50,11 +52,14 @@ class FlagMutationAuditServiceTest {
     @Test
     void updateCapturesImmutableBeforeStateBeforeDelegating() {
         FlagRequest request = new FlagRequest();
+        request.setExpectedVersion(0L);
+        request.setFlagKey("CHECKOUT");
         FeatureFlag existing = flag(false);
         FeatureFlag updated = flag(true);
         when(flagService.getById(10L)).thenReturn(existing);
         when(flagService.updateFlag(10L, request))
                 .thenAnswer(invocation -> {
+                    assertThat(request.getFlagKey()).isEqualTo(existing.getFlagKey());
                     assertContext(
                             "actor-123",
                             FlagAuditSnapshot.from(existing)
@@ -68,6 +73,43 @@ class FlagMutationAuditServiceTest {
                 "actor-123"
         )).isSameAs(updated);
         assertThat(auditContext.current()).isEmpty();
+    }
+
+    @Test
+    void staleBrowserEditIsRejectedBeforeMutation() {
+        FeatureFlag existing = flag(false);
+        existing.setVersion(2L);
+        when(flagService.getById(10L)).thenReturn(existing);
+        FlagRequest request = new FlagRequest();
+        request.setExpectedVersion(1L);
+        request.setFlagKey("checkout");
+
+        assertThatThrownBy(() -> service.updateFlag(10L, request, "actor"))
+                .isInstanceOf(org.springframework.orm.ObjectOptimisticLockingFailureException.class);
+        org.mockito.Mockito.verify(flagService, org.mockito.Mockito.never())
+                .updateFlag(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any());
+        assertThat(existing.getEnabled()).isFalse();
+    }
+
+    @Test
+    void missingBrowserVersionIsAClientError() {
+        when(flagService.getById(10L)).thenReturn(flag(false));
+        assertThatThrownBy(() -> service.updateFlag(10L, new FlagRequest(), "actor"))
+                .isInstanceOf(com.featureflag.flag_service.exception.InvalidOperationException.class)
+                .hasMessageContaining("expectedVersion");
+    }
+
+    @Test
+    void caseOnlyEditPreservesLegacyRolloutSeed() {
+        FeatureFlag existing = flag(true);
+        existing.setFlagKey("CHECKOUT");
+        when(flagService.getById(10L)).thenReturn(existing);
+        FlagRequest request = new FlagRequest();
+        request.setFlagKey("Checkout");
+        request.setExpectedVersion(0L);
+        when(flagService.updateFlag(10L, request)).thenReturn(existing);
+        service.updateFlag(10L, request, "actor");
+        assertThat(request.getFlagKey()).isEqualTo("CHECKOUT");
     }
 
     @Test
@@ -108,6 +150,7 @@ class FlagMutationAuditServiceTest {
     @Test
     void contextIsClearedWhenMutationFails() {
         FlagRequest request = new FlagRequest();
+        request.setFlagKey("checkout");
         when(flagService.createFlag(request))
                 .thenThrow(new IllegalStateException("save failed"));
 
@@ -130,6 +173,7 @@ class FlagMutationAuditServiceTest {
     private FeatureFlag flag(boolean enabled) {
         return FeatureFlag.builder()
                 .id(10L)
+                .version(0L)
                 .flagKey("checkout")
                 .name("Checkout")
                 .environment("DEV")

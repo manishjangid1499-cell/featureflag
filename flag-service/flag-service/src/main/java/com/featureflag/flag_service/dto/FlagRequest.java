@@ -19,6 +19,11 @@ import java.util.List;
 @AllArgsConstructor
 public class FlagRequest {
 
+    public static final String KEY_PATTERN = "[A-Za-z0-9][A-Za-z0-9._-]{0,254}";
+
+    @Min(value = 0, message = "expectedVersion cannot be negative")
+    private Long expectedVersion;
+
     @NotBlank(message = "name is required")
     @Size(max = 255, message = "name cannot exceed 255 characters")
     private String name;
@@ -26,7 +31,7 @@ public class FlagRequest {
     @NotBlank(message = "flagKey is required")
     @Size(max = 255, message = "flagKey cannot exceed 255 characters")
     @Pattern(
-            regexp = "[A-Za-z0-9][A-Za-z0-9._-]*",
+            regexp = KEY_PATTERN,
             message = "flagKey may contain only letters, numbers, dots, underscores, and hyphens"
     )
     private String flagKey;

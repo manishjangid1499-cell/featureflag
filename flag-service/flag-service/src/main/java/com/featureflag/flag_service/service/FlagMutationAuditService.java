@@ -6,6 +6,10 @@ import com.featureflag.flag_service.event.FlagAuditSnapshot;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.Locale;
+import java.util.Objects;
+import com.featureflag.flag_service.exception.InvalidOperationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +23,7 @@ public class FlagMutationAuditService {
             FlagRequest request,
             String actor
     ) {
+        request.setFlagKey(request.getFlagKey().toLowerCase(Locale.ROOT));
         return auditContext.within(
                 new FlagAuditContext.AuditDetails(
                         actor,
@@ -33,8 +38,18 @@ public class FlagMutationAuditService {
             FlagRequest request,
             String actor
     ) {
+        FeatureFlag existing = flagService.getById(id);
+        if (request.getExpectedVersion() == null) {
+            throw new InvalidOperationException("expectedVersion is required when updating a flag");
+        }
+        if (!Objects.equals(existing.getVersion(), request.getExpectedVersion())) {
+            throw new ObjectOptimisticLockingFailureException(FeatureFlag.class, id);
+        }
+        // Preserve legacy canonical spelling so a case-only edit cannot reshuffle cohorts.
+        request.setFlagKey(existing.getFlagKey().equalsIgnoreCase(request.getFlagKey())
+                ? existing.getFlagKey() : request.getFlagKey().toLowerCase(Locale.ROOT));
         FlagAuditSnapshot before = FlagAuditSnapshot.from(
-                flagService.getById(id)
+                existing
         );
 
         return auditContext.within(

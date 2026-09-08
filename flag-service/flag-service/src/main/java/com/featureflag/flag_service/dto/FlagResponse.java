@@ -7,6 +7,7 @@ import java.util.List;
 
 public record FlagResponse(
         Long id,
+        Long version,
         String flagKey,
         String name,
         String description,
@@ -20,6 +21,7 @@ public record FlagResponse(
     public static FlagResponse from(FeatureFlag flag) {
         return new FlagResponse(
                 flag.getId(),
+                flag.getVersion(),
                 flag.getFlagKey(),
                 flag.getName(),
                 flag.getDescription(),

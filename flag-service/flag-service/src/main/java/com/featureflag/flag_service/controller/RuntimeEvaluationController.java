@@ -1,6 +1,8 @@
 package com.featureflag.flag_service.controller;
 
 import com.featureflag.flag_service.dto.FlagEvaluationResponse;
+import com.featureflag.flag_service.dto.FlagRequest;
+import jakarta.validation.constraints.Pattern;
 import com.featureflag.flag_service.dto.RuntimeEvaluationResponse;
 import com.featureflag.flag_service.security.SdkKeyPrincipal;
 import com.featureflag.flag_service.service.FlagEvaluationTelemetryService;
@@ -22,7 +24,9 @@ public class RuntimeEvaluationController {
 
     @GetMapping("/{flagKey}/evaluate")
     public ResponseEntity<RuntimeEvaluationResponse> evaluate(
-            @PathVariable String flagKey,
+            @PathVariable
+            @Pattern(regexp = FlagRequest.KEY_PATTERN, message = "Invalid flag key format or length")
+            String flagKey,
             @RequestParam String subject,
             @AuthenticationPrincipal SdkKeyPrincipal principal
     ) {

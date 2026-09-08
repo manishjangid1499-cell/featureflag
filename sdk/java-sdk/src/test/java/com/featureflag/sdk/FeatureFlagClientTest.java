@@ -60,6 +60,15 @@ class FeatureFlagClientTest {
     }
 
     @Test
+    void canonicalResponseKeyAcceptsCaseAliasesButRejectsDifferentFlags() {
+        FeatureFlagClient client = client();
+        response.set("{\"enabled\":true,\"flagKey\":\"Checkout\",\"environment\":\"DEV\"}");
+        assertThat(client.isEnabled("CHECKOUT", "user-1", false)).isTrue();
+        assertThat(client.isEnabled("checkout", "user-1", false)).isTrue();
+        assertThat(client.isEnabled("different", "user-1", false)).isFalse();
+    }
+
+    @Test
     void trueAndFalseResponsesAreReturned() {
         FeatureFlagClient client = client();
 

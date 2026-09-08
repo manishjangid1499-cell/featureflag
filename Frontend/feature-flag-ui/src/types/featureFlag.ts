@@ -1,5 +1,6 @@
 export interface FeatureFlag {
   id: number
+  version: number
   name: string
   flagKey: string
   enabled: boolean
@@ -11,7 +12,8 @@ export interface FeatureFlag {
   targetUsers: string[]
 }
 
-export type FlagRequest = Omit<FeatureFlag, "id">;
+export type FlagRequest = Omit<FeatureFlag, "id" | "version">;
+export type FlagUpdateRequest = FlagRequest & { expectedVersion: number };
 
 export interface FlagEvaluationResponse {
   flagKey: string

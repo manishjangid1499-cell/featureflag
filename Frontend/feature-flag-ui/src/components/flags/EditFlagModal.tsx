@@ -1,5 +1,6 @@
 import { useState, useEffect, type FormEvent } from "react";
-import type { FlagRequest, FeatureFlag } from "../../types/featureFlag";
+import type { FlagUpdateRequest, FeatureFlag } from "../../types/featureFlag";
+import { isAxiosError } from "axios";
 import { updateFlag } from "../../api/flagApi";
 import { getApiErrorMessage } from "../../api/errors";
 
@@ -64,7 +65,8 @@ export function EditFlagModal({ flag, isOpen, onClose, onSuccess }: EditFlagModa
       .map((u) => u.trim())
       .filter(Boolean);
 
-    const payload: FlagRequest = {
+    const payload: FlagUpdateRequest = {
+      expectedVersion: flag.version,
       name: name.trim(),
       flagKey: flagKey.trim(),
       description: description.trim(),
@@ -82,7 +84,9 @@ export function EditFlagModal({ flag, isOpen, onClose, onSuccess }: EditFlagModa
       onSuccess(updated);
       onClose();
     } catch (error: unknown) {
-      setError(getApiErrorMessage(error, "Failed to update feature flag."));
+      setError(isAxiosError(error) && error.response?.status === 409
+        ? "This flag changed or its key is already in use. Refresh the page, reopen the flag, and review your changes before saving again."
+        : getApiErrorMessage(error, "Failed to update feature flag."));
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,5 @@
 import api from "./axios";
-import type { FeatureFlag, FlagRequest, FlagEvaluationResponse } from "../types/featureFlag";
+import type { FeatureFlag, FlagRequest, FlagUpdateRequest, FlagEvaluationResponse } from "../types/featureFlag";
 import { DEFAULT_PAGE_SIZE, type PageResponse } from "../types/page";
 
 export const getAllFlags = async (
@@ -37,7 +37,7 @@ export const createFlag = async (flag: FlagRequest): Promise<FeatureFlag> => {
   return response.data;
 };
 
-export const updateFlag = async (id: number, flag: FlagRequest): Promise<FeatureFlag> => {
+export const updateFlag = async (id: number, flag: FlagUpdateRequest): Promise<FeatureFlag> => {
   const response = await api.put<FeatureFlag>(`/flags/${id}`, flag);
   return response.data;
 };

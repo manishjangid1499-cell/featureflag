@@ -17,6 +17,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -139,7 +140,9 @@ public class FlagController {
                     description = "Feature flag key",
                     example = "NEW_CHECKOUT"
             )
-            @PathVariable String key,
+            @PathVariable
+            @Pattern(regexp = FlagRequest.KEY_PATTERN, message = "Invalid flag key format or length")
+            String key,
 
             @Parameter(
                     description = "Environment",
@@ -168,7 +171,9 @@ public class FlagController {
     @GetMapping("/{flagKey}/evaluate")
     public ResponseEntity<FlagEvaluationResponse> evaluateFlag(
             @Parameter(description = "Feature flag key", example = "NEW_CHECKOUT")
-            @PathVariable String flagKey,
+            @PathVariable
+            @Pattern(regexp = FlagRequest.KEY_PATTERN, message = "Invalid flag key format or length")
+            String flagKey,
             @Parameter(description = "User ID used for targeting and rollout calculation", example = "user123")
             @RequestParam String userId,
             @Parameter(description = "Environment", example = "DEV")
