@@ -132,11 +132,25 @@ a strong cross-system consistency guarantee: failures or concurrent cache fills
 can leave stale configuration until expiry. Paginated management queries read
 through the repository. See [FlagService](flag-service/flag-service/src/main/java/com/featureflag/flag_service/service/FlagService.java).
 
-Flag entities have a JPA `@Version` column. Conflicting concurrent persistence
-updates return HTTP 409, including stale versions detected by JPA. The public
-flag request/response does not implement a client-supplied version or ETag editing
-protocol. Schedule fields are offset-free date-time values; deployments must use
-a consistent service timezone. Audit/outbox timestamps use UTC clocks.
+Flag keys use case-insensitive ASCII identity. New keys are stored in lowercase;
+existing spelling is preserved on case-only edits so existing rollout cohorts do
+not change. Configuration cache keys use a lowercase `flag:config:v2:` namespace,
+so request aliases share one entry and invalidation. Older cache entries are no
+longer read and expire normally. Both management and SDK evaluation use the stored
+flag identity, including for telemetry dimensions.
+
+Redis connect and command timeouts default to 500 ms each. The client rejects
+commands while disconnected, bounds its request queue, and reconnects automatically.
+These are per-operation budgets, not an end-to-end evaluation SLA; MySQL lookup and
+SDK authentication also contribute to latency.
+
+Flag entities have a JPA `@Version` column. Responses include `version`; updates
+(`PUT /flags/{id}`) must supply `expectedVersion` from the version being edited.
+Missing versions return HTTP 400 and stale edits or overlapping persistence writes
+return HTTP 409. The edit dialog explains the conflict and asks the user to refresh
+before editing again; it does not blindly retry stale data. Toggle/delete retain
+their existing command contracts. Schedule fields are offset-free date-time values;
+deployments must use a consistent service timezone. Audit/outbox timestamps use UTC clocks.
 
 ## Security model
 
@@ -145,6 +159,14 @@ signature, expiry, issuer, and audience using the public key. Passwords are BCry
 hashed. Roles are `OWNER`, `ADMIN`, `DEVELOPER`, and `VIEWER`; service rules restrict
 management operations, SDK-key administration, and member changes. The initial
 OWNER is provisioned through an explicitly enabled bootstrap configuration.
+
+Password creation, invitation confirmation, login, and OWNER bootstrap enforce
+BCrypt's maximum of **72 UTF-8 bytes**, not 72 Java characters. Oversized API inputs
+return validation errors without echoing the password; passwords are never truncated.
+ADMIN can manage DEVELOPER/VIEWER members, but cannot change the role, status, or
+existence of peer ADMIN/OWNER accounts. Member writes share this backend policy and
+use a version column to prevent stale writes from silently restoring disabled state.
+Optimistic conflicts return HTTP 409 through the existing error contract.
 
 Invitations use random tokens with hashes stored by Auth. Raw acceptance URLs are
 passed to email delivery without persisting the email body or token in Notification.
@@ -252,8 +274,19 @@ remediation require operator judgment. Compose initializes the listed topics wit
 one partition and one replica for local use.
 
 Evaluation telemetry is best-effort and does not use the transactional outbox.
-Publishing failures are recorded, but do not change an otherwise successful flag
-evaluation. Events can be lost during sustained Kafka outages.
+The request admits work nonblockingly to one worker with a bounded queue (default
+256). A full queue or shutdown drops telemetry immediately; Kafka serialization
+and `send()` run on the worker. The producer's `max.block.ms` defaults to 1000 ms.
+Admission/drop and publish-failure counters make loss visible. The evaluation timer
+includes decision computation and admission, not background delivery. Events can
+also be lost on process exit or sustained Kafka outages; delivery is not guaranteed.
+
+Consumers classify malformed/invalid events as non-retryable. Recognized transient
+database/connectivity failures receive twelve retries five seconds apart (up to one
+minute of backoff, plus operation time); unexpected failures retain two one-second
+retries. Exhausted failures go to the existing DLT. Failed DLT publication remains
+an error rather than silently acknowledging the original record. This policy buys
+time for brief outages; it does not automatically recover a long database outage.
 
 ### Analytics
 
@@ -286,6 +319,11 @@ all notifications; ADMIN visibility includes recipient/creator activity; other
 roles see their own recipient records. Unsupported delivery types do not become
 successful email sends.
 
+Lifecycle subjects are bounded to the Notification API/database limit of 255
+characters. Long identifiers retain their beginning and end in the subject; the
+body retains the complete details. Leases and claim tokens prevent stale workers
+from updating a newer claim, but cannot provide exactly-once delivery to SMTP.
+
 Invitation emails use a separate synchronous internal endpoint so raw acceptance
 URLs are not stored for background retry. That endpoint returns 502 when delivery
 fails. Auth dispatches after its invitation transaction commits and logs delivery
@@ -300,6 +338,9 @@ HTTP uses `X-Correlation-ID`; a valid bounded incoming value is reused, otherwis
 new value is created by the existing correlation mechanism. Services put it in MDC
 and ProblemDetail responses; outbox and Kafka processing preserve it across the
 asynchronous boundary. This is correlation, not a distributed tracing deployment.
+The log level pattern includes the MDC correlation ID. Unexpected internal errors
+log their type and originating frame without logging request values or database
+exception messages. Evaluation telemetry workers restore their previous MDC after work.
 
 The five business services expose Actuator health, metrics, and
 `/actuator/prometheus` according to profile configuration. Metrics include login,
@@ -309,6 +350,30 @@ services includes the database; Redis/Kafka failure does not automatically remov
 Flag from readiness, allowing fallback and outbox behavior to operate. Scrapers
 need service-network access and the required authentication. No Prometheus or
 Grafana server is bundled in Compose.
+
+`feature.flag.outbox.oldest.pending.age` measures the oldest pending row in seconds
+(zero when empty); it queries the database at scrape time. Together with pending,
+DEAD, DLT and telemetry admission/failure metrics, it helps distinguish stalled work
+from an idle system. Metric labels do not contain flag keys, subjects, emails, or
+credentials. Cache hit/miss counters are not currently exposed; fallback logs and
+the Redis infrastructure tests cover that path.
+
+### Inspecting and recovering failed work
+
+- Check service health, a request's correlation ID, consumer failure/DLT counters,
+  outbox pending age, and notification retry/lease state before replaying anything.
+- Inspect Flag's `outbox_events` status and next-attempt fields using its database
+  credentials. Pending rows retry automatically; `DEAD` rows require diagnosing the
+  cause before an explicit, targeted operator requeue. Preserve the event ID so
+  consumer idempotency continues to protect database effects.
+- Inspect the named DLT with restricted local Kafka tooling after fixing the
+  original failure. Replay deliberately into the original topic, preserving the
+  original event identity and contract. There is no automatic DLT replay endpoint.
+- Notification leases expire so another worker can claim retryable work. A crash
+  after SMTP accepts mail can still result in a duplicate delivery; inspect the
+  recorded state before manually retrying terminal failures.
+- Dropped evaluation telemetry cannot be reconstructed by replaying lifecycle
+  events. Treat evaluation counters as best-effort operational analytics.
 
 Flyway owns schema changes for Auth, Flag, Audit, Analytics, and Notification;
 Hibernate uses schema validation rather than updating production tables. Existing
@@ -372,6 +437,12 @@ Open `http://localhost:3000` (or the configured frontend port). Compose keeps My
 Redis, Eureka, and backend service ports internal. Kafka's optional host listener
 binds to loopback. The public app is served by an unprivileged Nginx container;
 Java runtime containers also run without root and use healthchecks.
+
+Nginx preserves the browser-facing host, protocol and port when forwarding to the
+Gateway. The default CORS list covers Compose on `FRONTEND_PORT` and Vite on 5173
+for localhost/127.0.0.1. Set the comma-separated `CORS_ALLOWED_ORIGINS` override to
+the actual browser origins when deploying elsewhere; it is shared by Gateway,
+Flag and Audit. Do not use a wildcard to work around a mismatched deployment origin.
 
 Compose pins MySQL 8.4.11, Redis 8.10.0, and Kafka 4.3.1. It creates lifecycle,
 evaluation, notification, and DLT topics with broker auto-creation disabled.
@@ -498,6 +569,10 @@ requests; local validation is not evidence of a remote GitHub Actions run.
 - **Outbox for lifecycle reliability, best-effort evaluation telemetry:** lifecycle
   changes are durable with their state mutation; per-evaluation telemetry avoids
   another durable write on every evaluation and can be lost during outages.
+- **Eureka retained for the existing routing/Feign deployment:** it demonstrates
+  discovery and is actively used, but Compose DNS with configured service URLs
+  would be simpler for this fixed local topology. Removing it is a separate
+  simplification decision, not part of stabilization.
 - **MySQL atomic counters and transaction-scoped markers:** preserve aggregate
   correctness under concurrent consumers without read-modify-write updates.
 - **Independent service builds:** error contracts and security conventions have
@@ -522,10 +597,20 @@ requests; local validation is not evidence of a remote GitHub Actions run.
   analysis also reports framework/aggregator false positives; these are reviewed
   rather than used to remove reflective runtime dependencies blindly.
 
-Kubernetes, multi-region coordination, streaming/offline SDK evaluation, external
-identity providers, and broader deployment automation are possible future design
-choices, not implemented features. The project does not use Keycloak, MongoDB,
-RabbitMQ, or Elasticsearch.
+The architecture is frozen for this portfolio scope. **STOP ADDING TECHNOLOGY.**
+Kubernetes, a service mesh, Keycloak, gRPC, CQRS/event sourcing, another datastore,
+another service, or a tracing platform are not required to demonstrate this system.
+The next work is presentation and interview preparation, not architecture expansion.
+
+### Historical credentials
+
+Older Git history (including commit `5bc5eb8`) contained an SMTP credential literal;
+later configuration externalized credentials. The repository cannot establish
+whether that external credential was revoked. Its owner must confirm revocation
+or rotate it before public portfolio publication. Do not assume removal from the
+working tree invalidates a historical secret. Current deployment uses supplied
+environment credentials and external RSA files, not historical literals. No Git
+history rewrite or external credential rotation is automated by this project.
 
 Dependency maintenance is configured through [Dependabot](.github/dependabot.yml)
 with weekly grouped updates and limited open PRs. Spring Boot/Cloud major or minor
