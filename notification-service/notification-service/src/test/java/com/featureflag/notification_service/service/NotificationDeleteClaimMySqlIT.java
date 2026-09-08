@@ -49,6 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 )
 @Import({
         NotificationService.class,
+        NotificationAccessPolicy.class,
         MySqlClaimTransactionHelper.class,
         TimeConfiguration.class,
         NotificationDeleteClaimMySqlIT.PropertiesConfiguration.class

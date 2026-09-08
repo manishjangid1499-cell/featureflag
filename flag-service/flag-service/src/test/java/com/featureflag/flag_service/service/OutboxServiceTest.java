@@ -60,6 +60,25 @@ class OutboxServiceTest {
             );
 
     @Test
+    void maximumValidFlagKeyProducesBoundedSubjectsWithoutLosingBodyDetails() throws Exception {
+        String tail = "unique-flag-tail1";
+        String key = "a".repeat(255 - tail.length()) + tail;
+        assertThat(key).hasSize(255);
+        for (String prefix : List.of("Feature Flag Created: ", "Feature Flag Updated: ",
+                "Feature Flag Deleted: ", "Feature Flag Toggled: ")) {
+            outboxService.enqueueNotificationEvent(prefix + key, "Full flag: " + key);
+        }
+        ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
+        verify(repository, org.mockito.Mockito.times(4)).save(captor.capture());
+        for (OutboxEvent event : captor.getAllValues()) {
+            JsonNode payload = objectMapper.readTree(event.getPayload());
+            assertThat(payload.get("subject").asText()).hasSizeLessThanOrEqualTo(255)
+                    .startsWith("Feature Flag ").endsWith("unique-flag-tail1");
+            assertThat(payload.get("message").asText()).contains(key);
+        }
+    }
+
+    @Test
     void flagEventIsStoredAsPendingWithEventId()
             throws Exception {
 

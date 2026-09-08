@@ -151,11 +151,6 @@ public class NotificationService {
         return getNotificationsForUser(userEmail, "VIEWER");
     }
 
-    public List<Notification> getAllNotifications() {
-
-        return notificationRepository.findAll();
-    }
-
     public Notification getNotificationById(
             Long id,
             String userEmail,

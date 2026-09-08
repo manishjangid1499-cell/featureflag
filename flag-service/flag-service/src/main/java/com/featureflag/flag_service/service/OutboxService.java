@@ -118,7 +118,7 @@ public class OutboxService {
                         eventId,
                         null,
                         null,
-                        subject,
+                        boundedSubject(subject),
                         message,
                         "EMAIL"
                 );
@@ -132,6 +132,22 @@ public class OutboxService {
         );
 
         return eventId;
+    }
+
+    private String boundedSubject(String subject) {
+        if (subject.length() <= 255) {
+            return subject;
+        }
+        // Preserve action + identifying tail; the full flag key remains in the body.
+        int headEnd = 228;
+        int tailStart = subject.length() - 24;
+        if (Character.isHighSurrogate(subject.charAt(headEnd - 1))) {
+            headEnd--;
+        }
+        if (Character.isLowSurrogate(subject.charAt(tailStart))) {
+            tailStart++;
+        }
+        return subject.substring(0, headEnd) + "..." + subject.substring(tailStart);
     }
 
     private void persist(
