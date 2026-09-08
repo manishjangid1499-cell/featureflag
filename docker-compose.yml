@@ -157,6 +157,11 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: docker
       FLAG_DB_USERNAME: "${FLAG_DB_USERNAME:?FLAG_DB_USERNAME is required}"
+      CORS_ALLOWED_ORIGINS: &browser_origins "${CORS_ALLOWED_ORIGINS:-http://localhost:${FRONTEND_PORT:-3000},http://127.0.0.1:${FRONTEND_PORT:-3000},http://localhost:5173,http://127.0.0.1:5173}"
+      REDIS_CONNECT_TIMEOUT: "${REDIS_CONNECT_TIMEOUT:-500ms}"
+      REDIS_COMMAND_TIMEOUT: "${REDIS_COMMAND_TIMEOUT:-500ms}"
+      KAFKA_MAX_BLOCK_MS: "${KAFKA_MAX_BLOCK_MS:-1000}"
+      EVALUATION_TELEMETRY_QUEUE_CAPACITY: "${EVALUATION_TELEMETRY_QUEUE_CAPACITY:-256}"
       FLAG_DB_PASSWORD: "${FLAG_DB_PASSWORD:?FLAG_DB_PASSWORD is required}"
       JWT_PUBLIC_KEY_LOCATION: "file:/run/secrets/jwt-public.pem"
       JWT_ISSUER: "${JWT_ISSUER:?JWT_ISSUER is required}"
@@ -198,6 +203,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: docker
       AUDIT_DB_USERNAME: "${AUDIT_DB_USERNAME:?AUDIT_DB_USERNAME is required}"
+      CORS_ALLOWED_ORIGINS: *browser_origins
       AUDIT_DB_PASSWORD: "${AUDIT_DB_PASSWORD:?AUDIT_DB_PASSWORD is required}"
       JWT_PUBLIC_KEY_LOCATION: "file:/run/secrets/jwt-public.pem"
       JWT_ISSUER: "${JWT_ISSUER:?JWT_ISSUER is required}"
@@ -267,6 +273,8 @@ services:
       dockerfile: Dockerfile
     security_opt:
       - no-new-privileges:true
+    environment:
+      CORS_ALLOWED_ORIGINS: *browser_origins
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "4", "http://127.0.0.1:8080/actuator/health/readiness"]
       interval: 10s
