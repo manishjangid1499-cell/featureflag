@@ -72,7 +72,8 @@ final class AuthMigrationSchemaAssertions {
                                 "name",
                                 "password",
                                 "role",
-                                "enabled"
+                                "enabled",
+                                "version"
                         )
                         : List.of(
                                 "id",
@@ -97,6 +98,12 @@ final class AuthMigrationSchemaAssertions {
                 ROLE_ENUM, "enum", false, 9L, null, "");
 
         if (enabledColumnExpected) {
+            assertColumn(jdbcTemplate, "users", "version",
+                    "bigint", "bigint", false, null, null, "");
+            assertEquals("0", jdbcTemplate.queryForObject(
+                    "SELECT column_default FROM information_schema.columns "
+                            + "WHERE table_schema = DATABASE() AND table_name = 'users' "
+                            + "AND column_name = 'version'", String.class));
             assertColumn(jdbcTemplate, "users", "enabled",
                     "bit(1)", "bit", false, null, null, "");
             assertEquals(

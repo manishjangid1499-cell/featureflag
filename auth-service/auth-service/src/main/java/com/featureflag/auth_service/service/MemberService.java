@@ -11,25 +11,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-
-import java.util.List;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class MemberService {
 
     private final UserRepository userRepository;
-    /**
-     * Get all members.
-     */
-    public List<MemberResponse> getAllMembers() {
-
-        return userRepository.findAll()
-                .stream()
-                .map(this::toResponse)
-                .toList();
-    }
-
     public Page<MemberResponse> getAllMembers(Pageable pageable) {
         return userRepository.findAll(pageable).map(this::toResponse);
     }
@@ -54,6 +42,7 @@ public class MemberService {
     /**
      * Change a member's role.
      */
+    @Transactional
     public MemberResponse updateRole(
             Long id,
             Role newRole,
@@ -80,21 +69,11 @@ public class MemberService {
             );
         }
 
+        requireManageableTarget(currentUser, user);
         validateRoleCreationPermission(
                 currentUser.getRole(),
                 newRole
         );
-
-        /*
-         * ADMIN cannot modify OWNER.
-         */
-        if (user.getRole() == Role.OWNER
-                && currentUser.getRole() != Role.OWNER) {
-
-            throw new ForbiddenException(
-                    "Only OWNER can modify OWNER"
-            );
-        }
 
         user.setRole(newRole);
 
@@ -107,6 +86,7 @@ public class MemberService {
     /**
      * Enable or disable a member account without deleting it.
      */
+    @Transactional
     public MemberResponse updateEnabled(
             Long id,
             boolean enabled,
@@ -125,13 +105,7 @@ public class MemberService {
             );
         }
 
-        if (currentUser.getRole() == Role.ADMIN
-                && user.getRole() != Role.DEVELOPER
-                && user.getRole() != Role.VIEWER) {
-            throw new ForbiddenException(
-                    "ADMIN can only enable or disable DEVELOPER or VIEWER"
-            );
-        }
+        requireManageableTarget(currentUser, user);
 
         user.setEnabled(enabled);
         return toResponse(userRepository.save(user));
@@ -140,6 +114,7 @@ public class MemberService {
     /**
      * Delete a member.
      */
+    @Transactional
     public void deleteMember(
             Long id,
             User currentUser
@@ -164,29 +139,7 @@ public class MemberService {
             );
         }
 
-        /*
-         * OWNER cannot be deleted by ADMIN.
-         */
-        if (user.getRole() == Role.OWNER
-                && currentUser.getRole() != Role.OWNER) {
-
-            throw new ForbiddenException(
-                    "Only OWNER can delete OWNER"
-            );
-        }
-
-        /*
-         * ADMIN can only delete
-         * DEVELOPER and VIEWER.
-         */
-        if (currentUser.getRole() == Role.ADMIN
-                && user.getRole() != Role.DEVELOPER
-                && user.getRole() != Role.VIEWER) {
-
-            throw new ForbiddenException(
-                    "ADMIN can only delete DEVELOPER or VIEWER"
-            );
-        }
+        requireManageableTarget(currentUser, user);
 
         userRepository.delete(user);
     }
@@ -228,6 +181,15 @@ public class MemberService {
         throw new ForbiddenException(
                 "You do not have permission to manage members"
         );
+    }
+
+    private void requireManageableTarget(User currentUser, User target) {
+        requireMemberManager(currentUser);
+        if (currentUser.getRole() == Role.ADMIN
+                && target.getRole() != Role.DEVELOPER
+                && target.getRole() != Role.VIEWER) {
+            throw new ForbiddenException("ADMIN can only manage DEVELOPER or VIEWER");
+        }
     }
 
     private void requireMemberManager(User currentUser) {

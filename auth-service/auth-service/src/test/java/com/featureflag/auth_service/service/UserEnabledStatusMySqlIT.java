@@ -15,6 +15,10 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.context.annotation.Import;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -30,6 +34,7 @@ import static org.mockito.Mockito.when;
         replace = AutoConfigureTestDatabase.Replace.NONE
 )
 @Testcontainers
+@Import(MemberService.class)
 class UserEnabledStatusMySqlIT {
 
     @Container
@@ -39,6 +44,28 @@ class UserEnabledStatusMySqlIT {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private MemberService memberService;
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void staleRoleSaveCannotRestoreDisabledAccount() {
+        User member = userRepository.saveAndFlush(User.builder()
+                .email("race@example.test").password("test-hash")
+                .role(Role.DEVELOPER).build());
+        User stale = userRepository.findById(member.getId()).orElseThrow();
+        User owner = User.builder().id(-1L).role(Role.OWNER).build();
+
+        memberService.updateEnabled(member.getId(), false, owner);
+        stale.setRole(Role.VIEWER);
+
+        assertThatThrownBy(() -> userRepository.saveAndFlush(stale))
+                .isInstanceOf(ObjectOptimisticLockingFailureException.class);
+        User retained = userRepository.findById(member.getId()).orElseThrow();
+        assertThat(retained.isEnabled()).isFalse();
+        assertThat(retained.getRole()).isEqualTo(Role.DEVELOPER);
+    }
 
     @Test
     void persistedStatusControlsNewLoginAndSupportsReEnable() {

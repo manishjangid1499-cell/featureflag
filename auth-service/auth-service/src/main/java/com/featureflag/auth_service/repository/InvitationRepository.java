@@ -51,8 +51,6 @@ public interface InvitationRepository extends JpaRepository<Invitation, Long> {
             @Param("status") InvitationStatus status
     );
 
-    List<Invitation> findAllByOrderByCreatedAtDesc();
-
     Page<Invitation> findAllByOrderByCreatedAtDescIdDesc(
             Pageable pageable
     );

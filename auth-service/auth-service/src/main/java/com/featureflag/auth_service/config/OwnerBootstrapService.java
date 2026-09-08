@@ -4,6 +4,7 @@ import com.featureflag.auth_service.entity.Role;
 import com.featureflag.auth_service.entity.User;
 import com.featureflag.auth_service.repository.UserRepository;
 import com.featureflag.auth_service.util.EmailNormalizer;
+import com.featureflag.auth_service.validation.BcryptPasswordValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -86,6 +87,9 @@ public class OwnerBootstrapService implements ApplicationRunner {
             throw new IllegalStateException(
                     "Bootstrap OWNER password must be at least 8 characters."
             );
+        }
+        if (!BcryptPasswordValidator.withinByteLimit(properties.getPassword())) {
+            throw new IllegalStateException("Bootstrap OWNER password must not exceed 72 UTF-8 bytes.");
         }
     }
 }

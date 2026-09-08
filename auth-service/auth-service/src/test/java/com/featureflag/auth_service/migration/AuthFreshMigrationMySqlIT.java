@@ -75,12 +75,12 @@ class AuthFreshMigrationMySqlIT {
 
     private void assertSuccessfulMigrations() {
         assertEquals(
-                2,
+                3,
                 jdbcTemplate.queryForObject(
                         """
                         SELECT COUNT(*)
                         FROM flyway_schema_history
-                        WHERE version IN ('1', '2')
+                        WHERE version IN ('1', '2', '3')
                           AND type = 'SQL'
                           AND success = 1
                         """,

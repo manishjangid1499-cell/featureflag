@@ -12,6 +12,7 @@ import com.featureflag.auth_service.exception.ResourceNotFoundException;
 import com.featureflag.auth_service.repository.InvitationRepository;
 import com.featureflag.auth_service.repository.UserRepository;
 import com.featureflag.auth_service.util.EmailNormalizer;
+import com.featureflag.auth_service.validation.BcryptPasswordValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -130,22 +131,6 @@ public class InvitationService {
         invitationNotificationDispatcher.dispatchAfterCommit(notificationRequest);
 
         return toResponse(saved);
-    }
-
-    public List<InvitationResponse> getAllInvitations() {
-        List<Invitation> list = invitationRepository.findAllByOrderByCreatedAtDesc();
-        Instant now = clock.instant();
-
-        // Auto-mark expired invitations.
-        for (Invitation invitation : list) {
-            if (invitation.getStatus() == InvitationStatus.PENDING
-                    && now.isAfter(invitation.getExpiresAt())) {
-                invitation.setStatus(InvitationStatus.EXPIRED);
-                invitationRepository.save(invitation);
-            }
-        }
-
-        return list.stream().map(this::toResponse).toList();
     }
 
     @Transactional
@@ -267,6 +252,10 @@ public class InvitationService {
 
         if (request.getPassword().length() < 8) {
             throw new InvalidOperationException("Password must be at least 8 characters long.");
+        }
+
+        if (!BcryptPasswordValidator.withinByteLimit(request.getPassword())) {
+            throw new InvalidOperationException("Password must not exceed 72 UTF-8 bytes.");
         }
 
         String tokenHash = hashToken(request.getToken().trim());
