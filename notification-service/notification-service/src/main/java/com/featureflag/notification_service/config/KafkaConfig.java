@@ -20,6 +20,10 @@ import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.util.backoff.FixedBackOff;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.TransientDataAccessException;
+import org.springframework.transaction.CannotCreateTransactionException;
+import com.fasterxml.jackson.core.JsonProcessingException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -32,6 +36,22 @@ public class KafkaConfig {
 
     static final long RETRY_BACKOFF_MS = 1_000L;
     static final long MAX_RETRIES = 2L;
+    static final long INFRASTRUCTURE_RETRY_BACKOFF_MS = 5_000L;
+    static final long INFRASTRUCTURE_MAX_RETRIES = 12L;
+
+    static FixedBackOff retryBackOff(Exception exception) {
+        Throwable cause = exception;
+        for (int depth = 0; cause != null && depth < 16; depth++, cause = cause.getCause()) {
+            if (cause instanceof TransientDataAccessException
+                    || cause instanceof DataAccessResourceFailureException
+                    || cause instanceof CannotCreateTransactionException
+                    || cause instanceof java.sql.SQLTransientException
+                    || cause instanceof java.sql.SQLRecoverableException) {
+                return new FixedBackOff(INFRASTRUCTURE_RETRY_BACKOFF_MS, INFRASTRUCTURE_MAX_RETRIES);
+            }
+        }
+        return new FixedBackOff(RETRY_BACKOFF_MS, MAX_RETRIES);
+    }
 
     private final KafkaProperties kafkaProperties;
 
@@ -127,6 +147,8 @@ public class KafkaConfig {
         errorHandler.addNotRetryableExceptions(
                 UnsupportedNotificationChannelException.class
         );
+        errorHandler.addNotRetryableExceptions(IllegalArgumentException.class, JsonProcessingException.class);
+        errorHandler.setBackOffFunction((record, exception) -> retryBackOff(exception));
         errorHandler.setRetryListeners(
                 failureVisibility::recordFailure
         );
