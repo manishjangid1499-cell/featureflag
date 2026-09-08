@@ -13,6 +13,19 @@ import static org.mockito.Mockito.when;
 class FlagMetricsTest {
 
     @Test
+    void oldestPendingAgeDistinguishesEmptyBacklogFromFailedInspection() {
+        OutboxEventRepository repository = mock(OutboxEventRepository.class);
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        new FlagMetrics(registry, repository);
+        var gauge = registry.get("feature.flag.outbox.oldest.pending.age").gauge();
+        assertThat(gauge.value()).isZero();
+        when(repository.findOldestPendingCreatedAt()).thenReturn(java.time.Instant.EPOCH);
+        assertThat(gauge.value()).isPositive();
+        when(repository.findOldestPendingCreatedAt()).thenThrow(new IllegalStateException("database down"));
+        assertThat(gauge.value()).isNaN();
+    }
+
+    @Test
     void runtimeOutboxAndAuthenticationSignalsUseBoundedTags() {
         OutboxEventRepository repository = mock(OutboxEventRepository.class);
         when(repository.countByStatus(OutboxEvent.STATUS_PENDING)).thenReturn(2L);

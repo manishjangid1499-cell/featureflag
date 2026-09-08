@@ -7,6 +7,8 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import java.time.Duration;
+import java.time.Instant;
 
 @Component
 @Slf4j
@@ -21,6 +23,10 @@ public class FlagMetrics {
     ) {
         this.meterRegistry = meterRegistry;
         this.outboxEventRepository = outboxEventRepository;
+
+        Gauge.builder("feature.flag.outbox.oldest.pending.age", this, FlagMetrics::oldestPendingAge)
+                .baseUnit("seconds").description("Age of the oldest pending outbox row")
+                .register(meterRegistry);
 
         Gauge.builder(
                         "feature.flag.outbox.pending",
@@ -120,6 +126,21 @@ public class FlagMetrics {
                 "feature.flag.telemetry.publish",
                 "outcome", successful ? "success" : "failure"
         ).increment();
+    }
+
+    public void telemetryAdmitted(boolean accepted) {
+        meterRegistry.counter("feature.flag.telemetry.admission",
+                "outcome", accepted ? "accepted" : "dropped").increment();
+    }
+
+    private double oldestPendingAge() {
+        try {
+            Instant oldest = outboxEventRepository.findOldestPendingCreatedAt();
+            return oldest == null ? 0 : Math.max(0, Duration.between(oldest, Instant.now()).toSeconds());
+        } catch (RuntimeException exception) {
+            log.warn("Outbox age query failed; errorType={}", exception.getClass().getSimpleName());
+            return Double.NaN;
+        }
     }
 
     private double countOutbox(String status) {

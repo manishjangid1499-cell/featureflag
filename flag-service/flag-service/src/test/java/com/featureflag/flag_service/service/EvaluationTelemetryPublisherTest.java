@@ -49,7 +49,8 @@ class EvaluationTelemetryPublisherTest {
                     objectMapper,
                     TOPIC,
                     Clock.fixed(NOW, ZoneOffset.UTC),
-                    flagMetrics
+                    flagMetrics,
+                    Runnable::run
             );
 
     @Test
@@ -141,7 +142,8 @@ class EvaluationTelemetryPublisherTest {
                         failingMapper,
                         TOPIC,
                         Clock.fixed(NOW, ZoneOffset.UTC),
-                        flagMetrics
+                        flagMetrics,
+                        Runnable::run
                 );
         when(failingMapper.writeValueAsString(
                 org.mockito.ArgumentMatchers.any(FlagEvent.class)

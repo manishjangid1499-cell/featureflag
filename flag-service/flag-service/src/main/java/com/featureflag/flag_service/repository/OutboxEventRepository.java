@@ -18,6 +18,9 @@ public interface OutboxEventRepository
 
     long countByStatus(String status);
 
+    @Query("select min(event.createdAt) from OutboxEvent event where event.status = 'PENDING'")
+    Instant findOldestPendingCreatedAt();
+
     List<OutboxEvent>
     findTop50ByStatusAndNextAttemptAtLessThanEqualOrderByCreatedAtAsc(
             String status,

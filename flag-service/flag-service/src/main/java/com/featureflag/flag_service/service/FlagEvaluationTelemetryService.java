@@ -34,14 +34,10 @@ public class FlagEvaluationTelemetryService {
             throw exception;
         }
 
-        flagMetrics.evaluationCompleted(
-                sample,
-                evaluation.isEnabled()
-        );
-
         try {
             telemetryPublisher.publish(evaluation);
         } catch (RuntimeException exception) {
+            flagMetrics.telemetryPublished(false);
             log.warn(
                     "Evaluation telemetry dispatch failed; "
                             + "flagKey={} environment={} errorType={}",
@@ -50,6 +46,9 @@ public class FlagEvaluationTelemetryService {
                     exception.getClass().getSimpleName()
             );
         }
+
+        // Include bounded admission in the decision-path timer, not background Kafka work.
+        flagMetrics.evaluationCompleted(sample, evaluation.isEnabled());
 
         return evaluation;
     }

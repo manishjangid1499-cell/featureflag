@@ -130,6 +130,33 @@ class RedisFlagEvaluationInfrastructureIT {
     }
 
     @Test
+    void casingAliasesShareCacheAndCannotSurviveToggleInvalidation() {
+        FeatureFlagRepository repository = mock(FeatureFlagRepository.class);
+        FeatureFlag flag = enabledFlag();
+        List<String> aliases = List.of("NEW_CHECKOUT", "new_checkout", "New_Checkout");
+        when(repository.findByFlagKeyAndEnvironment(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq("DEV")))
+                .thenReturn(Optional.of(flag));
+        when(repository.findById(1L)).thenReturn(Optional.of(flag));
+        when(repository.save(flag)).thenReturn(flag);
+        FlagService service = new FlagService(repository, redisTemplate,
+                new RedisConfig().objectMapper(), mock(OutboxService.class));
+
+        for (String alias : aliases) {
+            assertThat(service.evaluateFlag(alias, "stable-user", "DEV").isEnabled()).isTrue();
+        }
+        verify(repository, times(1)).findByFlagKeyAndEnvironment(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq("DEV"));
+        service.toggleFlag(1L);
+        for (String alias : aliases) {
+            assertThat(service.evaluateFlag(alias, "stable-user", "DEV").isEnabled()).isFalse();
+        }
+        verify(repository, times(2)).findByFlagKeyAndEnvironment(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq("DEV"));
+        assertThat(redisTemplate.keys("flag:config:*")).hasSize(1);
+    }
+
+    @Test
     void realRedisOutageFallsBackToRepository() {
         GenericContainer<?> unavailableRedis =
                 new GenericContainer<>(REDIS_IMAGE)
@@ -160,6 +187,7 @@ class RedisFlagEvaluationInfrastructureIT {
                     mock(OutboxService.class)
             );
 
+            long started = System.nanoTime();
             FlagEvaluationResponse response =
                     service.evaluateFlag(
                             "NEW_CHECKOUT",
@@ -168,6 +196,7 @@ class RedisFlagEvaluationInfrastructureIT {
                     );
 
             assertThat(response.isEnabled()).isTrue();
+            assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(3));
             verify(repository).findByFlagKeyAndEnvironment(
                     "NEW_CHECKOUT",
                     "DEV"
@@ -180,22 +209,14 @@ class RedisFlagEvaluationInfrastructureIT {
     private static LettuceConnectionFactory connectionFactoryFor(
             GenericContainer<?> container
     ) {
+        ClientOptions.Builder options = ClientOptions.builder()
+                .socketOptions(SocketOptions.builder().connectTimeout(Duration.ofMillis(500)).build());
+        new RedisConfig().redisClientOptionsCustomizer().customize(options);
         LettuceClientConfiguration clientConfiguration =
                 LettuceClientConfiguration.builder()
                         .commandTimeout(Duration.ofMillis(500))
                         .shutdownTimeout(Duration.ZERO)
-                        .clientOptions(
-                                ClientOptions.builder()
-                                        .autoReconnect(false)
-                                        .socketOptions(
-                                                SocketOptions.builder()
-                                                        .connectTimeout(
-                                                                Duration.ofMillis(500)
-                                                        )
-                                                        .build()
-                                        )
-                                        .build()
-                        )
+                        .clientOptions(options.build())
                         .build();
         LettuceConnectionFactory factory =
                 new LettuceConnectionFactory(
