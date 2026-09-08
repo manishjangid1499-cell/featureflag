@@ -28,6 +28,7 @@ public class GlobalExceptionHandler extends ApiExceptionHandler {
     public ResponseEntity<ProblemDetail> handleGeneralException(
             Exception exception, HttpServletRequest request
     ) {
+        logUnexpectedFailure(exception);
         return problems.response(HttpStatus.INTERNAL_SERVER_ERROR, "internal-error", "Internal Server Error",
                 "An unexpected error occurred", request);
     }

@@ -37,6 +37,9 @@ public abstract class ApiExceptionHandler extends ResponseEntityExceptionHandler
     ) {
         HttpServletRequest request = ((ServletWebRequest) webRequest).getRequest();
         HttpStatus status = HttpStatus.valueOf(statusCode.value());
+        if (status.is5xxServerError()) {
+            logUnexpectedFailure(exception);
+        }
         String detail = status.is5xxServerError()
                 ? "An unexpected error occurred" : "The request could not be processed";
         if (status == HttpStatus.NOT_FOUND) {
@@ -97,6 +100,13 @@ public abstract class ApiExceptionHandler extends ResponseEntityExceptionHandler
     ) {
         return problems.response(HttpStatus.UNAUTHORIZED, "unauthenticated", "Unauthorized",
                 "Authentication is required", request);
+    }
+
+    protected void logUnexpectedFailure(Exception exception) {
+        StackTraceElement[] stack = exception.getStackTrace();
+        // Exception messages/SQL parameters can contain credentials or request values.
+        logger.error("Unexpected internal failure; type=" + exception.getClass().getName()
+                + " location=" + (stack.length == 0 ? "unknown" : stack[0]));
     }
 
     private static void addError(Map<String, String> errors, String field, String message) {

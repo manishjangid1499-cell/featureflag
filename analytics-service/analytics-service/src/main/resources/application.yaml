@@ -2,6 +2,10 @@ spring:
   profiles:
     active: local
 
+logging:
+  pattern:
+    level: "%5p [correlationId=%X{correlationId:-}]"
+
 telemetry:
   evaluation:
     topic: ${EVALUATION_TELEMETRY_TOPIC:feature-flag-evaluations}
