@@ -17,7 +17,7 @@ public class NotificationFeignConfig {
     public NotificationFeignConfig(
             @Value("${clients.notification.connect-timeout-ms:2000}")
             long connectTimeoutMillis,
-            @Value("${clients.notification.read-timeout-ms:5000}")
+            @Value("${clients.notification.read-timeout-ms:35000}")
             long readTimeoutMillis
     ) {
         this.connectTimeoutMillis = connectTimeoutMillis;

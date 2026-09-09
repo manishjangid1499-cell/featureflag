@@ -128,9 +128,11 @@ public class InvitationService {
                         .acceptanceUrl(acceptanceUrl)
                         .build();
 
-        invitationNotificationDispatcher.dispatchAfterCommit(notificationRequest);
-
-        return toResponse(saved);
+        InvitationResponse response = toResponse(saved);
+        // Spring invokes afterCommit before returning this response to the controller.
+        invitationNotificationDispatcher.dispatchAfterCommit(
+                notificationRequest, response::setEmailDeliveryConfirmed);
+        return response;
     }
 
     @Transactional
@@ -161,6 +163,10 @@ public class InvitationService {
 
         if (invitation.getStatus() == InvitationStatus.ACCEPTED) {
             throw new InvalidOperationException("This invitation has already been accepted.");
+        }
+
+        if (invitation.getStatus() == InvitationStatus.REVOKED) {
+            throw new InvalidOperationException("This invitation has been revoked. Create a new invitation instead.");
         }
 
         invitation.setStatus(InvitationStatus.REVOKED);

@@ -1,5 +1,6 @@
 package com.featureflag.auth_service.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.featureflag.auth_service.entity.InvitationStatus;
 import com.featureflag.auth_service.entity.Role;
 import lombok.AllArgsConstructor;
@@ -26,4 +27,8 @@ public class InvitationResponse {
     private Instant expiresAt;
     private Instant createdAt;
     private Instant acceptedAt;
+
+    // Present only on create/resend. SMTP acceptance is not mailbox receipt.
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Boolean emailDeliveryConfirmed;
 }

@@ -47,7 +47,8 @@ management:
 clients:
   notification:
     connect-timeout-ms: ${NOTIFICATION_CONNECT_TIMEOUT_MS:2000}
-    read-timeout-ms: ${NOTIFICATION_READ_TIMEOUT_MS:5000}
+    # Allow SMTP connection/read/write waits (10s each) plus response overhead.
+    read-timeout-ms: ${NOTIFICATION_READ_TIMEOUT_MS:35000}
 
 app:
   bootstrap:

@@ -38,6 +38,9 @@ class InvitationNotificationDispatcherTest {
     @InjectMocks
     private InvitationNotificationDispatcher dispatcher;
 
+    @Mock
+    private java.util.function.Consumer<Boolean> deliveryResult;
+
     private InvitationNotificationDto request;
 
     @BeforeEach
@@ -75,11 +78,13 @@ class InvitationNotificationDispatcherTest {
     ) {
         TransactionSynchronizationManager.initSynchronization();
 
-        dispatcher.dispatchAfterCommit(request);
+        dispatcher.dispatchAfterCommit(request, deliveryResult);
 
         verifyNoInteractions(notificationClient);
 
+        verifyNoInteractions(deliveryResult);
         invokeAfterCommitCallbacks();
+        verify(deliveryResult).accept(true);
 
         verify(notificationClient).sendInvitationEmail(
                 "test-internal-key",
@@ -105,7 +110,7 @@ class InvitationNotificationDispatcherTest {
 
         TransactionSynchronizationManager.initSynchronization();
 
-        dispatcher.dispatchAfterCommit(request);
+        dispatcher.dispatchAfterCommit(request, deliveryResult);
 
         verifyNoInteractions(notificationClient);
         assertDoesNotThrow(
@@ -117,6 +122,7 @@ class InvitationNotificationDispatcherTest {
                 request
         );
         verifyNoMoreInteractions(notificationClient);
+        verify(deliveryResult).accept(false);
         assertTrue(output.getOut().contains("errorType=RuntimeException"));
         assertFalse(output.getOut().contains(RECIPIENT));
         assertFalse(output.getOut().contains(RAW_TOKEN));
@@ -133,7 +139,7 @@ class InvitationNotificationDispatcherTest {
         );
 
         assertDoesNotThrow(
-                () -> dispatcher.dispatchAfterCommit(request)
+                () -> dispatcher.dispatchAfterCommit(request, deliveryResult)
         );
 
         verifyNoInteractions(notificationClient);

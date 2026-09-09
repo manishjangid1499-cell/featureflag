@@ -130,7 +130,7 @@ class InvitationServiceTest {
         assertEquals(InvitationStatus.PENDING, response.getStatus());
 
         verify(invitationNotificationDispatcher)
-                .dispatchAfterCommit(any(InvitationNotificationDto.class));
+                .dispatchAfterCommit(any(InvitationNotificationDto.class), any());
         verify(invitationRepository)
                 .findByEmailAndStatusForUpdate(
                         "newadmin@company.com",
@@ -181,7 +181,7 @@ class InvitationServiceTest {
                 ArgumentCaptor.forClass(InvitationNotificationDto.class);
 
         verify(invitationNotificationDispatcher)
-                .dispatchAfterCommit(captor.capture());
+                .dispatchAfterCommit(captor.capture(), any());
 
         InvitationNotificationDto notification = captor.getValue();
 
@@ -247,7 +247,7 @@ class InvitationServiceTest {
         assertEquals(Role.DEVELOPER, response.getInvitedRole());
 
         verify(invitationNotificationDispatcher)
-                .dispatchAfterCommit(any(InvitationNotificationDto.class));
+                .dispatchAfterCommit(any(InvitationNotificationDto.class), any());
     }
 
     @Test
@@ -568,7 +568,7 @@ class InvitationServiceTest {
         ArgumentCaptor<InvitationNotificationDto> notificationCaptor =
                 ArgumentCaptor.forClass(InvitationNotificationDto.class);
         verify(invitationNotificationDispatcher)
-                .dispatchAfterCommit(notificationCaptor.capture());
+                .dispatchAfterCommit(notificationCaptor.capture(), any());
         String acceptanceUrl = notificationCaptor.getValue().getAcceptanceUrl();
         String rawToken = acceptanceUrl.substring(acceptanceUrl.indexOf("token=") + 6);
         String expectedHash = HexFormat.of().formatHex(
