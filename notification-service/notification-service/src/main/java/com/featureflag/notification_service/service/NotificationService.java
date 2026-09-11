@@ -19,7 +19,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.time.Clock;
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -31,13 +30,6 @@ public class NotificationService {
     private final Clock clock;
     private final NotificationMetrics notificationMetrics;
     private final NotificationAccessPolicy accessPolicy;
-
-    public Notification createNotification(
-            NotificationRequest request
-    ) {
-
-        return createNotificationInternal(request, request.getCreatorEmail());
-    }
 
     public Notification createNotification(
             NotificationRequest request,
@@ -89,31 +81,6 @@ public class NotificationService {
         return notificationRepository.save(notification);
     }
 
-    public List<Notification> getNotificationsForUser(String userEmail, String userRole) {
-        if (userEmail == null || userEmail.isBlank()) {
-            return List.of();
-        }
-
-        String normalizedEmail = userEmail.toLowerCase().trim();
-        String normalizedRole = userRole != null ? userRole.toUpperCase().trim() : "VIEWER";
-
-        if ("OWNER".equals(normalizedRole)) {
-            // OWNER sees all organization invitation & notification activity
-            return notificationRepository.findAllByOrderByCreatedAtDesc();
-        } else if ("ADMIN".equals(normalizedRole)) {
-            // ADMIN sees notifications where they are the recipient OR the creator/actor of the action
-            return notificationRepository
-                    .findByRecipientIgnoreCaseOrCreatorEmailIgnoreCaseOrderByCreatedAtDesc(
-                            normalizedEmail,
-                            normalizedEmail
-                    );
-        } else {
-            // DEVELOPER and VIEWER see only notifications directed specifically to themselves
-            return notificationRepository
-                    .findByRecipientIgnoreCaseOrderByCreatedAtDesc(normalizedEmail);
-        }
-    }
-
     public Page<Notification> getNotificationsForUser(
             String userEmail,
             String userRole,
@@ -147,10 +114,6 @@ public class NotificationService {
                 );
     }
 
-    public List<Notification> getUserNotifications(String userEmail) {
-        return getNotificationsForUser(userEmail, "VIEWER");
-    }
-
     public Notification getNotificationById(
             Long id,
             String userEmail,
@@ -174,26 +137,6 @@ public class NotificationService {
         return notification;
     }
 
-    public List<Notification> getNotificationsByRecipient(
-            String recipient,
-            String userEmail,
-            String userRole
-    ) {
-
-        String normalizedRole = accessPolicy.normalizeRole(userRole);
-        String normalizedRecipient = accessPolicy.normalizeEmail(recipient);
-
-        if (!"OWNER".equals(normalizedRole)
-                && !accessPolicy.emailsEqual(normalizedRecipient, userEmail)) {
-            throw new ForbiddenException(
-                    "You do not have permission to query this recipient"
-            );
-        }
-
-        return notificationRepository
-                .findByRecipientIgnoreCaseOrderByCreatedAtDesc(normalizedRecipient);
-    }
-
     public Page<Notification> getNotificationsByRecipient(
             String recipient,
             String userEmail,
@@ -215,14 +158,6 @@ public class NotificationService {
                         normalizedRecipient,
                         pageable
                 );
-    }
-
-    public List<Notification> getNotificationsByStatus(
-            String status
-    ) {
-
-        return notificationRepository
-                .findByStatus(status);
     }
 
     public Page<Notification> getNotificationsByStatus(

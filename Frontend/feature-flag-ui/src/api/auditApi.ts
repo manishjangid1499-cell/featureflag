@@ -11,15 +11,3 @@ export const getAllAuditLogs = async (
   });
   return response.data;
 };
-
-export const getAuditLogsByFlagKey = async (
-  flagKey: string,
-  page = 0,
-  size = DEFAULT_PAGE_SIZE,
-): Promise<PageResponse<AuditLog>> => {
-  const response = await api.get<PageResponse<AuditLog>>(
-    `/audit/${encodeURIComponent(flagKey)}`,
-    { params: { page, size } },
-  );
-  return response.data;
-};

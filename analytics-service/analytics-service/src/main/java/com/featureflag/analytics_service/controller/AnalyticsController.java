@@ -17,9 +17,6 @@ public class AnalyticsController {
 
     private final AnalyticsService analyticsService;
 
-    /**
-     * Get all analytics.
-     */
     @GetMapping
     public PageResponse<AnalyticsResponse> getAllAnalytics(
             @RequestParam(defaultValue = "0") @Min(0) int page,
@@ -38,9 +35,6 @@ public class AnalyticsController {
         );
     }
 
-    /**
-     * Get analytics for a specific feature flag.
-     */
     @GetMapping("/{flagKey}")
     public PageResponse<AnalyticsResponse> getAnalyticsByFlagKey(
             @PathVariable String flagKey,
@@ -61,9 +55,6 @@ public class AnalyticsController {
         );
     }
 
-    /**
-     * Get analytics by database ID.
-     */
     @GetMapping("/id/{id}")
     public AnalyticsResponse getAnalyticsById(
             @PathVariable Long id
@@ -74,9 +65,6 @@ public class AnalyticsController {
         );
     }
 
-    /**
-     * Delete analytics record.
-     */
     @DeleteMapping("/{id}")
     public String deleteAnalytics(
             @PathVariable Long id

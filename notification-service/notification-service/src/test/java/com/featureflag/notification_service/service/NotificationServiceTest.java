@@ -19,6 +19,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -31,6 +34,8 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
+
+    private static final PageRequest PAGE = PageRequest.of(1, 20);
 
     private static final Instant NOW =
             Instant.parse("2026-09-02T12:00:00Z");
@@ -71,54 +76,54 @@ class NotificationServiceTest {
     @Test
     @DisplayName("Get Notifications For OWNER - Returns all organization notification activity")
     void testGetNotificationsForUser_Owner() {
-        when(notificationRepository.findAllByOrderByCreatedAtDesc())
-                .thenReturn(List.of(testNotification));
+        when(notificationRepository.findAllByOrderByCreatedAtDescIdDesc(PAGE))
+                .thenReturn(new PageImpl<>(List.of(testNotification), PAGE, 21));
 
-        List<Notification> results = notificationService.getNotificationsForUser("owner@company.com", "OWNER");
+        List<Notification> results = notificationService.getNotificationsForUser("owner@company.com", "OWNER", PAGE).getContent();
 
         assertNotNull(results);
         assertEquals(1, results.size());
-        verify(notificationRepository, times(1)).findAllByOrderByCreatedAtDesc();
+        verify(notificationRepository, times(1)).findAllByOrderByCreatedAtDescIdDesc(PAGE);
     }
 
     @Test
     @DisplayName("Get Notifications For ADMIN - Returns notifications where recipient or creator is the admin")
     void testGetNotificationsForUser_Admin() {
-        when(notificationRepository.findByRecipientIgnoreCaseOrCreatorEmailIgnoreCaseOrderByCreatedAtDesc("admina@company.com", "admina@company.com"))
-                .thenReturn(List.of(testNotification));
+        when(notificationRepository.findByRecipientIgnoreCaseOrCreatorEmailIgnoreCaseOrderByCreatedAtDescIdDesc("admina@company.com", "admina@company.com", PAGE))
+                .thenReturn(new PageImpl<>(List.of(testNotification), PAGE, 21));
 
-        List<Notification> results = notificationService.getNotificationsForUser("admina@company.com", "ADMIN");
+        List<Notification> results = notificationService.getNotificationsForUser("admina@company.com", "ADMIN", PAGE).getContent();
 
         assertNotNull(results);
         assertEquals(1, results.size());
         verify(notificationRepository, times(1))
-                .findByRecipientIgnoreCaseOrCreatorEmailIgnoreCaseOrderByCreatedAtDesc("admina@company.com", "admina@company.com");
+                .findByRecipientIgnoreCaseOrCreatorEmailIgnoreCaseOrderByCreatedAtDescIdDesc("admina@company.com", "admina@company.com", PAGE);
     }
 
     @Test
     @DisplayName("Get Notifications For DEVELOPER - Returns only notifications directed specifically to themselves")
     void testGetNotificationsForUser_Developer() {
-        when(notificationRepository.findByRecipientIgnoreCaseOrderByCreatedAtDesc("dev@company.com"))
-                .thenReturn(List.of(testNotification));
+        when(notificationRepository.findByRecipientIgnoreCaseOrderByCreatedAtDescIdDesc("dev@company.com", PAGE))
+                .thenReturn(new PageImpl<>(List.of(testNotification), PAGE, 21));
 
-        List<Notification> results = notificationService.getNotificationsForUser("dev@company.com", "DEVELOPER");
+        List<Notification> results = notificationService.getNotificationsForUser("dev@company.com", "DEVELOPER", PAGE).getContent();
 
         assertNotNull(results);
         assertEquals(1, results.size());
-        verify(notificationRepository, times(1)).findByRecipientIgnoreCaseOrderByCreatedAtDesc("dev@company.com");
+        verify(notificationRepository, times(1)).findByRecipientIgnoreCaseOrderByCreatedAtDescIdDesc("dev@company.com", PAGE);
     }
 
     @Test
     @DisplayName("Get User Notifications - Null or blank email returns empty list")
     void testGetUserNotifications_NullOrBlank() {
-        List<Notification> nullResults = notificationService.getUserNotifications(null);
-        List<Notification> blankResults = notificationService.getUserNotifications("   ");
+        List<Notification> nullResults = notificationService.getNotificationsForUser(null, "VIEWER", PAGE).getContent();
+        List<Notification> blankResults = notificationService.getNotificationsForUser("   ", "VIEWER", PAGE).getContent();
 
         assertNotNull(nullResults);
         assertTrue(nullResults.isEmpty());
         assertNotNull(blankResults);
         assertTrue(blankResults.isEmpty());
-        verify(notificationRepository, never()).findByRecipientIgnoreCaseOrderByCreatedAtDesc(anyString());
+        verifyNoInteractions(notificationRepository);
     }
 
     @Test
@@ -137,7 +142,7 @@ class NotificationServiceTest {
             return n;
         });
 
-        Notification result = notificationService.createNotification(request);
+        Notification result = notificationService.createNotification(request, "owner@company.com");
 
         assertNotNull(result);
         assertEquals("SENT", result.getStatus());
@@ -159,7 +164,7 @@ class NotificationServiceTest {
         when(notificationRepository.save(any(Notification.class))).thenAnswer(i -> i.getArgument(0));
         doThrow(new RuntimeException("SMTP connection failed")).when(mailSender).send(any(SimpleMailMessage.class));
 
-        Notification result = notificationService.createNotification(request);
+        Notification result = notificationService.createNotification(request, "owner@company.com");
 
         assertNotNull(result);
         assertEquals("FAILED", result.getStatus());
@@ -189,7 +194,7 @@ class NotificationServiceTest {
 
         assertThrows(
                 UnsupportedNotificationChannelException.class,
-                () -> notificationService.createNotification(request)
+                () -> notificationService.createNotification(request, "owner@company.com")
         );
 
         verifyNoInteractions(
@@ -209,7 +214,7 @@ class NotificationServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         Notification result =
-                notificationService.createNotification(request);
+                notificationService.createNotification(request, "owner@company.com");
 
         assertEquals("EMAIL", result.getType());
         verify(mailSender).send(any(SimpleMailMessage.class));
@@ -459,21 +464,23 @@ class NotificationServiceTest {
     @Test
     @DisplayName("Recipient query allows self and rejects another recipient")
     void testRecipientQuery_SelfOnlyForNonOwner() {
-        when(notificationRepository.findByRecipientIgnoreCaseOrderByCreatedAtDesc("admin@company.com"))
-                .thenReturn(List.of(testNotification));
+        when(notificationRepository.findByRecipientIgnoreCaseOrderByCreatedAtDescIdDesc("admin@company.com", PAGE))
+                .thenReturn(new PageImpl<>(List.of(testNotification), PAGE, 21));
 
         List<Notification> ownResults = notificationService.getNotificationsByRecipient(
                 " Admin@Company.com ",
                 "admin@company.com",
-                "ADMIN"
-        );
+                "ADMIN",
+                PAGE
+        ).getContent();
 
         assertEquals(1, ownResults.size());
         assertThrows(com.featureflag.notification_service.exception.ForbiddenException.class, () ->
                 notificationService.getNotificationsByRecipient(
                         "other@company.com",
                         "admin@company.com",
-                        "ADMIN"
+                        "ADMIN",
+                        PAGE
                 )
         );
     }

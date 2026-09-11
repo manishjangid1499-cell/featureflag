@@ -22,9 +22,6 @@ public class MemberService {
         return userRepository.findAll(pageable).map(this::toResponse);
     }
 
-    /**
-     * Get member by ID.
-     */
     public MemberResponse getMember(Long id) {
 
         User user =
@@ -39,9 +36,6 @@ public class MemberService {
         return toResponse(user);
     }
 
-    /**
-     * Change a member's role.
-     */
     @Transactional
     public MemberResponse updateRole(
             Long id,
@@ -83,9 +77,6 @@ public class MemberService {
         return toResponse(updatedUser);
     }
 
-    /**
-     * Enable or disable a member account without deleting it.
-     */
     @Transactional
     public MemberResponse updateEnabled(
             Long id,
@@ -111,9 +102,6 @@ public class MemberService {
         return toResponse(userRepository.save(user));
     }
 
-    /**
-     * Delete a member.
-     */
     @Transactional
     public void deleteMember(
             Long id,

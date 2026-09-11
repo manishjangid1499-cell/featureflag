@@ -25,9 +25,6 @@ public class NotificationController {
 
     private final NotificationService notificationService;
 
-    /**
-     * Create and send notification.
-     */
     @Operation(summary = "Create and send notification")
     @PostMapping
     public ResponseEntity<NotificationResponse> createNotification(
@@ -45,9 +42,6 @@ public class NotificationController {
                 ));
     }
 
-    /**
-     * Get notifications for the authenticated user (derived securely from JWT).
-     */
     @Operation(summary = "Get authenticated user's notifications")
     @GetMapping
     public ResponseEntity<PageResponse<NotificationResponse>> getUserNotifications(
@@ -68,9 +62,6 @@ public class NotificationController {
         ));
     }
 
-    /**
-     * Get notifications for /me endpoint (derived securely from JWT).
-     */
     @Operation(summary = "Get notifications for /me")
     @GetMapping("/me")
     public ResponseEntity<PageResponse<NotificationResponse>> getMyNotifications(
@@ -99,9 +90,6 @@ public class NotificationController {
         return authName.startsWith("ROLE_") ? authName.substring(5) : authName;
     }
 
-    /**
-     * Get notification by ID.
-     */
     @Operation(summary = "Get notification by ID")
     @GetMapping("/{id}")
     public ResponseEntity<NotificationResponse> getNotificationById(
@@ -141,9 +129,6 @@ public class NotificationController {
         ));
     }
 
-    /**
-     * Get notifications by status.
-     */
     @Operation(summary = "Get notifications by status")
     @GetMapping("/status/{status}")
     public ResponseEntity<PageResponse<NotificationResponse>> getNotificationsByStatus(
@@ -161,9 +146,6 @@ public class NotificationController {
         ));
     }
 
-    /**
-     * Delete notification.
-     */
     @Operation(summary = "Delete notification")
     @DeleteMapping("/{id}")
     public ResponseEntity<String> deleteNotification(

@@ -16,7 +16,6 @@ import org.springframework.data.domain.Pageable;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -66,15 +65,6 @@ public class SdkKeyService {
                 saved.getCreatedBy(),
                 generated.rawKey()
         );
-    }
-
-    @Transactional(readOnly = true)
-    public List<SdkKeyMetadataResponse> list() {
-        return repository
-                .findAllByOrderByCreatedAtDescIdDesc()
-                .stream()
-                .map(this::metadata)
-                .toList();
     }
 
     @Transactional(readOnly = true)

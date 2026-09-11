@@ -12,18 +12,6 @@ export const getAllAnalytics = async (
   return response.data;
 };
 
-export const getAnalyticsByFlagKey = async (
-  flagKey: string,
-  page = 0,
-  size = DEFAULT_PAGE_SIZE,
-): Promise<PageResponse<AnalyticsEvent>> => {
-  const response = await api.get<PageResponse<AnalyticsEvent>>(
-    `/analytics/${encodeURIComponent(flagKey)}`,
-    { params: { page, size } },
-  );
-  return response.data;
-};
-
 export const deleteAnalytics = async (id: number): Promise<string> => {
   const response = await api.delete<string>(`/analytics/${id}`);
   return response.data;

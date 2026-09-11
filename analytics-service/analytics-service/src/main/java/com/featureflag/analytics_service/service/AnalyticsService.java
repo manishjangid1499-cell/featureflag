@@ -21,9 +21,6 @@ public class AnalyticsService {
         return analyticsEventRepository.findAll(pageable);
     }
 
-    /**
-     * Get analytics for a specific flag.
-     */
     public Page<AnalyticsEvent> getAnalyticsByFlagKey(
             String flagKey,
             Pageable pageable
@@ -34,9 +31,6 @@ public class AnalyticsService {
         );
     }
 
-    /**
-     * Get analytics by ID.
-     */
     public AnalyticsEvent getAnalyticsById(Long id) {
 
         return analyticsEventRepository.findById(id)
@@ -48,9 +42,6 @@ public class AnalyticsService {
                 );
     }
 
-    /**
-     * Process an event received from Kafka.
-     */
     @Transactional
     public AnalyticsEvent processEvent(
             String flagKey,
@@ -81,9 +72,6 @@ public class AnalyticsService {
         }
     }
 
-    /**
-     * Delete analytics record.
-     */
     public void deleteAnalytics(Long id) {
 
         AnalyticsEvent event = analyticsEventRepository.findById(id)

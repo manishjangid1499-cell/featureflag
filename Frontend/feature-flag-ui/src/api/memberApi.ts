@@ -17,11 +17,6 @@ export const getAllMembers = async (
   return response.data;
 };
 
-export const getMemberById = async (id: number): Promise<MemberResponse> => {
-  const response = await api.get<MemberResponse>(`/members/${id}`);
-  return response.data;
-};
-
 export const inviteMember = async (request: InviteMemberRequest): Promise<InvitationResponse> => {
   const response = await api.post<InvitationResponse>("/members/invite", request);
   return response.data;

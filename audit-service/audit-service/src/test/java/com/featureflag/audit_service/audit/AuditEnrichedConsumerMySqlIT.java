@@ -29,6 +29,8 @@ import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import org.springframework.data.domain.PageRequest;
+
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -157,8 +159,8 @@ class AuditEnrichedConsumerMySqlIT {
 
         List<AuditLog> history = auditLogRepository
                 .findByFlagKeyOrderByOccurredAtDescIdDesc(
-                        "checkout"
-                );
+                        "checkout", PageRequest.of(0, 20)
+                ).getContent();
         assertThat(history)
                 .extracting(AuditLog::getEventId)
                 .containsExactly("checkout-2", "checkout-1");

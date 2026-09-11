@@ -447,12 +447,6 @@ class FlagServiceTest {
             ).delete(
                     "flag:config:DEV:NEW_CHECKOUT"
             );
-            verify(
-                    redisTemplate,
-                    never()
-            ).delete(
-                    "all_flags"
-            );
             List<TransactionSynchronization> synchronizations =
                     TransactionSynchronizationManager
                             .getSynchronizations();
@@ -467,10 +461,6 @@ class FlagServiceTest {
                     .delete(
                             "flag:config:DEV:NEW_CHECKOUT"
                     );
-            verify(redisTemplate)
-                    .delete(
-                            "all_flags"
-                    );
         } finally {
             TransactionSynchronizationManager
                     .clearSynchronization();
@@ -478,7 +468,7 @@ class FlagServiceTest {
     }
 
     @Test
-    @DisplayName("Update Flag - all_flags and config cache invalidations are deferred until transaction commit")
+    @DisplayName("Update Flag - Evaluation cache invalidations are deferred until transaction commit")
     void testUpdateFlag_CacheInvalidationsDeferredUntilAfterCommit() {
         FlagRequest request = new FlagRequest();
         request.setName("Updated Checkout");
@@ -492,7 +482,6 @@ class FlagServiceTest {
         TransactionSynchronizationManager.initSynchronization();
         try {
             flagService.updateFlag(1L, request);
-            verify(redisTemplate, never()).delete("all_flags");
             verify(redisTemplate, never()).delete("flag:config:DEV:NEW_CHECKOUT");
             verify(redisTemplate, never()).delete("flag:config:PROD:NEW_CHECKOUT_V2");
 
@@ -501,7 +490,6 @@ class FlagServiceTest {
             assertFalse(synchronizations.isEmpty());
             synchronizations.forEach(TransactionSynchronization::afterCommit);
 
-            verify(redisTemplate).delete("all_flags");
             verify(redisTemplate).delete("flag:config:DEV:NEW_CHECKOUT");
             verify(redisTemplate).delete("flag:config:PROD:NEW_CHECKOUT_V2");
         } finally {
@@ -510,14 +498,13 @@ class FlagServiceTest {
     }
 
     @Test
-    @DisplayName("Delete Flag - all_flags and config cache invalidations are deferred until transaction commit")
+    @DisplayName("Delete Flag - Evaluation cache invalidations are deferred until transaction commit")
     void testDeleteFlag_CacheInvalidationsDeferredUntilAfterCommit() {
         when(repository.findById(1L)).thenReturn(Optional.of(testFlag));
 
         TransactionSynchronizationManager.initSynchronization();
         try {
             flagService.deleteFlag(1L);
-            verify(redisTemplate, never()).delete("all_flags");
             verify(redisTemplate, never()).delete("flag:config:DEV:NEW_CHECKOUT");
 
             List<TransactionSynchronization> synchronizations =
@@ -525,7 +512,6 @@ class FlagServiceTest {
             assertFalse(synchronizations.isEmpty());
             synchronizations.forEach(TransactionSynchronization::afterCommit);
 
-            verify(redisTemplate).delete("all_flags");
             verify(redisTemplate).delete("flag:config:DEV:NEW_CHECKOUT");
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
@@ -533,7 +519,7 @@ class FlagServiceTest {
     }
 
     @Test
-    @DisplayName("Toggle Flag - all_flags and config cache invalidations are deferred until transaction commit")
+    @DisplayName("Toggle Flag - Evaluation cache invalidations are deferred until transaction commit")
     void testToggleFlag_CacheInvalidationsDeferredUntilAfterCommit() {
         when(repository.findById(1L)).thenReturn(Optional.of(testFlag));
         when(repository.save(any(FeatureFlag.class))).thenAnswer(i -> i.getArgument(0));
@@ -541,7 +527,6 @@ class FlagServiceTest {
         TransactionSynchronizationManager.initSynchronization();
         try {
             flagService.toggleFlag(1L);
-            verify(redisTemplate, never()).delete("all_flags");
             verify(redisTemplate, never()).delete("flag:config:DEV:NEW_CHECKOUT");
 
             List<TransactionSynchronization> synchronizations =
@@ -549,7 +534,6 @@ class FlagServiceTest {
             assertFalse(synchronizations.isEmpty());
             synchronizations.forEach(TransactionSynchronization::afterCommit);
 
-            verify(redisTemplate).delete("all_flags");
             verify(redisTemplate).delete("flag:config:DEV:NEW_CHECKOUT");
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
@@ -572,7 +556,6 @@ class FlagServiceTest {
 
         assertNotNull(created);
         assertEquals("NEW_CHECKOUT", created.getFlagKey());
-        verify(redisTemplate, times(1)).delete("all_flags");
         verify(outboxService, times(1))
                 .enqueueFlagEvent(
                         "FLAG_CREATED",
@@ -663,26 +646,6 @@ class FlagServiceTest {
                 repository,
                 never()
         ).save(any(FeatureFlag.class));
-    }
-
-    @Test
-    @DisplayName("Get All Flags - Reads from MySQL and caches to Redis with TTL when cache miss")
-    void testGetAllFlags_CacheMiss_FetchesFromDb() throws Exception {
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.get("all_flags")).thenReturn(null);
-        when(repository.findAll()).thenReturn(List.of(testFlag));
-        when(objectMapper.writeValueAsString(List.of(testFlag))).thenReturn("[{\"flagKey\":\"NEW_CHECKOUT\"}]");
-
-        List<FeatureFlag> flags = flagService.getAllFlags();
-
-        assertNotNull(flags);
-        assertEquals(1, flags.size());
-        verify(repository, times(1)).findAll();
-        verify(valueOperations, times(1)).set(
-                eq("all_flags"),
-                eq("[{\"flagKey\":\"NEW_CHECKOUT\"}]"),
-                eq(Duration.ofMinutes(5))
-        );
     }
 
     @Test
@@ -780,7 +743,6 @@ class FlagServiceTest {
         assertNotNull(updated);
         assertEquals("Updated Checkout", updated.getName());
         assertFalse(updated.getEnabled());
-        verify(redisTemplate, times(1)).delete("all_flags");
         verify(outboxService, times(1))
                 .enqueueFlagEvent(
                         "FLAG_UPDATED",
@@ -883,7 +845,6 @@ class FlagServiceTest {
         assertNotNull(result);
         assertTrue(result.contains("Successfully"));
         verify(repository, times(1)).deleteById(1L);
-        verify(redisTemplate, times(1)).delete("all_flags");
         verify(outboxService, times(1))
                 .enqueueFlagEvent(
                         "FLAG_DELETED",
@@ -903,7 +864,6 @@ class FlagServiceTest {
 
         assertNotNull(toggled);
         assertFalse(toggled.getEnabled());
-        verify(redisTemplate, times(1)).delete("all_flags");
         verify(outboxService, times(1))
                 .enqueueFlagEvent(
                         "FLAG_TOGGLED",

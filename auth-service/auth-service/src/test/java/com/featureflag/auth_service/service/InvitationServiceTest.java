@@ -144,8 +144,6 @@ class InvitationServiceTest {
                 );
         lockingOrder.verify(userRepository)
                 .findByEmail("newadmin@company.com");
-        verify(invitationRepository, never())
-                .findByEmailAndStatus(anyString(), any());
     }
 
     @Test
@@ -321,8 +319,6 @@ class InvitationServiceTest {
 
         assertEquals(InvitationStatus.REVOKED, previousInvitation.getStatus());
         verify(invitationRepository).save(previousInvitation);
-        verify(invitationRepository, never())
-                .findByEmailAndStatus(anyString(), any());
     }
 
     @Test

@@ -175,7 +175,7 @@ class FlagApiHardeningTest {
                 .andExpect(jsonPath("$.totalElements").value(1));
 
         verify(queryService).findAll(any(Pageable.class));
-        verify(flagService, never()).getAllFlags();
+        verifyNoInteractions(flagService);
     }
 
     private void performInvalidFlag(String json) throws Exception {

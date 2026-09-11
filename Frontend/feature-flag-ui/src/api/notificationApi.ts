@@ -13,23 +13,6 @@ export const getAllNotifications = async (
   return response.data;
 };
 
-export const getNotificationById = async (id: number): Promise<Notification> => {
-  const response = await api.get<Notification>(`/api/notifications/${id}`);
-  return response.data;
-};
-
-export const getNotificationsByRecipient = async (
-  recipient: string,
-  page = 0,
-  size = DEFAULT_PAGE_SIZE,
-): Promise<PageResponse<Notification>> => {
-  const response = await api.get<PageResponse<Notification>>(
-    `/api/notifications/recipient/${encodeURIComponent(recipient)}`,
-    { params: { page, size } },
-  );
-  return response.data;
-};
-
 export const createNotification = async (request: NotificationRequest): Promise<Notification> => {
   const response = await api.post<Notification>("/api/notifications", request);
   return response.data;

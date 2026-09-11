@@ -45,10 +45,6 @@ public class FlagController {
             flagMutationAuditService;
     private final FlagQueryService flagQueryService;
 
-    // =========================================================
-    // CREATE FLAG
-    // =========================================================
-
     @Operation(
             summary = "Create a feature flag",
             description = "Creates a new feature flag and publishes a FLAG_CREATED Kafka event"
@@ -71,10 +67,6 @@ public class FlagController {
                 )
         );
     }
-
-    // =========================================================
-    // GET ALL FLAGS
-    // =========================================================
 
     @Operation(summary = "Get all feature flags", description = "Returns all feature flags")
     @ApiResponse(responseCode = "200", description = "Feature flags retrieved successfully")
@@ -99,10 +91,6 @@ public class FlagController {
         ));
     }
 
-    // =========================================================
-    // GET FLAG BY ID
-    // =========================================================
-
     @Operation(summary = "Get feature flag by database ID", description = "Returns a feature flag using its numerical ID")
     @GetMapping("/id/{id}")
     public ResponseEntity<FlagResponse> getFlagById(@PathVariable Long id) {
@@ -110,10 +98,6 @@ public class FlagController {
                 FlagResponse.from(flagService.getById(id))
         );
     }
-
-    // =========================================================
-    // GET FLAG BY KEY
-    // =========================================================
 
     @Operation(
             summary = "Get feature flag by key and environment",
@@ -156,10 +140,6 @@ public class FlagController {
         ));
     }
 
-    // =========================================================
-    // EVALUATE FLAG
-    // =========================================================
-
     @Operation(
             summary = "Evaluate a feature flag",
             description = "Evaluates whether a feature flag should be enabled for a user given schedule, targeting whitelist, and rollout bucket"
@@ -188,10 +168,6 @@ public class FlagController {
         return ResponseEntity.ok(response);
     }
 
-    // =========================================================
-    // UPDATE FLAG
-    // =========================================================
-
     @Operation(summary = "Update a feature flag", description = "Updates a feature flag and publishes a FLAG_UPDATED Kafka event")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Feature flag updated successfully"),
@@ -214,10 +190,6 @@ public class FlagController {
         ));
     }
 
-    // =========================================================
-    // DELETE FLAG
-    // =========================================================
-
     @Operation(summary = "Delete a feature flag", description = "Deletes a feature flag and publishes a FLAG_DELETED Kafka event")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Feature flag deleted successfully"),
@@ -235,10 +207,6 @@ public class FlagController {
         );
         return ResponseEntity.ok(message);
     }
-
-    // =========================================================
-    // TOGGLE FLAG
-    // =========================================================
 
     @Operation(summary = "Toggle feature flag", description = "Inverts the enabled state of a feature flag and publishes a FLAG_TOGGLED Kafka event")
     @ApiResponses({

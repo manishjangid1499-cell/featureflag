@@ -15,6 +15,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -30,6 +33,8 @@ import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
 class AuditServiceTest {
+
+    private static final PageRequest PAGE = PageRequest.of(1, 20);
 
     @Mock
     private AuditLogRepository repository;
@@ -61,11 +66,11 @@ class AuditServiceTest {
                     + "ordered by latest"
     )
     void testGetAllAuditLogs() {
-        when(repository.findAllByOrderByIdDesc())
-                .thenReturn(List.of(testLog));
+        when(repository.findAllByOrderByIdDesc(PAGE))
+                .thenReturn(new PageImpl<>(List.of(testLog), PAGE, 21));
 
         List<AuditLog> results =
-                auditService.getAllAuditLogs();
+                auditService.getAllAuditLogs(PAGE).getContent();
 
         assertNotNull(results);
         assertEquals(1, results.size());
@@ -88,15 +93,15 @@ class AuditServiceTest {
         when(
                 repository
                         .findByFlagKeyOrderByOccurredAtDescIdDesc(
-                                "NEW_CHECKOUT"
+                                "NEW_CHECKOUT", PAGE
                         )
-        ).thenReturn(List.of(testLog));
+        ).thenReturn(new PageImpl<>(List.of(testLog), PAGE, 21));
 
         List<AuditLog> results =
                 auditService
                         .getAuditLogsByFlagKey(
-                                "NEW_CHECKOUT"
-                        );
+                                "NEW_CHECKOUT", PAGE
+                        ).getContent();
 
         assertNotNull(results);
         assertEquals(1, results.size());

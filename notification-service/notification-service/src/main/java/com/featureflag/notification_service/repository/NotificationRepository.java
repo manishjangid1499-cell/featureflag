@@ -19,26 +19,11 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     long countByStatus(String status);
 
-    List<Notification> findAllByOrderByCreatedAtDesc();
-
     Page<Notification> findAllByOrderByCreatedAtDescIdDesc(Pageable pageable);
-
-    List<Notification> findByRecipient(String recipient);
-
-    List<Notification> findByRecipientOrderByCreatedAtDesc(String recipient);
-
-    List<Notification> findByRecipientIgnoreCaseOrderByCreatedAtDesc(String recipient);
 
     Page<Notification> findByRecipientIgnoreCaseOrderByCreatedAtDescIdDesc(
             String recipient,
             Pageable pageable
-    );
-
-    List<Notification> findByRecipientOrCreatorEmailOrderByCreatedAtDesc(String recipient, String creatorEmail);
-
-    List<Notification> findByRecipientIgnoreCaseOrCreatorEmailIgnoreCaseOrderByCreatedAtDesc(
-            String recipient,
-            String creatorEmail
     );
 
     Page<Notification> findByRecipientIgnoreCaseOrCreatorEmailIgnoreCaseOrderByCreatedAtDescIdDesc(
@@ -46,8 +31,6 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
             String creatorEmail,
             Pageable pageable
     );
-
-    List<Notification> findByStatus(String status);
 
     Page<Notification> findByStatusOrderByCreatedAtDescIdDesc(
             String status,

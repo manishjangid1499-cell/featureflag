@@ -13,6 +13,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -97,12 +100,13 @@ class SdkKeyServiceTest {
 
     @Test
     void listSerializesOnlySafeMetadata() throws Exception {
-        when(repository.findAllByOrderByCreatedAtDescIdDesc())
-                .thenReturn(List.of(sdkKey(true)));
+        var page = PageRequest.of(1, 20);
+        when(repository.findAllByOrderByCreatedAtDescIdDesc(page))
+                .thenReturn(new PageImpl<>(List.of(sdkKey(true)), page, 21));
 
         String json = new ObjectMapper()
                 .findAndRegisterModules()
-                .writeValueAsString(service.list());
+                .writeValueAsString(service.list(page));
 
         assertThat(json)
                 .contains("ff_sdk_AAAAAAAA")

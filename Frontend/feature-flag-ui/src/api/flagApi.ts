@@ -12,26 +12,6 @@ export const getAllFlags = async (
   return response.data;
 };
 
-export const getFlagById = async (id: number): Promise<FeatureFlag> => {
-  const response = await api.get<FeatureFlag>(`/flags/id/${id}`);
-  return response.data;
-};
-
-export const getFlagByKey = async (
-  key: string,
-  environment: string
-): Promise<FeatureFlag> => {
-  const params = new URLSearchParams({
-    environment,
-  });
-
-  const response = await api.get<FeatureFlag>(
-    `/flags/${encodeURIComponent(key)}?${params.toString()}`
-  );
-
-  return response.data;
-};
-
 export const createFlag = async (flag: FlagRequest): Promise<FeatureFlag> => {
   const response = await api.post<FeatureFlag>("/flags", flag);
   return response.data;

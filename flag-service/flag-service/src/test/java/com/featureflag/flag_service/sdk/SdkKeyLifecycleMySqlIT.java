@@ -25,6 +25,8 @@ import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import org.springframework.data.domain.PageRequest;
+
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -146,7 +148,7 @@ class SdkKeyLifecycleMySqlIT {
                 "admin@example.com"
         );
 
-        var metadata = sdkKeyService.list().getFirst();
+        var metadata = sdkKeyService.list(PageRequest.of(0, 20)).getContent().getFirst();
 
         assertThat(metadata.id()).isEqualTo(created.id());
         assertThat(metadata.keyPrefix()).isEqualTo(created.keyPrefix());

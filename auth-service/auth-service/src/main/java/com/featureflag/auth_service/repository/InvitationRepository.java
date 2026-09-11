@@ -17,8 +17,6 @@ public interface InvitationRepository extends JpaRepository<Invitation, Long> {
 
     Optional<Invitation> findByTokenHash(String tokenHash);
 
-    List<Invitation> findByEmailAndStatus(String email, InvitationStatus status);
-
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select i
@@ -54,6 +52,4 @@ public interface InvitationRepository extends JpaRepository<Invitation, Long> {
     Page<Invitation> findAllByOrderByCreatedAtDescIdDesc(
             Pageable pageable
     );
-
-    List<Invitation> findByStatus(InvitationStatus status);
 }
