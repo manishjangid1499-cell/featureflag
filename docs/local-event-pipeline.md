@@ -25,9 +25,7 @@ Another broker must not already own that host port.
 Flag, Audit, and Analytics use `spring.kafka.bootstrap-servers=localhost:9092`
 with their local profiles. Check any IntelliJ `SPRING_KAFKA_BOOTSTRAP_SERVERS`
 override against that address. Docker-profile services in the full stack use
-`kafka:29092`; that hostname is internal to their Docker network. The separate
-stabilization fixture can publish Kafka on a different host port and is not this
-local JVM setup.
+`kafka:29092`; that hostname is internal to their Docker network.
 
 The initializer waits for broker health and creates only missing topics:
 

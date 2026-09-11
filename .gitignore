@@ -14,11 +14,25 @@
 **/coverage/
 **/logs/
 *.log
+*.tmp
+*.bak
 *.tsbuildinfo
 *.mv.db
 *.trace.db
 /runtime-data/
 /secrets/
+
+# Local database exports; Flyway and test SQL under src remain tracked.
+/*_db*.sql
+*.sql.gz
+*.sql.zip
+*.dump
+/backups/
+
+# Local signing credentials; public/test fixtures are not covered by these rules.
+*.key
+*.p12
+*.pfx
 
 # Local editor and operating system files
 .vscode/*

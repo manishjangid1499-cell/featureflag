@@ -5,9 +5,8 @@ deployment. Teams manage environment-specific flags, schedule releases, target
 subjects, and expand a deterministic percentage rollout. Applications evaluate
 flags through a separate SDK-key-authenticated runtime API.
 
-The project demonstrates service boundaries, authorization, transactional event
-delivery, idempotent consumers, and failure handling. It is a portfolio application,
-not a claim of a production SLA, measured throughput, or customer adoption.
+The system combines service-level authorization, transactional event delivery,
+idempotent consumers, and explicit failure handling.
 
 ## Capabilities
 
@@ -25,7 +24,7 @@ not a claim of a production SLA, measured throughput, or customer adoption.
 ## Services and repository structure
 
 The Java modules are independent Maven projects, rather than a root Maven reactor.
-Spring Boot remains on **3.5.5**, Spring Cloud on **2025.0.0**, and Java on **21**.
+The services use Spring Boot **3.5.5**, Spring Cloud **2025.0.0**, and Java **21**.
 The browser application uses React 19, TypeScript 6, and Vite 8.
 
 | Component | Directory | Service port | Responsibility |
@@ -466,6 +465,16 @@ For local JWT resources, use `AUTH_JWT_PRIVATE_KEY_LOCATION` and
 `JWT_PUBLIC_KEY_LOCATION` with `file:` resource locations instead of Compose's
 host `*_FILE` variables. Set the invitation frontend origin to the Vite origin.
 
+For Kafka, use [docker-compose.kafka-local.yml](docker-compose.kafka-local.yml):
+
+```sh
+docker compose -f docker-compose.kafka-local.yml up -d --wait --wait-timeout 180 kafka
+docker compose -f docker-compose.kafka-local.yml run --rm kafka-init
+```
+
+The [local Kafka guide](docs/local-event-pipeline.md) explains listener addresses,
+topic initialization, consumer groups, and outbox recovery.
+
 In IntelliJ, set `JWT_ISSUER` and `JWT_AUDIENCE` in every resource service's run
 configuration, including Flag Service, to the same values used by Auth Service
 (`feature-flag-auth` and `feature-flag-api` in `.env.example`). Each also needs
@@ -478,14 +487,13 @@ in both the Auth and Notification run configurations. This is distinct from
 `AUTH_RECIPIENTS_SERVICE_KEY`. Use a newly generated random secret, keep it out of
 Git, and restart both applications after changing their environments. Without
 this key Auth commits the invitation but skips the internal delivery request;
-the response now reports unconfirmed delivery instead of silently hiding it.
+the response reports unconfirmed delivery.
 
 Notification's local mail configuration defaults to Gmail SMTP on port 587 with
 SMTP authentication and STARTTLS enabled. Configure `NOTIFICATION_MAIL_USERNAME`
 and `NOTIFICATION_MAIL_PASSWORD` in Notification's JVM, or set `SPRING_MAIL_HOST`
-and `SPRING_MAIL_PORT` for another SMTP server. For Gmail, use a current App
-Password, never the account password or a credential exposed in repository
-history. Provider rejection still requires resolving the provider/configuration
+and `SPRING_MAIL_PORT` for another SMTP server. For Gmail, use an App Password.
+Provider rejection requires resolving the provider/configuration
 problem before using Resend. Do not enable mail/Feign body logging: invitation
 links are secrets. Notification history stores only redacted metadata.
 Auth waits up to 35 seconds for the internal invitation response by default
@@ -588,12 +596,18 @@ npm run build
 ```
 
 The frontend suite covers authentication policy, ProblemDetail decoding, and full
-page traversal for dashboard totals. `build` runs TypeScript, creates production
+page traversal for dashboard totals, invitation delivery feedback, and profile
+display across session changes. `build` runs TypeScript, creates production
 assets, and validates CSP. Backend tests cover roles, SDK credential isolation,
 error/status/correlation contracts, concurrency, retries, and domain behavior.
 See the [CI workflow](.github/workflows/ci.yml) for the exact module/profile matrix
 and packaged-artifact checks. It is configured to run on pushes to `main` and pull
 requests; local validation is not evidence of a remote GitHub Actions run.
+
+The [disposable end-to-end smoke tests](scripts/e2e/README.md) exercise the real
+Compose stack, browser workflows, invitation emails through a local SMTP sink,
+and Java SDK. They use generated credentials and isolated volumes, and keep their
+state and reports outside the repository.
 
 ## Design decisions, tradeoffs, and limitations
 
@@ -603,10 +617,9 @@ requests; local validation is not evidence of a remote GitHub Actions run.
 - **Outbox for lifecycle reliability, best-effort evaluation telemetry:** lifecycle
   changes are durable with their state mutation; per-evaluation telemetry avoids
   another durable write on every evaluation and can be lost during outages.
-- **Eureka retained for the existing routing/Feign deployment:** it demonstrates
-  discovery and is actively used, but Compose DNS with configured service URLs
-  would be simpler for this fixed local topology. Removing it is a separate
-  simplification decision, not part of stabilization.
+- **Service discovery:** Gateway and Feign resolve service instances through
+  Eureka. This supports discovery-based routing at the cost of another runtime
+  dependency in the fixed local topology.
 - **MySQL atomic counters and transaction-scoped markers:** preserve aggregate
   correctness under concurrent consumers without read-modify-write updates.
 - **Independent service builds:** error contracts and security conventions have
@@ -626,25 +639,15 @@ requests; local validation is not evidence of a remote GitHub Actions run.
 - **Operational footprint:** one local MySQL instance and one Kafka broker, with no
   multi-region deployment, tenant isolation, Kubernetes, automatic DLT replay, or
   bundled monitoring/backup system. No throughput benchmark or SLA is asserted.
-- **Version compatibility:** Flyway's MySQL 8.4 support warning remains even though
-  the repository's disposable MySQL suites pass on the pinned image. Dependency
-  analysis also reports framework/aggregator false positives; these are reviewed
-  rather than used to remove reflective runtime dependencies blindly.
-
-The architecture is frozen for this portfolio scope. **STOP ADDING TECHNOLOGY.**
-Kubernetes, a service mesh, Keycloak, gRPC, CQRS/event sourcing, another datastore,
-another service, or a tracing platform are not required to demonstrate this system.
-The next work is presentation and interview preparation, not architecture expansion.
+- **Version compatibility:** the pinned Flyway version warns about MySQL 8.4's
+  tested support range. Native integration suites cover the selected MySQL image.
 
 ### Historical credentials
 
-Older Git history (including commit `5bc5eb8`) contained an SMTP credential literal;
-later configuration externalized credentials. The repository cannot establish
-whether that external credential was revoked. Its owner must confirm revocation
-or rotate it before public portfolio publication. Do not assume removal from the
-working tree invalidates a historical secret. Current deployment uses supplied
-environment credentials and external RSA files, not historical literals. No Git
-history rewrite or external credential rotation is automated by this project.
+Commit `5bc5eb8` contains historical database and SMTP credentials. Their owner
+must confirm revocation or rotate them before publishing this Git history.
+Current configuration uses environment credentials and external RSA files;
+removing a credential from current files does not revoke it.
 
 Dependency maintenance is configured through [Dependabot](.github/dependabot.yml)
 with weekly grouped updates and limited open PRs. Spring Boot/Cloud major or minor

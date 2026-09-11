@@ -37,7 +37,7 @@ function Layout() {
           <div className="brand-icon">FF</div>
           <div>
             <div className="brand-title">FeatureFlag</div>
-            <div className="brand-subtitle">Enterprise Console</div>
+            <div className="brand-subtitle">Management Console</div>
           </div>
         </div>
 
