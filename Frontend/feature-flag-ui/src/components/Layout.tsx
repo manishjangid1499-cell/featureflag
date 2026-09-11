@@ -3,6 +3,7 @@ import { useAuth } from "../hooks/useAuth";
 
 function Layout() {
   const { user, logout, canManageMembers } = useAuth();
+  const displayName = user?.name?.trim() || user?.email;
   const navigate = useNavigate();
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -85,11 +86,11 @@ function Layout() {
         <div className="sidebar-bottom">
           <div className="user-card">
             <div className="avatar">
-              {user?.email?.charAt(0).toUpperCase()}
+              {displayName?.charAt(0).toUpperCase()}
             </div>
 
             <div className="user-info">
-              <strong>{user?.email}</strong>
+              <strong title={user?.email}>{displayName}</strong>
               <span style={{
                 color: getRoleBadgeColor(),
                 fontWeight: 700,

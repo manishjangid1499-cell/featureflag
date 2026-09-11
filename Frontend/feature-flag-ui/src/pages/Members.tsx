@@ -11,6 +11,7 @@ import {
   revokeInvitation,
 } from "../api/memberApi";
 import { getApiErrorMessage } from "../api/errors";
+import { invitationDeliveryFeedback } from "../api/invitationDelivery";
 import { PaginationControls } from "../components/PaginationControls";
 import type {
   MemberResponse,
@@ -35,6 +36,8 @@ export function Members() {
   const loading = membersLoading || invitationsLoading;
   const error = membersError || invitationsError;
   const [successMessage, setSuccessMessage] = useState("");
+  const [deliveryWarning, setDeliveryWarning] = useState("");
+  const [resendingId, setResendingId] = useState<number | null>(null);
 
   // Modal
   const [isInviteOpen, setIsInviteOpen] = useState(false);
@@ -52,6 +55,7 @@ export function Members() {
     e.preventDefault();
     setFormError("");
     setSuccessMessage("");
+    setDeliveryWarning("");
 
     if (!email.trim()) {
       setFormError("Email address is required.");
@@ -71,7 +75,9 @@ export function Members() {
       setName("");
       setEmail("");
       setRole("DEVELOPER");
-      setSuccessMessage(`Invitation created for ${created.email}.`);
+      const feedback = invitationDeliveryFeedback(created, "created");
+      setDeliveryWarning(feedback.warning ? feedback.message : "");
+      setSuccessMessage(feedback.warning ? "" : feedback.message);
       setTimeout(() => setSuccessMessage(""), 6000);
     } catch (error: unknown) {
       setFormError(getApiErrorMessage(
@@ -83,14 +89,21 @@ export function Members() {
     }
   };
 
-  const handleResend = async (invitationId: number, memberEmail: string) => {
+  const handleResend = async (invitationId: number) => {
+    setSuccessMessage("");
+    setDeliveryWarning("");
+    setResendingId(invitationId);
     try {
-      await resendInvitation(invitationId);
+      const renewed = await resendInvitation(invitationId);
       await reloadInvitations();
-      setSuccessMessage(`Invitation renewed for ${memberEmail}.`);
+      const feedback = invitationDeliveryFeedback(renewed, "renewed");
+      setDeliveryWarning(feedback.warning ? feedback.message : "");
+      setSuccessMessage(feedback.warning ? "" : feedback.message);
       setTimeout(() => setSuccessMessage(""), 5000);
     } catch (error: unknown) {
       alert(getApiErrorMessage(error, "Failed to resend invitation."));
+    } finally {
+      setResendingId(null);
     }
   };
 
@@ -234,6 +247,13 @@ export function Members() {
           </button>
         </div>
       </div>
+
+      {deliveryWarning && (
+        <div role="alert" style={{ background: "#fffbeb", border: "1px solid #fcd34d",
+          borderRadius: "10px", padding: "12px 18px", color: "#92400e", marginBottom: "20px" }}>
+          {deliveryWarning}
+        </div>
+      )}
 
       {successMessage && (
         <div
@@ -741,7 +761,8 @@ export function Members() {
                           >
                             <button
                               type="button"
-                              onClick={() => handleResend(inv.id, inv.email)}
+                              onClick={() => handleResend(inv.id)}
+                              disabled={resendingId !== null}
                               style={{
                                 padding: "4px 9px",
                                 border: "1px solid #d1d5db",
@@ -753,7 +774,7 @@ export function Members() {
                                 cursor: "pointer",
                               }}
                             >
-                              Resend
+                              {resendingId === inv.id ? "Sending..." : "Resend"}
                             </button>
 
                             <button

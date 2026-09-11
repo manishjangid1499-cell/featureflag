@@ -12,9 +12,16 @@ export interface LoginResponse {
 }
 
 export interface AuthUser {
+  name?: string | null;
   email: string;
   role: UserRole;
   token: string;
+}
+
+export interface ProfileResponse {
+  name: string | null;
+  email: string;
+  role: UserRole;
 }
 
 export interface MemberResponse {
@@ -45,6 +52,7 @@ export interface InvitationResponse {
   expiresAt: string;
   createdAt: string;
   acceptedAt: string | null;
+  emailDeliveryConfirmed?: boolean;
 }
 
 export interface ValidateInvitationResponse {

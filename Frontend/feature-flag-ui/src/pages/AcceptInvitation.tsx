@@ -279,7 +279,7 @@ export function AcceptInvitation() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    placeholder="Minimum 6 characters"
+                    placeholder="Minimum 8 characters"
                     style={{
                       width: "100%",
                       padding: "10px 14px",

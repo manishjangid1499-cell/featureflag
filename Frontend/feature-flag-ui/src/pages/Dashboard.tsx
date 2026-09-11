@@ -9,6 +9,7 @@ import { collectAllPages } from "../types/page";
 
 export function Dashboard() {
   const { user, isViewer, canManageMembers } = useAuth();
+  const displayName = user?.name?.trim() || user?.email;
   const navigate = useNavigate();
 
   const [flags, setFlags] = useState<FeatureFlag[]>([]);
@@ -91,7 +92,7 @@ export function Dashboard() {
             {user?.role} CONSOLE
           </span>
           <h1 style={{ margin: "10px 0 6px 0", fontSize: "26px", fontWeight: 800 }}>
-            Welcome back, {user?.email}
+            Welcome back, {displayName}
           </h1>
           <p style={{ margin: 0, fontSize: "14px", color: "#c7d2fe", maxWidth: "600px" }}>
             {isViewer

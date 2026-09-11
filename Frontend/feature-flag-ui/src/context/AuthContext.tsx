@@ -12,7 +12,7 @@ import type {
 
 import { AuthContext } from "./AuthState";
 
-import { login as loginApi } from "../api/authApi";
+import { getProfile, login as loginApi } from "../api/authApi";
 import {
   AUTH_SESSION_CHANGED_EVENT,
   AUTH_STORAGE_KEY,
@@ -50,6 +50,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
       window.removeEventListener("storage", handleStorage);
     };
   }, []);
+
+  const sessionToken = user?.token;
+  useEffect(() => {
+    if (!sessionToken) {
+      return;
+    }
+
+    let cancelled = false;
+    getProfile().then((profile) => {
+      const current = readAuthSession();
+      if (!cancelled && current?.token === sessionToken) {
+        if (current.name !== profile.name) {
+          writeAuthSession({ ...current, name: profile.name });
+        }
+      }
+    }).catch(() => {
+      // Keep the saved name/email on a profile outage; the API handles 401 logout.
+    });
+
+    return () => { cancelled = true; };
+  }, [sessionToken]);
 
   useEffect(() => {
     if (!user) {

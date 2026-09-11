@@ -327,8 +327,15 @@ from updating a newer claim, but cannot provide exactly-once delivery to SMTP.
 Invitation emails use a separate synchronous internal endpoint so raw acceptance
 URLs are not stored for background retry. That endpoint returns 502 when delivery
 fails. Auth dispatches after its invitation transaction commits and logs delivery
-failures safely: a successful invitation-creation response does not prove that
-SMTP delivery succeeded. Administrators can resend invitations. See
+failures safely. Create/resend responses include `emailDeliveryConfirmed`: `true`
+means Notification acknowledged SMTP acceptance; `false` means sending could not
+be confirmed (configuration error, service failure, SMTP rejection, or timeout).
+This transient response field is not persisted and is omitted from invitation
+lists. `PENDING` only means the invitation has not been accepted. The Members page
+shows a warning on unconfirmed delivery and supports explicit Resend recovery.
+Resend creates a new invitation/token hash and revokes the previous link; pending
+and expired invitations are eligible, while accepted/revoked invitations cannot
+be resent. Neither SMTP acceptance nor an HTTP response proves inbox receipt. See
 [NotificationAccessPolicy](notification-service/notification-service/src/main/java/com/featureflag/notification_service/service/NotificationAccessPolicy.java)
 and [notification services](notification-service/notification-service/src/main/java/com/featureflag/notification_service/service).
 
@@ -465,6 +472,33 @@ configuration, including Flag Service, to the same values used by Auth Service
 `JWT_PUBLIC_KEY_LOCATION` pointing to Auth's public key. Run configurations do not
 inherit another service's environment variables. Flag Service rejects unresolved
 JWT configuration placeholders at startup.
+
+Invitation email also requires the **same** `NOTIFICATION_INTERNAL_SERVICE_KEY`
+in both the Auth and Notification run configurations. This is distinct from
+`AUTH_RECIPIENTS_SERVICE_KEY`. Use a newly generated random secret, keep it out of
+Git, and restart both applications after changing their environments. Without
+this key Auth commits the invitation but skips the internal delivery request;
+the response now reports unconfirmed delivery instead of silently hiding it.
+
+Notification's local mail configuration defaults to Gmail SMTP on port 587 with
+SMTP authentication and STARTTLS enabled. Configure `NOTIFICATION_MAIL_USERNAME`
+and `NOTIFICATION_MAIL_PASSWORD` in Notification's JVM, or set `SPRING_MAIL_HOST`
+and `SPRING_MAIL_PORT` for another SMTP server. For Gmail, use a current App
+Password, never the account password or a credential exposed in repository
+history. Provider rejection still requires resolving the provider/configuration
+problem before using Resend. Do not enable mail/Feign body logging: invitation
+links are secrets. Notification history stores only redacted metadata.
+Auth waits up to 35 seconds for the internal invitation response by default
+(`NOTIFICATION_READ_TIMEOUT_MS`), allowing the default SMTP connection/read/write
+timeouts of 10 seconds each plus response overhead. These are per-operation
+timeouts, not a guaranteed total SMTP deadline. No automatic HTTP retry is used;
+an unconfirmed response may still be followed by SMTP acceptance.
+
+Local invitation links default to `http://localhost:5173/accept-invitation`.
+Override `APP_INVITATION_FRONTEND_BASE_URL` for another JVM/Vite origin; Compose
+uses `FRONTEND_BASE_URL` (normally `http://localhost:3000`). A localhost link is
+usable only on the machine running the frontend; invitations to another device
+need a reachable frontend origin. No raw token is returned to the inviting user.
 
 Start Eureka, then the service modules, then Gateway in separate terminals:
 

@@ -17,6 +17,27 @@ import {
 } from "../src/auth/authPolicy.ts";
 import { getApiErrorMessage, getApiProblem, getApiStatus } from "../src/api/errors.ts";
 import { collectAllPages } from "../src/types/page.ts";
+import { invitationDeliveryFeedback } from "../src/api/invitationDelivery.ts";
+
+test("invitation success requires an explicit delivery confirmation", () => {
+  const feedback = invitationDeliveryFeedback({ email: "invitee@example.test", emailDeliveryConfirmed: true }, "created");
+  assert.equal(feedback.warning, false);
+  assert.match(feedback.message, /sent successfully/);
+});
+
+test("committed invitation with unconfirmed delivery prompts safe resend", () => {
+  const feedback = invitationDeliveryFeedback({ email: "invitee@example.test", emailDeliveryConfirmed: false }, "created");
+  assert.equal(feedback.warning, true);
+  assert.match(feedback.message, /Invitation created/);
+  assert.match(feedback.message, /could not be confirmed/);
+  assert.match(feedback.message, /Resend/);
+});
+
+test("renewed invitation and missing delivery information never imply delivery", () => {
+  const feedback = invitationDeliveryFeedback({ email: "invitee@example.test" }, "renewed");
+  assert.equal(feedback.warning, true);
+  assert.match(feedback.message, /Invitation renewed/);
+});
 
 class MemoryStorage {
   #values = new Map();

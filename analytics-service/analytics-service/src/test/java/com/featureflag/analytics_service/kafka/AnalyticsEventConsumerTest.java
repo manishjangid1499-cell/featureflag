@@ -10,7 +10,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.kafka.annotation.KafkaListener;
 
+import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -29,6 +36,18 @@ class AnalyticsEventConsumerTest {
 
     @InjectMocks
     private AnalyticsEventConsumer consumer;
+
+    @Test
+    void subscribesOnlyToLifecycleTopic() {
+        Set<String> topics = new HashSet<>();
+        for (Method method : AnalyticsEventConsumer.class.getDeclaredMethods()) {
+            KafkaListener listener = method.getAnnotation(KafkaListener.class);
+            if (listener != null) {
+                topics.addAll(Arrays.asList(listener.topics()));
+            }
+        }
+        assertThat(topics).containsExactlyInAnyOrder("feature-flag-events");
+    }
 
     @Test
     void successfulEventUpdatesAnalyticsAndStoresMarker() {

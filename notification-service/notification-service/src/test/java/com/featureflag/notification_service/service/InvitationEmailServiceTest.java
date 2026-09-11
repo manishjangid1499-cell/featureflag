@@ -119,9 +119,15 @@ class InvitationEmailServiceTest {
 
         String renderedEmail = mailCaptor.getValue().getText();
 
+        assertArrayEquals(new String[]{"invitee@company.com"}, mailCaptor.getValue().getTo());
+        assertEquals(InvitationEmailService.SUBJECT, mailCaptor.getValue().getSubject());
+        assertTrue(mailCaptor.getValue().getSubject().length() <= 255);
         assertNotNull(renderedEmail);
         assertTrue(renderedEmail.contains(ACCEPTANCE_URL));
         assertTrue(renderedEmail.contains("DEVELOPER"));
+        assertTrue(renderedEmail.contains("Invitee"));
+        assertTrue(renderedEmail.contains("Owner"));
+        assertTrue(renderedEmail.contains("48 hours"));
         verify(mailSender, times(1)).send(any(SimpleMailMessage.class));
         verify(notificationRepository, times(2))
                 .save(any(Notification.class));

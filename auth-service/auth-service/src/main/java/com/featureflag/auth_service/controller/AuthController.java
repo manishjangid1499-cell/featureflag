@@ -2,11 +2,14 @@ package com.featureflag.auth_service.controller;
 
 import com.featureflag.auth_service.dto.AuthResponse;
 import com.featureflag.auth_service.dto.LoginRequest;
+import com.featureflag.auth_service.dto.ProfileResponse;
+import com.featureflag.auth_service.entity.User;
 import com.featureflag.auth_service.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 
@@ -31,8 +34,9 @@ public class AuthController {
     @Operation(summary = "Access protected profile")
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/profile")
-    public String profile() {
-        return "Welcome to Protected Profile";
+    public ProfileResponse profile(Authentication authentication) {
+        User user = (User) authentication.getPrincipal();
+        return new ProfileResponse(user.getName(), user.getEmail(), user.getRole());
     }
 
     @Operation(summary = "Get active notification recipients by role")

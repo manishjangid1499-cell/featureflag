@@ -55,6 +55,7 @@ function isAuthUser(value: unknown): value is AuthUser {
 
   const candidate = value as Partial<AuthUser>;
   return (
+    (candidate.name == null || typeof candidate.name === "string") &&
     typeof candidate.email === "string" &&
     candidate.email.trim().length > 0 &&
     typeof candidate.token === "string" &&
