@@ -30,8 +30,6 @@ app:
 
 security:
   jwt:
-    private-key-location: classpath:test-private-key.pem
-    public-key-location: classpath:test-public-key.pem
     issuer: feature-flag-auth-test
     audience: feature-flag-api-test
     access-token-ttl: 15m
