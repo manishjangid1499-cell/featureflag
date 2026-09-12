@@ -1,9 +1,15 @@
 package com.featureflag.flag_service.security;
 
 import com.featureflag.flag_service.config.OpenApiConfig;
+import com.featureflag.flag_service.config.TimeConfiguration;
 import com.featureflag.flag_service.controller.FlagController;
 import com.featureflag.flag_service.entity.FeatureFlag;
+import com.featureflag.flag_service.service.FlagEvaluationTelemetryService;
+import com.featureflag.flag_service.service.FlagMutationAuditService;
+import com.featureflag.flag_service.service.FlagQueryService;
 import com.featureflag.flag_service.service.FlagService;
+import com.featureflag.flag_service.service.SdkKeyAuthenticationService;
+import com.featureflag.flag_service.observability.FlagMetrics;
 import com.nimbusds.jose.JOSEObjectType;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -23,6 +29,7 @@ import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.data.domain.Page;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -40,6 +47,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -49,6 +57,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({
         SecurityConfig.class,
         OpenApiConfig.class,
+        TimeConfiguration.class,
         FlagJwtSecurityTest.TestJwtConfiguration.class,
         FlagJwtSecurityTest.HealthProbeController.class
 })
@@ -71,11 +80,31 @@ class FlagJwtSecurityTest {
     @MockitoBean
     private FlagService flagService;
 
+    @MockitoBean
+    private FlagEvaluationTelemetryService
+            flagEvaluationTelemetryService;
+
+    @MockitoBean
+    private FlagMutationAuditService flagMutationAuditService;
+
+    @MockitoBean
+    private FlagQueryService flagQueryService;
+
+    @MockitoBean
+    private SdkKeyAuthenticationService sdkKeyAuthenticationService;
+
+    @MockitoBean
+    private FlagMetrics flagMetrics;
+
     @BeforeEach
     void setUp() {
-        when(flagService.getAllFlags()).thenReturn(List.of());
-        when(flagService.toggleFlag(1L)).thenReturn(FeatureFlag.builder().id(1L).build());
-        when(flagService.deleteFlag(1L)).thenReturn("deleted");
+        when(flagQueryService.findAll(
+                org.mockito.ArgumentMatchers.any()
+        )).thenReturn(Page.empty());
+        when(flagMutationAuditService.toggleFlag(1L, EMAIL))
+                .thenReturn(FeatureFlag.builder().id(1L).build());
+        when(flagMutationAuditService.deleteFlag(1L, EMAIL))
+                .thenReturn("deleted");
     }
 
     @Test
@@ -168,6 +197,19 @@ class FlagJwtSecurityTest {
         assertEquals(1, authentication.getAuthorities().size());
         assertTrue(authentication.getAuthorities().stream()
                 .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN")));
+    }
+
+    @Test
+    void mutationPassesJwtSubjectToAuditWrapper() throws Exception {
+        String token = validTimingToken("ADMIN");
+
+        mockMvc.perform(
+                patch("/flags/1/toggle")
+                        .header("Authorization", "Bearer " + token)
+        ).andExpect(status().isOk());
+
+        verify(flagMutationAuditService)
+                .toggleFlag(1L, EMAIL);
     }
 
     @Test

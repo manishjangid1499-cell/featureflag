@@ -1,42 +1,27 @@
-import { useEffect, useState } from "react";
-import { useAuth } from "../context/AuthContext";
+import { useState } from "react";
+import { useAuth } from "../hooks/useAuth";
 import { getAllAnalytics, deleteAnalytics } from "../api/analyticsApi";
+import { getApiErrorMessage } from "../api/errors";
+import { PaginationControls } from "../components/PaginationControls";
 import type { AnalyticsEvent } from "../types/analytics";
+import { usePagedResource } from "../hooks/usePagedResource";
 
 export function Analytics() {
+  const { items: events, data: pageData, page, setPage,
+    loading, error, reload: loadAnalytics } = usePagedResource<AnalyticsEvent>(
+      getAllAnalytics, "Failed to connect to Analytics Service.",
+    );
   const { canDeleteFlags } = useAuth();
-  const [events, setEvents] = useState<AnalyticsEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-
-  const loadAnalytics = async () => {
-    try {
-      setLoading(true);
-      setError("");
-      const data = await getAllAnalytics();
-      setEvents(Array.isArray(data) ? data : []);
-    } catch (err: any) {
-      console.error("Failed to load analytics:", err);
-      const msg = err?.response?.data?.message || err?.message || "Failed to connect to Analytics Service.";
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadAnalytics();
-  }, []);
 
   const handleDelete = async (id: number) => {
     if (!window.confirm("Are you sure you want to delete this analytics record?")) return;
 
     try {
       await deleteAnalytics(id);
-      setEvents((prev) => prev.filter((e) => e.id !== id));
-    } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to delete analytics record.");
+      await loadAnalytics();
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, "Failed to delete analytics record."));
     }
   };
 
@@ -61,7 +46,7 @@ export function Analytics() {
 
         <button
           type="button"
-          onClick={loadAnalytics}
+          onClick={() => void loadAnalytics(page)}
           style={{
             padding: "9px 15px",
             border: "1px solid #d1d5db",
@@ -80,14 +65,14 @@ export function Analytics() {
       {/* SUMMARY BANNER */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px", marginBottom: "24px" }}>
         <div style={{ background: "white", borderRadius: "12px", padding: "20px", border: "1px solid #e5e7eb" }}>
-          <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: 600 }}>TRACKED FLAG KEYS</span>
+          <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: 600 }}>FLAG KEYS (THIS PAGE)</span>
           <div style={{ fontSize: "28px", fontWeight: 800, color: "#111827", marginTop: "4px" }}>
             {new Set(events.map((e) => e.flagKey)).size}
           </div>
         </div>
 
         <div style={{ background: "white", borderRadius: "12px", padding: "20px", border: "1px solid #e5e7eb" }}>
-          <span style={{ fontSize: "12px", color: "#4f46e5", fontWeight: 600 }}>TOTAL EVENT MUTATIONS</span>
+          <span style={{ fontSize: "12px", color: "#4f46e5", fontWeight: 600 }}>EVENT COUNT (THIS PAGE)</span>
           <div style={{ fontSize: "28px", fontWeight: 800, color: "#4f46e5", marginTop: "4px" }}>
             {totalEventCount}
           </div>
@@ -98,7 +83,7 @@ export function Analytics() {
       <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e5e7eb", padding: "14px 20px", marginBottom: "20px" }}>
         <input
           type="text"
-          placeholder="Filter by flag key or event type..."
+          placeholder="Filter this page by flag key or event type..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{ width: "100%", maxWidth: "400px", padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: "7px", fontSize: "13px" }}
@@ -177,6 +162,13 @@ export function Analytics() {
           </table>
         </div>
       )}
+      <PaginationControls
+        page={pageData.page}
+        totalPages={pageData.totalPages}
+        totalElements={pageData.totalElements}
+        disabled={loading}
+        onPageChange={setPage}
+      />
     </div>
   );
 }

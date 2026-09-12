@@ -1,4 +1,9 @@
 import axios from "axios";
+import { clearAuthSession, readAuthSession } from "../auth/authStorage";
+import {
+  shouldAttachAuthentication,
+  shouldInvalidateAuthentication,
+} from "../auth/authPolicy";
 
 const api = axios.create({
   baseURL: "",
@@ -9,16 +14,16 @@ const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
-    const storedUser = localStorage.getItem("authUser");
-    if (storedUser) {
-      try {
-        const user = JSON.parse(storedUser);
-        if (user && user.token) {
-          config.headers.Authorization = `Bearer ${user.token}`;
-        }
-      } catch (e) {
-        localStorage.removeItem("authUser");
-      }
+    const user = readAuthSession();
+    if (
+      user &&
+      shouldAttachAuthentication(
+        config.url,
+        config.baseURL,
+        window.location.origin,
+      )
+    ) {
+      config.headers.Authorization = `Bearer ${user.token}`;
     }
     return config;
   },
@@ -32,12 +37,11 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    if (error.response && error.response.status === 401) {
-      // Clear token and redirect to login if session has expired
-      localStorage.removeItem("authUser");
-      if (window.location.pathname !== "/login") {
-        window.location.href = "/login";
-      }
+    if (shouldInvalidateAuthentication(
+      error.response?.status,
+      Boolean(error.config?.headers?.Authorization),
+    )) {
+      clearAuthSession();
     }
     return Promise.reject(error);
   }

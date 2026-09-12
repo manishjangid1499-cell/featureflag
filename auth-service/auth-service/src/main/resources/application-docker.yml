@@ -10,9 +10,13 @@ spring:
     username: ${AUTH_DB_USERNAME}
     password: ${AUTH_DB_PASSWORD}
 
+  flyway:
+    enabled: true
+    baseline-on-migrate: false
+
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
 
 eureka:
@@ -27,7 +31,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:health,metrics,prometheus}
   endpoint:
     health:
       show-details: never
@@ -40,6 +44,12 @@ management:
         readiness:
           include: "readinessState,db"
 
+clients:
+  notification:
+    connect-timeout-ms: ${NOTIFICATION_CONNECT_TIMEOUT_MS:2000}
+    # Allow SMTP connection/read/write waits (10s each) plus response overhead.
+    read-timeout-ms: ${NOTIFICATION_READ_TIMEOUT_MS:35000}
+
 app:
   bootstrap:
     owner:
@@ -51,6 +61,11 @@ app:
     frontend-base-url: ${FRONTEND_BASE_URL}
 
 security:
+  login-rate-limit:
+    enabled: ${LOGIN_RATE_LIMIT_ENABLED:true}
+    max-failures: ${LOGIN_RATE_LIMIT_MAX_FAILURES:5}
+    window: ${LOGIN_RATE_LIMIT_WINDOW:PT5M}
+    max-entries: ${LOGIN_RATE_LIMIT_MAX_ENTRIES:10000}
   jwt:
     private-key-location: ${AUTH_JWT_PRIVATE_KEY_LOCATION}
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION}

@@ -7,7 +7,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-COPY index.html vite.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json ./
+COPY index.html nginx.conf vite.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json ./
+COPY scripts ./scripts
 COPY public ./public
 COPY src ./src
 
@@ -15,8 +16,13 @@ RUN npm run build
 
 FROM nginxinc/nginx-unprivileged:1.30.4-alpine-slim AS runtime
 
+USER root
+RUN apk add --no-cache wget
+
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder --chown=101:101 /app/dist /usr/share/nginx/html
+
+USER 101
 
 EXPOSE 8080
 

@@ -1,31 +1,15 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { getAllAuditLogs } from "../api/auditApi";
+import { PaginationControls } from "../components/PaginationControls";
 import type { AuditLog } from "../types/audit";
+import { usePagedResource } from "../hooks/usePagedResource";
 
 export function AuditLogs() {
-  const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { items: logs, data: pageData, page, setPage,
+    loading, error, reload: loadAuditLogs } = usePagedResource<AuditLog>(
+      getAllAuditLogs, "Failed to connect to Audit Service.",
+    );
   const [search, setSearch] = useState("");
-
-  const loadAuditLogs = async () => {
-    try {
-      setLoading(true);
-      setError("");
-      const data = await getAllAuditLogs();
-      setLogs(Array.isArray(data) ? data : []);
-    } catch (err: any) {
-      console.error("Failed to load audit logs:", err);
-      const msg = err?.response?.data?.message || err?.message || "Failed to connect to Audit Service.";
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadAuditLogs();
-  }, []);
 
   const filteredLogs = logs.filter((log) =>
     log.flagKey?.toLowerCase().includes(search.toLowerCase()) ||
@@ -46,7 +30,7 @@ export function AuditLogs() {
 
         <button
           type="button"
-          onClick={loadAuditLogs}
+          onClick={() => void loadAuditLogs(page)}
           style={{
             padding: "9px 15px",
             border: "1px solid #d1d5db",
@@ -65,7 +49,7 @@ export function AuditLogs() {
       <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e5e7eb", padding: "14px 20px", marginBottom: "20px" }}>
         <input
           type="text"
-          placeholder="Filter audit logs by flag key or event type..."
+          placeholder="Filter this page by flag key or event type..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{ width: "100%", maxWidth: "400px", padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: "7px", fontSize: "13px" }}
@@ -128,6 +112,13 @@ export function AuditLogs() {
           </table>
         </div>
       )}
+      <PaginationControls
+        page={pageData.page}
+        totalPages={pageData.totalPages}
+        totalElements={pageData.totalElements}
+        disabled={loading}
+        onPageChange={setPage}
+      />
     </div>
   );
 }

@@ -1,8 +1,11 @@
 package com.featureflag.audit_service.kafka;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.featureflag.audit_service.entity.AuditLog;
 import com.featureflag.audit_service.entity.ProcessedEvent;
 import com.featureflag.audit_service.event.FlagEvent;
+import com.featureflag.audit_service.observability.AuditMetrics;
 import com.featureflag.audit_service.repository.AuditLogRepository;
 import com.featureflag.audit_service.repository.ProcessedEventRepository;
 import lombok.RequiredArgsConstructor;
@@ -11,7 +14,12 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -21,9 +29,19 @@ public class AuditEventConsumer {
     private static final String TOPIC =
             "feature-flag-events";
 
+    private static final Set<String> LIFECYCLE_EVENT_TYPES =
+            Set.of(
+                    "FLAG_CREATED",
+                    "FLAG_UPDATED",
+                    "FLAG_TOGGLED",
+                    "FLAG_DELETED"
+            );
+
     private final AuditLogRepository auditLogRepository;
     private final ProcessedEventRepository
             processedEventRepository;
+    private final ObjectMapper objectMapper;
+    private final AuditMetrics auditMetrics;
 
     @KafkaListener(
             topics = TOPIC,
@@ -34,24 +52,31 @@ public class AuditEventConsumer {
         String eventId =
                 requireEventId(event.getEventId());
 
-        requireField(
+        String eventType = requireField(
                 event.getEventType(),
                 "eventType"
         );
-        requireField(
+        String flagKey = requireField(
                 event.getFlagKey(),
                 "flagKey"
         );
-        requireField(
+        String environment = requireField(
                 event.getEnvironment(),
                 "environment"
         );
-        requireField(
+        String timestamp = requireField(
                 event.getTimestamp(),
                 "timestamp"
         );
 
+        if (!LIFECYCLE_EVENT_TYPES.contains(eventType)) {
+            throw new IllegalArgumentException(
+                    "Unsupported audit eventType: " + eventType
+            );
+        }
+
         if (processedEventRepository.existsById(eventId)) {
+            auditMetrics.duplicateIgnored();
             log.info(
                     "Skipping duplicate audit event; eventId={}",
                     eventId
@@ -60,10 +85,16 @@ public class AuditEventConsumer {
         }
 
         AuditLog auditLog = AuditLog.builder()
-                .eventType(event.getEventType())
-                .flagKey(event.getFlagKey())
-                .environment(event.getEnvironment())
-                .timestamp(event.getTimestamp())
+                .eventId(eventId)
+                .eventType(eventType)
+                .flagKey(flagKey)
+                .environment(environment)
+                .timestamp(timestamp)
+                .sourceService(optional(event.getSourceService()))
+                .actor(optional(event.getActor()))
+                .beforeState(toJson(event.getBefore()))
+                .afterState(toJson(event.getAfter()))
+                .occurredAt(resolveOccurredAt(event, timestamp))
                 .build();
 
         auditLogRepository.save(auditLog);
@@ -72,17 +103,70 @@ public class AuditEventConsumer {
                 ProcessedEvent.builder()
                         .eventId(eventId)
                         .topic(TOPIC)
-                        .processedAt(LocalDateTime.now())
+                        .processedAt(Instant.now())
                         .build()
         );
+        auditMetrics.eventPersisted();
 
         log.info(
                 "Audit event persisted; eventId={} "
                         + "eventType={} flagKey={}",
                 eventId,
-                event.getEventType(),
+                eventType,
                 event.getFlagKey()
         );
+    }
+
+    private String toJson(Object snapshot) {
+        if (snapshot == null) {
+            return null;
+        }
+
+        try {
+            return objectMapper.writeValueAsString(snapshot);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalArgumentException(
+                    "Unable to serialize flag audit snapshot",
+                    exception
+            );
+        }
+    }
+
+    private Instant resolveOccurredAt(
+            FlagEvent event,
+            String timestamp
+    ) {
+        if (event.getOccurredAt() != null) {
+            return event.getOccurredAt().toInstant(ZoneOffset.UTC);
+        }
+
+        try {
+            return Instant.parse(timestamp);
+        } catch (DateTimeParseException instantFailure) {
+            try {
+                return OffsetDateTime.parse(timestamp)
+                        .toInstant();
+            } catch (DateTimeParseException offsetFailure) {
+                try {
+                    return LocalDateTime.parse(timestamp)
+                            .toInstant(ZoneOffset.UTC);
+                } catch (DateTimeParseException localFailure) {
+                    log.warn(
+                            "Audit event timestamp could not be converted; "
+                                    + "eventId={} errorType={}",
+                            event.getEventId(),
+                            localFailure.getClass().getSimpleName()
+                    );
+                    return null;
+                }
+            }
+        }
+    }
+
+    private String optional(String value) {
+        return value == null || value.isBlank()
+                ? null
+                : value.trim();
     }
 
     private String requireField(
@@ -96,7 +180,7 @@ public class AuditEventConsumer {
                             + " is required"
             );
         }
-        return value;
+        return value.trim();
     }
 
     private String requireEventId(String eventId) {

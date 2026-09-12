@@ -2,6 +2,8 @@ package com.featureflag.notification_service.service;
 
 import com.featureflag.notification_service.dto.InvitationEmailRequest;
 import com.featureflag.notification_service.entity.Notification;
+import com.featureflag.notification_service.exception.InvitationDeliveryException;
+import com.featureflag.notification_service.observability.NotificationMetrics;
 import com.featureflag.notification_service.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -9,7 +11,7 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import java.time.Clock;
 import java.util.Locale;
 
 @Service
@@ -29,6 +31,8 @@ public class InvitationEmailService {
 
     private final NotificationRepository notificationRepository;
     private final JavaMailSender mailSender;
+    private final Clock clock;
+    private final NotificationMetrics notificationMetrics;
 
     public Notification sendInvitationEmail(InvitationEmailRequest request) {
         String recipient = normalizeEmail(request.getRecipient());
@@ -41,7 +45,7 @@ public class InvitationEmailService {
                 .message(SAFE_HISTORY_MESSAGE)
                 .type("EMAIL")
                 .status("PENDING")
-                .createdAt(LocalDateTime.now())
+                .createdAt(clock.instant())
                 .build();
 
         notification = notificationRepository.save(notification);
@@ -57,14 +61,12 @@ public class InvitationEmailService {
             mailSender.send(mailMessage);
 
             notification.setStatus("SENT");
-            notification.setSentAt(LocalDateTime.now());
-
-            log.info(
-                    "Invitation email delivered; notificationId={}",
-                    notification.getId()
-            );
+            notification.setSentAt(clock.instant());
         } catch (Exception exception) {
+            notificationMetrics.deliveryFailed("invitation");
             notification.setStatus("FAILED");
+
+            notification = notificationRepository.save(notification);
 
             // Do not log recipient, rendered body, acceptance URL, or exception
             // message because those can contain sensitive delivery context.
@@ -73,9 +75,19 @@ public class InvitationEmailService {
                     notification.getId(),
                     exception.getClass().getSimpleName()
             );
+
+            throw new InvitationDeliveryException();
         }
 
-        return notificationRepository.save(notification);
+        notification = notificationRepository.save(notification);
+        notificationMetrics.deliverySucceeded("invitation");
+
+        log.info(
+                "Invitation email delivered; notificationId={}",
+                notification.getId()
+        );
+
+        return notification;
     }
 
     private String buildEmailBody(InvitationEmailRequest request) {

@@ -3,18 +3,18 @@ package com.featureflag.notification_service.kafka;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.featureflag.notification_service.dto.NotificationEvent;
-import com.featureflag.notification_service.dto.NotificationRequest;
-import com.featureflag.notification_service.entity.ProcessedEvent;
+import com.featureflag.notification_service.observability.NotificationMetrics;
 import com.featureflag.notification_service.repository.ProcessedEventRepository;
-import com.featureflag.notification_service.service.NotificationService;
+import com.featureflag.notification_service.service.NotificationIngestionService;
+import com.featureflag.notification_service.validation.NotificationTypePolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 
 @Component
 @RequiredArgsConstructor
@@ -24,16 +24,17 @@ public class NotificationKafkaConsumer {
     private static final String TOPIC =
             "notification-events";
 
-    private final NotificationService notificationService;
+    private final NotificationIngestionService
+            notificationIngestionService;
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository
             processedEventRepository;
+    private final NotificationMetrics notificationMetrics;
 
     @KafkaListener(
             topics = TOPIC,
             groupId = "notification-service-group"
     )
-    @Transactional
     public void consumeNotificationEvent(String message)
             throws JsonProcessingException {
 
@@ -47,6 +48,7 @@ public class NotificationKafkaConsumer {
                 requireEventId(event.getEventId());
 
         if (processedEventRepository.existsById(eventId)) {
+            notificationMetrics.duplicateIgnored();
             log.info(
                     "Skipping duplicate notification event; "
                             + "eventId={}",
@@ -55,6 +57,12 @@ public class NotificationKafkaConsumer {
             return;
         }
 
+        event.setType(
+                NotificationTypePolicy.resolveKafkaType(
+                        event.getType()
+                )
+        );
+
         log.info(
                 "Received notification event; eventId={}",
                 eventId
@@ -62,48 +70,44 @@ public class NotificationKafkaConsumer {
 
         if (event.getRecipient() != null
                 && !event.getRecipient().isBlank()) {
-
-            NotificationRequest request =
-                    new NotificationRequest();
-
-            request.setRecipient(event.getRecipient());
-            request.setCreatorEmail(
-                    event.getCreatorEmail()
-            );
-            request.setSubject(event.getSubject());
-            request.setMessage(event.getMessage());
-            request.setType(
-                    event.getType() != null
-                            ? event.getType()
-                            : "EMAIL"
-            );
-
-            notificationService.createNotification(
-                    request
-            );
+            notificationIngestionService
+                    .ingestDirectNotificationEvent(
+                            eventId,
+                            event
+                    );
         } else {
-            notificationService.sendToRoleRecipients(
-                    event.getSubject(),
-                    event.getMessage(),
-                    event.getType() != null
-                            ? event.getType()
-                            : "EMAIL",
-                    List.of("OWNER", "ADMIN")
+            List<String> recipients = requireRecipients(event);
+
+            notificationIngestionService
+                    .ingestRoleNotificationEvent(
+                            eventId,
+                            event,
+                            recipients
+                    );
+        }
+
+        log.info(
+                "Notification event ingestion completed; "
+                        + "eventId={}",
+                eventId
+        );
+        notificationMetrics.eventIngested();
+    }
+
+    private List<String> requireRecipients(NotificationEvent event) {
+        if (event.getRecipients() == null) {
+            throw new IllegalArgumentException(
+                    "Kafka notification recipients are required"
             );
         }
 
-        processedEventRepository.save(
-                ProcessedEvent.builder()
-                        .eventId(eventId)
-                        .topic(TOPIC)
-                        .processedAt(LocalDateTime.now())
-                        .build()
-        );
-
-        log.info(
-                "Notification event processed; eventId={}",
-                eventId
-        );
+        return event.getRecipients().stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(recipient -> !recipient.isBlank())
+                .map(recipient -> recipient.toLowerCase(Locale.ROOT))
+                .distinct()
+                .toList();
     }
 
     private String requireEventId(String eventId) {

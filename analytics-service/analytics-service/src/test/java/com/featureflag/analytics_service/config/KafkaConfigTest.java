@@ -2,6 +2,7 @@ package com.featureflag.analytics_service.config;
 
 import com.featureflag.analytics_service.event.FlagEvent;
 import com.featureflag.analytics_service.kafka.AnalyticsEventConsumer;
+import com.featureflag.analytics_service.observability.KafkaFailureVisibility;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -173,13 +174,91 @@ class KafkaConfigTest {
     }
 
     @Test
+    void evaluationTelemetryContractDeserializesWithConfiguredFactory() {
+        KafkaProperties properties = kafkaProperties();
+
+        DefaultKafkaConsumerFactory<String, FlagEvent> factory =
+                (DefaultKafkaConsumerFactory<String, FlagEvent>)
+                        new KafkaConfig(properties).consumerFactory();
+        Map<String, Object> configuration =
+                factory.getConfigurationProperties();
+        ErrorHandlingDeserializer<FlagEvent> deserializer =
+                (ErrorHandlingDeserializer<FlagEvent>)
+                        factory.getValueDeserializer();
+        deserializer.configure(configuration, false);
+
+        FlagEvent event = deserializer.deserialize(
+                "feature-flag-evaluations",
+                new RecordHeaders(),
+                """
+                {
+                  "eventId":"evaluation-1",
+                  "eventType":"EVALUATION_ENABLED",
+                  "flagKey":"checkout",
+                  "environment":"DEV",
+                  "timestamp":"2026-08-27T12:00:00Z"
+                }
+                """.getBytes(StandardCharsets.UTF_8)
+        );
+
+        assertThat(event).isNotNull();
+        assertThat(event.getEventId()).isEqualTo("evaluation-1");
+        assertThat(event.getEventType())
+                .isEqualTo(FlagEvent.EVALUATION_ENABLED);
+        assertThat(event.getFlagKey()).isEqualTo("checkout");
+        assertThat(event.getEnvironment()).isEqualTo("DEV");
+        assertThat(event.getTimestamp())
+                .isEqualTo("2026-08-27T12:00:00Z");
+    }
+
+    @Test
+    void enrichedLifecycleFieldsRemainBackwardCompatible() {
+        KafkaProperties properties = kafkaProperties();
+        DefaultKafkaConsumerFactory<String, FlagEvent> factory =
+                (DefaultKafkaConsumerFactory<String, FlagEvent>)
+                        new KafkaConfig(properties).consumerFactory();
+        Map<String, Object> configuration =
+                factory.getConfigurationProperties();
+        ErrorHandlingDeserializer<FlagEvent> deserializer =
+                (ErrorHandlingDeserializer<FlagEvent>)
+                        factory.getValueDeserializer();
+        deserializer.configure(configuration, false);
+
+        FlagEvent event = deserializer.deserialize(
+                "feature-flag-events",
+                new RecordHeaders(),
+                """
+                {
+                  "eventId":"audit-event-1",
+                  "eventType":"FLAG_UPDATED",
+                  "flagKey":"checkout",
+                  "environment":"DEV",
+                  "timestamp":"2026-08-27T12:00:00",
+                  "sourceService":"flag-service",
+                  "actor":"actor-123",
+                  "before":{"enabled":false},
+                  "after":{"enabled":true},
+                  "occurredAt":"2026-08-27T12:00:00"
+                }
+                """.getBytes(StandardCharsets.UTF_8)
+        );
+
+        assertThat(event).isNotNull();
+        assertThat(event.getEventId()).isEqualTo("audit-event-1");
+        assertThat(event.getEventType()).isEqualTo("FLAG_UPDATED");
+        assertThat(event.getFlagKey()).isEqualTo("checkout");
+        assertThat(event.getEnvironment()).isEqualTo("DEV");
+    }
+
+    @Test
     void listenerFactoryUsesRecordAckAndDefaultErrorHandler() {
         KafkaConfig config =
                 new KafkaConfig(kafkaProperties());
 
         DefaultErrorHandler errorHandler =
                 config.kafkaErrorHandler(
-                        mock(KafkaTemplate.class)
+                        mock(KafkaTemplate.class),
+                        mock(KafkaFailureVisibility.class)
                 );
 
         ConcurrentKafkaListenerContainerFactory<String, FlagEvent>

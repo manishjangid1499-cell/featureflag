@@ -115,7 +115,7 @@ public class JwtSecurityConfig {
     }
 
     private static String required(String value, String setting) {
-        if (value == null || value.isBlank()) {
+        if (value == null || value.isBlank() || value.contains("${")) {
             throw new IllegalStateException(setting + " must be configured");
         }
         return value.trim();

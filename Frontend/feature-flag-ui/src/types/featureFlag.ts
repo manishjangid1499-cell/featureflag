@@ -1,9 +1,10 @@
 export interface FeatureFlag {
   id: number
+  version: number
   name: string
   flagKey: string
   enabled: boolean
-  description: string
+  description: string | null
   environment: string
   rolloutPercentage: number
   startDate: string | null
@@ -11,17 +12,8 @@ export interface FeatureFlag {
   targetUsers: string[]
 }
 
-export interface FlagRequest {
-  name: string
-  flagKey: string
-  enabled: boolean
-  description: string
-  environment: string
-  rolloutPercentage: number
-  startDate: string | null
-  endDate: string | null
-  targetUsers: string[]
-}
+export type FlagRequest = Omit<FeatureFlag, "id" | "version">;
+export type FlagUpdateRequest = FlagRequest & { expectedVersion: number };
 
 export interface FlagEvaluationResponse {
   flagKey: string

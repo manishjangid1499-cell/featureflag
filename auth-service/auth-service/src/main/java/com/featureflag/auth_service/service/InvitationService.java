@@ -6,21 +6,28 @@ import com.featureflag.auth_service.entity.InvitationStatus;
 import com.featureflag.auth_service.entity.Role;
 import com.featureflag.auth_service.entity.User;
 import com.featureflag.auth_service.exception.ForbiddenException;
+import com.featureflag.auth_service.exception.InvalidOperationException;
+import com.featureflag.auth_service.exception.InvitationConflictException;
+import com.featureflag.auth_service.exception.ResourceNotFoundException;
 import com.featureflag.auth_service.repository.InvitationRepository;
 import com.featureflag.auth_service.repository.UserRepository;
 import com.featureflag.auth_service.util.EmailNormalizer;
+import com.featureflag.auth_service.validation.BcryptPasswordValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 
@@ -36,6 +43,7 @@ public class InvitationService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final InvitationNotificationDispatcher invitationNotificationDispatcher;
+    private final Clock clock;
 
     @Value("${app.invitation.expiration-hours:48}")
     private int expirationHours;
@@ -53,13 +61,19 @@ public class InvitationService {
 
         String email = EmailNormalizer.normalize(request.getEmail());
 
-        if (userRepository.findByEmail(email).isPresent()) {
-            throw new RuntimeException("User already exists with email: " + email);
-        }
-
         // Invalidate previous pending invitations for this email.
         List<Invitation> pendingInvitations =
-                invitationRepository.findByEmailAndStatus(email, InvitationStatus.PENDING);
+                invitationRepository.findByEmailAndStatusForUpdate(
+                        email,
+                        InvitationStatus.PENDING
+                );
+
+        if (userRepository.findByEmail(email).isPresent()) {
+            throw new InvitationConflictException(
+                    "A user already exists for this invitation"
+            );
+        }
+
         for (Invitation previous : pendingInvitations) {
             previous.setStatus(InvitationStatus.REVOKED);
             invitationRepository.save(previous);
@@ -67,7 +81,8 @@ public class InvitationService {
 
         String rawToken = generateSecureToken();
         String tokenHash = hashToken(rawToken);
-        LocalDateTime expiresAt = LocalDateTime.now().plusHours(expirationHours);
+        Instant now = clock.instant();
+        Instant expiresAt = now.plusSeconds(expirationHours * 3600L);
 
         String inviterName =
                 currentUser.getName() != null && !currentUser.getName().isBlank()
@@ -89,7 +104,7 @@ public class InvitationService {
                 .tokenHash(tokenHash)
                 .expiresAt(expiresAt)
                 .status(InvitationStatus.PENDING)
-                .createdAt(LocalDateTime.now())
+                .createdAt(now)
                 .build();
 
         Invitation saved = invitationRepository.save(invitation);
@@ -113,37 +128,45 @@ public class InvitationService {
                         .acceptanceUrl(acceptanceUrl)
                         .build();
 
-        invitationNotificationDispatcher.dispatchAfterCommit(notificationRequest);
-
-        return toResponse(saved);
+        InvitationResponse response = toResponse(saved);
+        // Spring invokes afterCommit before returning this response to the controller.
+        invitationNotificationDispatcher.dispatchAfterCommit(
+                notificationRequest, response::setEmailDeliveryConfirmed);
+        return response;
     }
 
-    public List<InvitationResponse> getAllInvitations() {
-        List<Invitation> list = invitationRepository.findAllByOrderByCreatedAtDesc();
-        LocalDateTime now = LocalDateTime.now();
-
-        // Auto-mark expired invitations.
-        for (Invitation invitation : list) {
+    @Transactional
+    public Page<InvitationResponse> getAllInvitations(
+            Pageable pageable
+    ) {
+        Page<Invitation> invitations =
+                invitationRepository.findAllByOrderByCreatedAtDescIdDesc(
+                        pageable
+                );
+        Instant now = clock.instant();
+        invitations.getContent().forEach(invitation -> {
             if (invitation.getStatus() == InvitationStatus.PENDING
                     && now.isAfter(invitation.getExpiresAt())) {
                 invitation.setStatus(InvitationStatus.EXPIRED);
-                invitationRepository.save(invitation);
             }
-        }
-
-        return list.stream().map(this::toResponse).toList();
+        });
+        return invitations.map(this::toResponse);
     }
 
     @Transactional
     public InvitationResponse resendInvitation(Long id, User currentUser) {
-        Invitation invitation = invitationRepository.findById(id)
+        Invitation invitation = invitationRepository.findByIdForUpdate(id)
                 .orElseThrow(() ->
-                        new RuntimeException("Invitation not found with id: " + id));
+                        new ResourceNotFoundException("Invitation not found with id: " + id));
 
         validateInvitePermission(currentUser.getRole(), invitation.getInvitedRole());
 
         if (invitation.getStatus() == InvitationStatus.ACCEPTED) {
-            throw new RuntimeException("This invitation has already been accepted.");
+            throw new InvalidOperationException("This invitation has already been accepted.");
+        }
+
+        if (invitation.getStatus() == InvitationStatus.REVOKED) {
+            throw new InvalidOperationException("This invitation has been revoked. Create a new invitation instead.");
         }
 
         invitation.setStatus(InvitationStatus.REVOKED);
@@ -160,14 +183,14 @@ public class InvitationService {
 
     @Transactional
     public String revokeInvitation(Long id, User currentUser) {
-        Invitation invitation = invitationRepository.findById(id)
+        Invitation invitation = invitationRepository.findByIdForUpdate(id)
                 .orElseThrow(() ->
-                        new RuntimeException("Invitation not found with id: " + id));
+                        new ResourceNotFoundException("Invitation not found with id: " + id));
 
         validateInvitePermission(currentUser.getRole(), invitation.getInvitedRole());
 
         if (invitation.getStatus() == InvitationStatus.ACCEPTED) {
-            throw new RuntimeException("Cannot revoke an already accepted invitation.");
+            throw new InvalidOperationException("Cannot revoke an already accepted invitation.");
         }
 
         invitation.setStatus(InvitationStatus.REVOKED);
@@ -208,7 +231,7 @@ public class InvitationService {
                     .build();
         }
 
-        if (LocalDateTime.now().isAfter(invitation.getExpiresAt())
+        if (clock.instant().isAfter(invitation.getExpiresAt())
                 || invitation.getStatus() == InvitationStatus.EXPIRED) {
             invitation.setStatus(InvitationStatus.EXPIRED);
             invitationRepository.save(invitation);
@@ -230,55 +253,58 @@ public class InvitationService {
     @Transactional
     public String acceptInvitation(AcceptInvitationRequest request) {
         if (!request.getPassword().equals(request.getConfirmPassword())) {
-            throw new RuntimeException("Password and confirm password do not match.");
+            throw new InvalidOperationException("Password and confirm password do not match.");
         }
 
         if (request.getPassword().length() < 8) {
-            throw new RuntimeException("Password must be at least 8 characters long.");
+            throw new InvalidOperationException("Password must be at least 8 characters long.");
+        }
+
+        if (!BcryptPasswordValidator.withinByteLimit(request.getPassword())) {
+            throw new InvalidOperationException("Password must not exceed 72 UTF-8 bytes.");
         }
 
         String tokenHash = hashToken(request.getToken().trim());
-        Invitation invitation = invitationRepository.findByTokenHash(tokenHash)
+        Invitation invitation = invitationRepository.findByTokenHashForUpdate(tokenHash)
                 .orElseThrow(() ->
-                        new RuntimeException("Invalid or non-existent invitation token."));
+                        new InvalidOperationException("Invalid or non-existent invitation token."));
 
         if (invitation.getStatus() == InvitationStatus.ACCEPTED) {
-            throw new RuntimeException("This invitation has already been accepted.");
+            throw new InvitationConflictException(
+                    "This invitation has already been accepted."
+            );
         }
 
         if (invitation.getStatus() == InvitationStatus.REVOKED) {
-            throw new RuntimeException("This invitation has been revoked.");
+            throw new InvalidOperationException("This invitation has been revoked.");
         }
 
-        if (LocalDateTime.now().isAfter(invitation.getExpiresAt())
+        if (clock.instant().isAfter(invitation.getExpiresAt())
                 || invitation.getStatus() == InvitationStatus.EXPIRED) {
-            invitation.setStatus(InvitationStatus.EXPIRED);
-            invitationRepository.save(invitation);
-            throw new RuntimeException(
+            throw new InvalidOperationException(
                     "This invitation has expired. Please request a new invitation."
             );
         }
 
         String email = EmailNormalizer.normalize(invitation.getEmail());
 
-        User user = userRepository.findByEmail(email).orElse(null);
-        if (user == null) {
-            user = User.builder()
-                    .name(invitation.getFullName())
-                    .email(email)
-                    .password(passwordEncoder.encode(request.getPassword()))
-                    .role(invitation.getInvitedRole())
-                    .build();
-        } else {
-            user.setName(invitation.getFullName());
-            user.setPassword(passwordEncoder.encode(request.getPassword()));
-            user.setRole(invitation.getInvitedRole());
+        if (userRepository.findByEmail(email).isPresent()) {
+            throw new InvitationConflictException(
+                    "Invitation can no longer be accepted."
+            );
         }
+
+        User user = User.builder()
+                .name(invitation.getFullName())
+                .email(email)
+                .password(passwordEncoder.encode(request.getPassword()))
+                .role(invitation.getInvitedRole())
+                .build();
 
         userRepository.save(user);
 
         invitation.setStatus(InvitationStatus.ACCEPTED);
-        invitation.setAcceptedAt(LocalDateTime.now());
+        invitation.setAcceptedAt(clock.instant());
         invitationRepository.save(invitation);
 
         log.info("Invitation accepted and user activated successfully");

@@ -1,28 +1,43 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { useAuth } from "../context/AuthContext";
+import { useState, type FormEvent } from "react";
+import { useAuth } from "../hooks/useAuth";
 import {
   getAllMembers,
   updateMemberRole,
+  updateMemberStatus,
   deleteMember,
   inviteMember,
   getAllInvitations,
   resendInvitation,
   revokeInvitation,
 } from "../api/memberApi";
+import { getApiErrorMessage } from "../api/errors";
+import { invitationDeliveryFeedback } from "../api/invitationDelivery";
+import { PaginationControls } from "../components/PaginationControls";
 import type {
   MemberResponse,
   InvitationResponse,
   InviteMemberRequest,
   UserRole,
 } from "../types/auth";
+import { usePagedResource } from "../hooks/usePagedResource";
 
 export function Members() {
   const { user, isOwner } = useAuth();
-  const [members, setMembers] = useState<MemberResponse[]>([]);
-  const [invitations, setInvitations] = useState<InvitationResponse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { items: members, setItems: setMembers, data: memberPageData,
+    setPage: setMemberPage, loading: membersLoading,
+    error: membersError, reload: reloadMembers } = usePagedResource<MemberResponse>(
+      getAllMembers, "Failed to load members.",
+    );
+  const { items: invitations, setItems: setInvitations, data: invitationPageData,
+    setPage: setInvitationPage, loading: invitationsLoading,
+    error: invitationsError, reload: reloadInvitations } = usePagedResource<InvitationResponse>(
+      getAllInvitations, "Failed to load invitations.",
+    );
+  const loading = membersLoading || invitationsLoading;
+  const error = membersError || invitationsError;
   const [successMessage, setSuccessMessage] = useState("");
+  const [deliveryWarning, setDeliveryWarning] = useState("");
+  const [resendingId, setResendingId] = useState<number | null>(null);
 
   // Modal
   const [isInviteOpen, setIsInviteOpen] = useState(false);
@@ -33,35 +48,14 @@ export function Members() {
   const [formError, setFormError] = useState("");
 
   const loadData = async () => {
-    try {
-      setLoading(true);
-      setError("");
-      const [membersData, invitationsData] = await Promise.all([
-        getAllMembers(),
-        getAllInvitations().catch(() => [] as InvitationResponse[]),
-      ]);
-      setMembers(Array.isArray(membersData) ? membersData : []);
-      setInvitations(Array.isArray(invitationsData) ? invitationsData : []);
-    } catch (err: any) {
-      console.error("Failed to load members or invitations:", err);
-      const msg =
-        err?.response?.data?.message ||
-        err?.message ||
-        "Failed to load organization data.";
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
+    await Promise.all([reloadMembers(), reloadInvitations()]);
   };
-
-  useEffect(() => {
-    loadData();
-  }, []);
 
   const handleInvite = async (e: FormEvent) => {
     e.preventDefault();
     setFormError("");
     setSuccessMessage("");
+    setDeliveryWarning("");
 
     if (!email.trim()) {
       setFormError("Email address is required.");
@@ -76,32 +70,40 @@ export function Members() {
         role,
       };
       const created = await inviteMember(payload);
-      setInvitations((prev) => [created, ...prev.filter((i) => i.id !== created.id)]);
+      await reloadInvitations(0);
       setIsInviteOpen(false);
       setName("");
       setEmail("");
       setRole("DEVELOPER");
-      setSuccessMessage(`Invitation successfully sent to ${created.email}.`);
+      const feedback = invitationDeliveryFeedback(created, "created");
+      setDeliveryWarning(feedback.warning ? feedback.message : "");
+      setSuccessMessage(feedback.warning ? "" : feedback.message);
       setTimeout(() => setSuccessMessage(""), 6000);
-    } catch (err: any) {
-      console.error("Invite member error:", err);
-      setFormError(
-        err?.response?.data?.message ||
-          "Failed to send invitation. Please verify permissions."
-      );
+    } catch (error: unknown) {
+      setFormError(getApiErrorMessage(
+        error,
+        "Failed to send invitation. Please verify permissions.",
+      ));
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleResend = async (invitationId: number, memberEmail: string) => {
+  const handleResend = async (invitationId: number) => {
+    setSuccessMessage("");
+    setDeliveryWarning("");
+    setResendingId(invitationId);
     try {
-      const resent = await resendInvitation(invitationId);
-      setInvitations((prev) => [resent, ...prev.filter((i) => i.id !== invitationId)]);
-      setSuccessMessage(`New invitation email sent to ${memberEmail}.`);
+      const renewed = await resendInvitation(invitationId);
+      await reloadInvitations();
+      const feedback = invitationDeliveryFeedback(renewed, "renewed");
+      setDeliveryWarning(feedback.warning ? feedback.message : "");
+      setSuccessMessage(feedback.warning ? "" : feedback.message);
       setTimeout(() => setSuccessMessage(""), 5000);
-    } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to resend invitation.");
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, "Failed to resend invitation."));
+    } finally {
+      setResendingId(null);
     }
   };
 
@@ -114,8 +116,8 @@ export function Members() {
       );
       setSuccessMessage(`Invitation for ${memberEmail} has been revoked.`);
       setTimeout(() => setSuccessMessage(""), 5000);
-    } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to revoke invitation.");
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, "Failed to revoke invitation."));
     }
   };
 
@@ -125,8 +127,32 @@ export function Members() {
       setMembers((prev) => prev.map((m) => (m.id === memberId ? updated : m)));
       setSuccessMessage(`Role updated for ${updated.email}.`);
       setTimeout(() => setSuccessMessage(""), 4000);
-    } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to update member role.");
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, "Failed to update member role."));
+    }
+  };
+
+  const handleStatusChange = async (
+    memberId: number,
+    memberEmail: string,
+    enabled: boolean,
+  ) => {
+    const action = enabled ? "enable" : "disable";
+    if (!window.confirm(`${action[0].toUpperCase()}${action.slice(1)} ${memberEmail}?`)) {
+      return;
+    }
+
+    try {
+      const updated = await updateMemberStatus(memberId, enabled);
+      setMembers((previous) =>
+        previous.map((member) => (member.id === memberId ? updated : member)),
+      );
+      setSuccessMessage(
+        `${updated.email} is now ${updated.enabled ? "enabled" : "disabled"}.`,
+      );
+      setTimeout(() => setSuccessMessage(""), 4000);
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, `Failed to ${action} member.`));
     }
   };
 
@@ -140,11 +166,11 @@ export function Members() {
 
     try {
       await deleteMember(memberId);
-      setMembers((prev) => prev.filter((m) => m.id !== memberId));
+      await reloadMembers();
       setSuccessMessage(`Member ${memberEmail} removed from platform.`);
       setTimeout(() => setSuccessMessage(""), 4000);
-    } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to remove member.");
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, "Failed to remove member."));
     }
   };
 
@@ -184,7 +210,7 @@ export function Members() {
         <div style={{ display: "flex", gap: "10px" }}>
           <button
             type="button"
-            onClick={loadData}
+            onClick={() => void loadData()}
             style={{
               padding: "9px 15px",
               border: "1px solid #d1d5db",
@@ -222,6 +248,13 @@ export function Members() {
         </div>
       </div>
 
+      {deliveryWarning && (
+        <div role="alert" style={{ background: "#fffbeb", border: "1px solid #fcd34d",
+          borderRadius: "10px", padding: "12px 18px", color: "#92400e", marginBottom: "20px" }}>
+          {deliveryWarning}
+        </div>
+      )}
+
       {successMessage && (
         <div
           style={{
@@ -258,7 +291,7 @@ export function Members() {
       <div style={{ marginBottom: "36px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
           <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#1e293b" }}>
-            Active Platform Members ({members.length})
+            Platform Members ({memberPageData.totalElements})
           </h2>
         </div>
 
@@ -351,6 +384,10 @@ export function Members() {
                 {members.map((m) => {
                   const isSelf = m.email === user?.email;
                   const isTargetOwner = m.role === "OWNER";
+                  const canModifyTarget =
+                    !isSelf &&
+                    !isTargetOwner &&
+                    (isOwner || m.role === "DEVELOPER" || m.role === "VIEWER");
 
                   return (
                     <tr key={m.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
@@ -377,6 +414,20 @@ export function Members() {
                           }}
                         >
                           {m.email}
+                        </div>
+                        <div
+                          style={{
+                            display: "inline-block",
+                            marginTop: "6px",
+                            padding: "2px 8px",
+                            borderRadius: "12px",
+                            fontSize: "10px",
+                            fontWeight: 700,
+                            background: m.enabled ? "#dcfce7" : "#fee2e2",
+                            color: m.enabled ? "#15803d" : "#b91c1c",
+                          }}
+                        >
+                          {m.enabled ? "ENABLED" : "DISABLED"}
                         </div>
                       </td>
 
@@ -426,7 +477,7 @@ export function Members() {
                       </td>
 
                       <td style={{ padding: "16px 20px", textAlign: "right" }}>
-                        {!isSelf && !isTargetOwner && (
+                        {canModifyTarget && (
                           <div
                             style={{
                               display: "inline-flex",
@@ -454,6 +505,24 @@ export function Members() {
 
                             <button
                               type="button"
+                              onClick={() =>
+                                handleStatusChange(m.id, m.email, !m.enabled)
+                              }
+                              style={{
+                                padding: "5px 10px",
+                                border: "1px solid #d1d5db",
+                                background: "white",
+                                color: "#374151",
+                                borderRadius: "6px",
+                                fontSize: "12px",
+                                cursor: "pointer",
+                              }}
+                            >
+                              {m.enabled ? "Disable" : "Enable"}
+                            </button>
+
+                            <button
+                              type="button"
                               onClick={() => handleDelete(m.id, m.email)}
                               style={{
                                 padding: "5px 10px",
@@ -477,13 +546,20 @@ export function Members() {
             </table>
           </div>
         )}
+        <PaginationControls
+          page={memberPageData.page}
+          totalPages={memberPageData.totalPages}
+          totalElements={memberPageData.totalElements}
+          disabled={loading}
+          onPageChange={setMemberPage}
+        />
       </div>
 
       {/* INVITATIONS SECTION */}
       <div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
           <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#1e293b" }}>
-            Member Invitations ({invitations.length})
+            Member Invitations ({invitationPageData.totalElements})
           </h2>
         </div>
 
@@ -685,7 +761,8 @@ export function Members() {
                           >
                             <button
                               type="button"
-                              onClick={() => handleResend(inv.id, inv.email)}
+                              onClick={() => handleResend(inv.id)}
+                              disabled={resendingId !== null}
                               style={{
                                 padding: "4px 9px",
                                 border: "1px solid #d1d5db",
@@ -697,7 +774,7 @@ export function Members() {
                                 cursor: "pointer",
                               }}
                             >
-                              Resend
+                              {resendingId === inv.id ? "Sending..." : "Resend"}
                             </button>
 
                             <button
@@ -726,6 +803,13 @@ export function Members() {
             </table>
           </div>
         )}
+        <PaginationControls
+          page={invitationPageData.page}
+          totalPages={invitationPageData.totalPages}
+          totalElements={invitationPageData.totalElements}
+          disabled={loading}
+          onPageChange={setInvitationPage}
+        />
       </div>
 
       {/* INVITE MEMBER MODAL */}

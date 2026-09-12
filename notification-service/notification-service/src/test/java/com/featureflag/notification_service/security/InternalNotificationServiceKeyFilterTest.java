@@ -1,5 +1,7 @@
 package com.featureflag.notification_service.security;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.featureflag.notification_service.exception.ApiProblemDetails;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -7,6 +9,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.time.Clock;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -24,7 +27,8 @@ class InternalNotificationServiceKeyFilterTest {
     void missingServiceKeyIsRejected() throws Exception {
         InternalNotificationServiceKeyFilter filter =
                 new InternalNotificationServiceKeyFilter(
-                        EXPECTED_KEY
+                        EXPECTED_KEY,
+                        problems()
                 );
 
         MockHttpServletRequest request = internalRequest();
@@ -48,7 +52,8 @@ class InternalNotificationServiceKeyFilterTest {
     void wrongServiceKeyIsRejected() throws Exception {
         InternalNotificationServiceKeyFilter filter =
                 new InternalNotificationServiceKeyFilter(
-                        EXPECTED_KEY
+                        EXPECTED_KEY,
+                        problems()
                 );
 
         MockHttpServletRequest request = internalRequest();
@@ -78,7 +83,8 @@ class InternalNotificationServiceKeyFilterTest {
 
         InternalNotificationServiceKeyFilter filter =
                 new InternalNotificationServiceKeyFilter(
-                        EXPECTED_KEY
+                        EXPECTED_KEY,
+                        problems()
                 );
 
         MockHttpServletRequest request = internalRequest();
@@ -122,7 +128,8 @@ class InternalNotificationServiceKeyFilterTest {
     void unrelatedPathsAreNotIntercepted() throws Exception {
         InternalNotificationServiceKeyFilter filter =
                 new InternalNotificationServiceKeyFilter(
-                        EXPECTED_KEY
+                        EXPECTED_KEY,
+                        problems()
                 );
 
         MockHttpServletRequest request =
@@ -156,5 +163,9 @@ class InternalNotificationServiceKeyFilterTest {
                 InternalNotificationServiceKeyFilter.INVITATION_PATH
         );
         return request;
+    }
+
+    private ApiProblemDetails problems() {
+        return new ApiProblemDetails(new ObjectMapper(), Clock.systemUTC());
     }
 }

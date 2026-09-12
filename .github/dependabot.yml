@@ -1,0 +1,49 @@
+version: 2
+updates:
+  - package-ecosystem: maven
+    directories:
+      - /auth-service/auth-service
+      - /flag-service/flag-service
+      - /audit-service/audit-service
+      - /analytics-service/analytics-service
+      - /notification-service/notification-service
+      - /api-gateway/api-gateway
+      - /eureka-server/eureka-server
+      - /sdk/java-sdk
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 2
+    groups:
+      java-maintenance:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "org.springframework.boot:*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "org.springframework.cloud:*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+
+  - package-ecosystem: npm
+    directory: /Frontend/feature-flag-ui
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 1
+    groups:
+      frontend-maintenance:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 1
+    groups:
+      actions-maintenance:
+        patterns: ["*"]

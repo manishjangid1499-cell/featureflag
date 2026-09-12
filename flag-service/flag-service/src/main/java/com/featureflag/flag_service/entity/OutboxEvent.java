@@ -11,7 +11,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(
@@ -24,6 +24,10 @@ import java.time.LocalDateTime;
                 @Index(
                         name = "idx_outbox_created_at",
                         columnList = "created_at"
+                ),
+                @Index(
+                        name = "idx_outbox_status_published_at_id",
+                        columnList = "status,published_at,id"
                 )
         }
 )
@@ -48,6 +52,9 @@ public class OutboxEvent {
     @Column(name = "message_key", length = 255)
     private String messageKey;
 
+    @Column(name = "correlation_id", length = 64)
+    private String correlationId;
+
     @Column(name = "event_type", nullable = false, length = 100)
     private String eventType;
 
@@ -61,13 +68,13 @@ public class OutboxEvent {
     private int attempts;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @Column(name = "next_attempt_at", nullable = false)
-    private LocalDateTime nextAttemptAt;
+    private Instant nextAttemptAt;
 
     @Column(name = "published_at")
-    private LocalDateTime publishedAt;
+    private Instant publishedAt;
 
     @Column(name = "last_error_type", length = 255)
     private String lastErrorType;

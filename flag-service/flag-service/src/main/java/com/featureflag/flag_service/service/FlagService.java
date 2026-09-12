@@ -1,6 +1,5 @@
 package com.featureflag.flag_service.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.featureflag.flag_service.dto.FlagEvaluationResponse;
 import com.featureflag.flag_service.dto.FlagRequest;
@@ -20,7 +19,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -34,15 +32,10 @@ public class FlagService {
     private final ObjectMapper objectMapper;
     private final OutboxService outboxService;
 
-    private static final String ALL_FLAGS_KEY = "all_flags";
     private static final String FLAG_CONFIG_CACHE_PREFIX = "flag:config:";
     private static final Duration FLAG_CONFIG_CACHE_TTL = Duration.ofMinutes(5);
     private static final Set<String> SUPPORTED_ENVIRONMENTS =
             Set.of("DEV", "QA", "STAGING", "PROD");
-
-    // =========================================================
-    // CREATE FLAG
-    // =========================================================
 
     @Transactional
     public FeatureFlag createFlag(FlagRequest request) {
@@ -67,22 +60,18 @@ public class FlagService {
 
         FeatureFlag savedFlag = repository.save(flag);
 
-        // Invalidate Redis cache
-        clearFlagCache();
-
         invalidateFlagConfigCacheAfterCommit(
                 savedFlag.getEnvironment(),
                 savedFlag.getFlagKey()
         );
 
-        // Publish event for Audit + Analytics
         publishFlagEvent(
                 "FLAG_CREATED",
                 savedFlag.getFlagKey(),
                 savedFlag.getEnvironment()
         );
 
-        // Publish notification event (recipients resolved dynamically by notification-service)
+        // The outbox publisher resolves recipients through Auth after this transaction commits.
         publishNotification(
                 "Feature Flag Created: " + savedFlag.getFlagKey(),
                 "Feature flag '" + savedFlag.getFlagKey()
@@ -93,48 +82,6 @@ public class FlagService {
     }
 
 
-    // =========================================================
-    // GET ALL FLAGS (WITH REDIS CACHING)
-    // =========================================================
-
-    public List<FeatureFlag> getAllFlags() {
-
-        try {
-            Object cachedObj = redisTemplate.opsForValue().get(ALL_FLAGS_KEY);
-            if (cachedObj != null) {
-                String cachedJson = cachedObj.toString();
-                if (!cachedJson.isBlank()) {
-                    List<FeatureFlag> cachedFlags = objectMapper.readValue(
-                            cachedJson,
-                            new TypeReference<List<FeatureFlag>>() {}
-                    );
-                    if (cachedFlags != null && !cachedFlags.isEmpty()) {
-                        log.debug("Feature flags cache hit");
-                        return cachedFlags;
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Redis cache read failed; falling back to database; errorType={}", e.getClass().getSimpleName());
-        }
-
-        log.debug("Feature flags cache miss; loading from database");
-        List<FeatureFlag> flags = repository.findAll();
-
-        try {
-            String jsonToCache = objectMapper.writeValueAsString(flags);
-            redisTemplate.opsForValue().set(ALL_FLAGS_KEY, jsonToCache);
-        } catch (Exception e) {
-            log.warn("Redis cache write failed; errorType={}", e.getClass().getSimpleName());
-        }
-
-        return flags;
-    }
-
-
-    // =========================================================
-    // GET FLAG BY KEY
-    // =========================================================
 
     public FeatureFlag getByKey(
             String key,
@@ -157,10 +104,6 @@ public class FlagService {
                 );
     }
 
-    // =========================================================
-    // GET FLAG BY ID
-    // =========================================================
-
     public FeatureFlag getById(Long id) {
 
         return repository.findById(id)
@@ -171,10 +114,6 @@ public class FlagService {
                 );
     }
 
-
-    // =========================================================
-    // UPDATE FLAG
-    // =========================================================
 
     @Transactional
     public FeatureFlag updateFlag(
@@ -218,9 +157,6 @@ public class FlagService {
 
         FeatureFlag updatedFlag = repository.save(flag);
 
-        // Invalidate Redis cache
-        clearFlagCache();
-
         invalidateFlagConfigCacheAfterCommit(
                 oldEnvironment,
                 oldFlagKey
@@ -235,14 +171,12 @@ public class FlagService {
             );
         }
 
-        // Publish event for Audit + Analytics
         publishFlagEvent(
                 "FLAG_UPDATED",
                 updatedFlag.getFlagKey(),
                 updatedFlag.getEnvironment()
         );
 
-        // Publish notification
         publishNotification(
                 "Feature Flag Updated: " + updatedFlag.getFlagKey(),
                 "Feature flag '" + updatedFlag.getFlagKey()
@@ -252,10 +186,6 @@ public class FlagService {
         return updatedFlag;
     }
 
-
-    // =========================================================
-    // DELETE FLAG
-    // =========================================================
 
     @Transactional
     public String deleteFlag(Long id) {
@@ -273,22 +203,17 @@ public class FlagService {
 
         repository.deleteById(id);
 
-        // Invalidate Redis cache
-        clearFlagCache();
-
         invalidateFlagConfigCacheAfterCommit(
                 environment,
                 flagKey
         );
 
-        // Publish event for Audit + Analytics
         publishFlagEvent(
                 "FLAG_DELETED",
                 flagKey,
                 environment
         );
 
-        // Publish notification
         publishNotification(
                 "Feature Flag Deleted: " + flagKey,
                 "Feature flag '" + flagKey
@@ -298,10 +223,6 @@ public class FlagService {
         return "Flag Deleted Successfully";
     }
 
-
-    // =========================================================
-    // TOGGLE FLAG
-    // =========================================================
 
     @Transactional
     public FeatureFlag toggleFlag(Long id) {
@@ -314,20 +235,15 @@ public class FlagService {
                                 )
                         );
 
-        // Null-safe toggle
         flag.setEnabled(!Boolean.TRUE.equals(flag.getEnabled()));
 
         FeatureFlag updatedFlag = repository.save(flag);
-
-        // Invalidate Redis cache
-        clearFlagCache();
 
         invalidateFlagConfigCacheAfterCommit(
                 updatedFlag.getEnvironment(),
                 updatedFlag.getFlagKey()
         );
 
-        // Publish event for Audit + Analytics
         publishFlagEvent(
                 "FLAG_TOGGLED",
                 updatedFlag.getFlagKey(),
@@ -336,7 +252,6 @@ public class FlagService {
 
         String status = Boolean.TRUE.equals(updatedFlag.getEnabled()) ? "ENABLED" : "DISABLED";
 
-        // Publish notification
         publishNotification(
                 "Feature Flag Toggled: " + updatedFlag.getFlagKey(),
                 "Feature flag '" + updatedFlag.getFlagKey()
@@ -347,10 +262,6 @@ public class FlagService {
         return updatedFlag;
     }
 
-
-    // =========================================================
-    // EVALUATE FLAG
-    // =========================================================
 
     public FlagEvaluationResponse evaluateFlag(
             String flagKey,
@@ -373,10 +284,6 @@ public class FlagService {
 
         LocalDateTime now = LocalDateTime.now();
 
-        // -----------------------------------------------------
-        // Check schedule
-        // -----------------------------------------------------
-
         boolean withinSchedule = true;
 
         if (flag.getStartDate() != null) {
@@ -388,19 +295,11 @@ public class FlagService {
         }
 
 
-        // -----------------------------------------------------
-        // Check targeted user
-        // -----------------------------------------------------
-
         boolean targetedUser =
                 flag.getTargetUsers() != null
                         && userId != null
                         && flag.getTargetUsers().contains(userId);
 
-
-        // -----------------------------------------------------
-        // Determine final enabled state
-        // -----------------------------------------------------
 
         boolean enabled = false;
 
@@ -419,10 +318,6 @@ public class FlagService {
             }
         }
 
-
-        // -----------------------------------------------------
-        // Return evaluation result
-        // -----------------------------------------------------
 
         return new FlagEvaluationResponse(
                 flag.getFlagKey(),
@@ -524,9 +419,20 @@ public class FlagService {
                 + flagKey;
     }
 
-    // =========================================================
-    // REDIS CACHE HELPERS
-    // =========================================================
+    private void runAfterCommitOrNow(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            action.run();
+                        }
+                    }
+            );
+            return;
+        }
+        action.run();
+    }
 
     private void invalidateFlagConfigCacheAfterCommit(
             String environment,
@@ -537,25 +443,9 @@ public class FlagService {
                         environment,
                         flagKey
                 );
-        Runnable invalidation =
-                () -> deleteFlagConfigCacheKey(
-                        cacheKey
-                );
-        if (TransactionSynchronizationManager
-                .isSynchronizationActive()) {
-            TransactionSynchronizationManager
-                    .registerSynchronization(
-                            new TransactionSynchronization() {
-                                @Override
-                                public void afterCommit() {
-                                    invalidation.run();
-                                }
-                            }
-                    );
-            return;
-        }
-        invalidation.run();
+        runAfterCommitOrNow(() -> deleteFlagConfigCacheKey(cacheKey));
     }
+
     private void deleteFlagConfigCacheKey(
             String cacheKey
     ) {
@@ -574,19 +464,6 @@ public class FlagService {
         }
     }
 
-    private void clearFlagCache() {
-        try {
-            redisTemplate.delete(ALL_FLAGS_KEY);
-            log.debug("Feature flags cache cleared");
-        } catch (Exception e) {
-            log.warn("Failed to clear feature flags cache; errorType={}", e.getClass().getSimpleName());
-        }
-    }
-
-
-    // =========================================================
-    // KAFKA FLAG EVENT
-    // =========================================================
 
     private void publishFlagEvent(
             String eventType,
@@ -601,10 +478,6 @@ public class FlagService {
     }
 
 
-    // =========================================================
-    // KAFKA NOTIFICATION EVENT
-    // =========================================================
-
     private void publishNotification(
             String subject,
             String message
@@ -616,9 +489,6 @@ public class FlagService {
     }
 
 
-    // =========================================================
-    // ENVIRONMENT VALIDATION
-    // =========================================================
     private String normalizeEnvironment(String environment) {
         if (environment == null || environment.isBlank()) {
             throw new IllegalArgumentException(
@@ -637,9 +507,6 @@ public class FlagService {
         }
         return normalized;
     }
-    // =========================================================
-    // SCHEDULE VALIDATION
-    // =========================================================
     private void validateSchedule(
             LocalDateTime startDate,
             LocalDateTime endDate
@@ -652,10 +519,6 @@ public class FlagService {
             );
         }
     }
-    // =========================================================
-    // ROLLOUT BUCKET
-    // =========================================================
-
     private int calculateBucket(String environment, String flagKey, String userId) {
         if (userId == null || userId.isBlank()) {
             return 0;

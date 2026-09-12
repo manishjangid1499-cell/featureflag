@@ -1,32 +1,31 @@
-# React + TypeScript + Vite
+# Feature Flag Platform UI
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React, TypeScript, and Vite application for managing flags, members, invitations,
+audit history, analytics, and notifications. Authentication and role checks are
+enforced by the backend; browser guards control navigation and available actions.
 
-Currently, two official plugins are available:
+Run from this directory with Node 24:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```sh
+npm ci
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Vite serves the UI on `http://localhost:5173` and proxies API requests to Gateway
+on port 8080. Start the backend with its `local` profiles and configure invitation
+links for the same frontend origin. See the [root setup guide](../../README.md)
+and [local Kafka guide](../../docs/local-event-pipeline.md).
+
+```sh
+npm test
+npm run lint
+npm run build
+```
+
+Tests use Node's test runner and cover session expiry, role policies, invitation
+delivery feedback, profile display, error decoding, and pagination. The build
+checks TypeScript, bundles the application, and validates its Content Security
+Policy. No production credentials belong in browser configuration.
+
+The supported Compose deployment serves the built UI through unprivileged Nginx,
+which forwards API requests to Gateway on the same browser origin.

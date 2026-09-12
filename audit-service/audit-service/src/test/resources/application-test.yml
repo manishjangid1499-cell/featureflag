@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: AUDIT-SERVICE-TEST
+
+  datasource:
+    url: jdbc:h2:mem:audit_test;MODE=MySQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  flyway:
+    enabled: false
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+    show-sql: false
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    admin:
+      auto-create: false
+    listener:
+      auto-startup: false
+
+  cloud:
+    discovery:
+      enabled: false
+
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+security:
+  jwt:
+    public-key-location: classpath:test-public-key.pem
+    issuer: feature-flag-auth-test
+    audience: feature-flag-api-test

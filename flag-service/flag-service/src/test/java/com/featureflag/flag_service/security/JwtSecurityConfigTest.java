@@ -4,8 +4,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.ResourceLoader;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class JwtSecurityConfigTest {
@@ -38,6 +40,42 @@ class JwtSecurityConfigTest {
 
         assertThrows(IllegalStateException.class,
                 () -> configuration.jwtDecoder(properties, resourceLoader));
+    }
+
+    @Test
+    void unresolvedIssuerFailsStartupBeforeLoadingPublicKey() {
+        JwtProperties properties = validProperties();
+        properties.setIssuer("${JWT_ISSUER}");
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> configuration.jwtDecoder(properties, resourceLoader));
+
+        assertEquals("JWT_ISSUER must be configured", exception.getMessage());
+        verifyNoInteractions(resourceLoader);
+    }
+
+    @Test
+    void unresolvedAudienceFailsStartupBeforeLoadingPublicKey() {
+        JwtProperties properties = validProperties();
+        properties.setAudience("${JWT_AUDIENCE}");
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> configuration.jwtDecoder(properties, resourceLoader));
+
+        assertEquals("JWT_AUDIENCE must be configured", exception.getMessage());
+        verifyNoInteractions(resourceLoader);
+    }
+
+    @Test
+    void unresolvedPublicKeyLocationFailsStartupBeforeLoadingPublicKey() {
+        JwtProperties properties = validProperties();
+        properties.setPublicKeyLocation("${JWT_PUBLIC_KEY_LOCATION}");
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> configuration.jwtDecoder(properties, resourceLoader));
+
+        assertEquals("JWT_PUBLIC_KEY_LOCATION must be configured", exception.getMessage());
+        verifyNoInteractions(resourceLoader);
     }
 
     @Test

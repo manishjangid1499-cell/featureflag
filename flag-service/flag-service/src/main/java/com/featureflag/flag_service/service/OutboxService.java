@@ -4,12 +4,18 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.featureflag.flag_service.dto.NotificationEvent;
 import com.featureflag.flag_service.entity.OutboxEvent;
+import com.featureflag.flag_service.event.FlagAuditSnapshot;
 import com.featureflag.flag_service.event.FlagEvent;
+import com.featureflag.flag_service.observability.CorrelationIds;
+import com.featureflag.flag_service.repository.FeatureFlagRepository;
 import com.featureflag.flag_service.repository.OutboxEventRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Service
@@ -22,8 +28,14 @@ public class OutboxService {
     public static final String NOTIFICATION_TOPIC =
             "notification-events";
 
+    public static final String SOURCE_SERVICE =
+            "flag-service";
+
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
+    private final FeatureFlagRepository featureFlagRepository;
+    private final FlagAuditContext flagAuditContext;
+    private final Clock clock;
 
     public String enqueueFlagEvent(
             String eventType,
@@ -32,12 +44,35 @@ public class OutboxService {
     ) {
         String eventId = UUID.randomUUID().toString();
 
+        Instant eventInstant = clock.instant();
+        LocalDateTime occurredAt = LocalDateTime.ofInstant(
+                eventInstant,
+                ZoneOffset.UTC
+        );
+        FlagAuditContext.AuditDetails auditDetails =
+                flagAuditContext.current().orElse(null);
+
         FlagEvent event = new FlagEvent(
                 eventId,
                 eventType,
                 flagKey,
                 environment,
-                LocalDateTime.now().toString()
+                eventInstant.toString(),
+                SOURCE_SERVICE,
+                auditDetails == null
+                        ? null
+                        : auditDetails.actor(),
+                auditDetails == null
+                        ? null
+                        : auditDetails.before(),
+                auditDetails == null
+                        ? null
+                        : resolveAfter(
+                                eventType,
+                                flagKey,
+                                environment
+                        ),
+                occurredAt
         );
 
         persist(
@@ -51,6 +86,27 @@ public class OutboxService {
         return eventId;
     }
 
+    private FlagAuditSnapshot resolveAfter(
+            String eventType,
+            String flagKey,
+            String environment
+    ) {
+        if ("FLAG_DELETED".equals(eventType)) {
+            return null;
+        }
+
+        return featureFlagRepository
+                .findByFlagKeyAndEnvironment(
+                        flagKey,
+                        environment
+                )
+                .map(FlagAuditSnapshot::from)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Unable to capture resulting flag state for "
+                                + eventType
+                ));
+    }
+
     public String enqueueNotificationEvent(
             String subject,
             String message
@@ -62,7 +118,7 @@ public class OutboxService {
                         eventId,
                         null,
                         null,
-                        subject,
+                        boundedSubject(subject),
                         message,
                         "EMAIL"
                 );
@@ -76,6 +132,22 @@ public class OutboxService {
         );
 
         return eventId;
+    }
+
+    private String boundedSubject(String subject) {
+        if (subject.length() <= 255) {
+            return subject;
+        }
+        // Preserve action + identifying tail; the full flag key remains in the body.
+        int headEnd = 228;
+        int tailStart = subject.length() - 24;
+        if (Character.isHighSurrogate(subject.charAt(headEnd - 1))) {
+            headEnd--;
+        }
+        if (Character.isLowSurrogate(subject.charAt(tailStart))) {
+            tailStart++;
+        }
+        return subject.substring(0, headEnd) + "..." + subject.substring(tailStart);
     }
 
     private void persist(
@@ -97,13 +169,16 @@ public class OutboxService {
             );
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = clock.instant();
 
         OutboxEvent outboxEvent =
                 OutboxEvent.builder()
                         .id(eventId)
                         .topic(topic)
                         .messageKey(messageKey)
+                        .correlationId(
+                                CorrelationIds.currentOrGenerate()
+                        )
                         .eventType(eventType)
                         .payload(payload)
                         .status(

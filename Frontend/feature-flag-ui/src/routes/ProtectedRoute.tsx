@@ -3,14 +3,24 @@ import {
   Outlet,
 } from "react-router-dom";
 
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../hooks/useAuth";
+import { resolveProtectedRoute } from "../auth/authPolicy";
 
 function ProtectedRoute() {
 
-  const { isAuthenticated } =
+  const { isAuthenticated, isAuthResolved } =
     useAuth();
 
-  if (!isAuthenticated) {
+  const decision = resolveProtectedRoute(
+    isAuthResolved,
+    isAuthenticated,
+  );
+
+  if (decision === "pending") {
+    return null;
+  }
+
+  if (decision === "login") {
 
     return (
       <Navigate

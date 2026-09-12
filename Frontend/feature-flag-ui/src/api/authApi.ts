@@ -3,6 +3,7 @@ import type {
   AcceptInvitationRequest,
   LoginRequest,
   LoginResponse,
+  ProfileResponse,
   ValidateInvitationResponse
 } from "../types/auth";
 
@@ -11,8 +12,8 @@ export const login = async (request: LoginRequest): Promise<LoginResponse> => {
   return response.data;
 };
 
-export const getProfile = async (): Promise<string> => {
-  const response = await api.get<string>("/auth/profile");
+export const getProfile = async (): Promise<ProfileResponse> => {
+  const response = await api.get<ProfileResponse>("/auth/profile");
   return response.data;
 };
 

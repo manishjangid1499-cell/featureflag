@@ -1,0 +1,15 @@
+spring:
+  flyway:
+    enabled: true
+    baseline-on-migrate: false
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    database-platform: org.hibernate.dialect.MySQLDialect
+    show-sql: false
+
+app:
+  notification:
+    delivery:
+      enabled: false

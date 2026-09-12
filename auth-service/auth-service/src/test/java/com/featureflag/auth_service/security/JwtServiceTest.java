@@ -6,6 +6,7 @@ import com.featureflag.auth_service.entity.Role;
 import com.featureflag.auth_service.entity.User;
 import com.featureflag.auth_service.repository.UserRepository;
 import com.featureflag.auth_service.service.AuthService;
+import com.featureflag.auth_service.observability.AuthMetrics;
 import com.nimbusds.jose.JOSEObjectType;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -161,7 +162,15 @@ class JwtServiceTest {
     void loginShapeUsesNewRsaToken() {
         UserRepository userRepository = mock(UserRepository.class);
         PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
-        AuthService authService = new AuthService(userRepository, passwordEncoder, jwtService);
+        LoginRateLimiter loginRateLimiter = mock(LoginRateLimiter.class);
+        AuthMetrics authMetrics = mock(AuthMetrics.class);
+        AuthService authService = new AuthService(
+                userRepository,
+                passwordEncoder,
+                jwtService,
+                loginRateLimiter,
+                authMetrics
+        );
         User loginUser = User.builder()
                 .email("User@Company.COM")
                 .password("encoded")

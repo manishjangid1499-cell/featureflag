@@ -62,9 +62,10 @@ public class JwtAuthenticationFilter
                         userDetailsService
                                 .loadUserByUsername(email);
 
-                if (jwtService.isTokenValid(
-                        token,
-                        userDetails.getUsername())) {
+                if (userDetails.isEnabled()
+                        && jwtService.isTokenValid(
+                                token,
+                                userDetails.getUsername())) {
 
                     UsernamePasswordAuthenticationToken
                             authToken =

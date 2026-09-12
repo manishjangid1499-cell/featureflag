@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import type { FeatureFlag, FlagEvaluationResponse } from "../../types/featureFlag";
 import { evaluateFlag } from "../../api/flagApi";
+import { getApiErrorMessage } from "../../api/errors";
 
 interface FlagEvaluationModalProps {
   flag: FeatureFlag | null;
@@ -31,9 +32,11 @@ export function FlagEvaluationModal({ flag, isOpen, onClose }: FlagEvaluationMod
       setLoading(true);
       const res = await evaluateFlag(flag.flagKey, userId.trim(), environment);
       setEvaluationResult(res);
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || "Evaluation failed. Ensure flag exists in this environment.";
-      setError(msg);
+    } catch (error: unknown) {
+      setError(getApiErrorMessage(
+        error,
+        "Evaluation failed. Ensure flag exists in this environment.",
+      ));
     } finally {
       setLoading(false);
     }

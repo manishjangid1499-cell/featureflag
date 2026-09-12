@@ -9,6 +9,10 @@ import com.featureflag.auth_service.security.JwtAuthenticationFilter;
 import com.featureflag.auth_service.security.JwtService;
 import com.featureflag.auth_service.service.AuthService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -24,6 +28,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(AuthController.class)
@@ -87,14 +92,51 @@ class AuthRecipientsSecurityTest {
                 .andExpect(content().json("[\"owner@company.com\",\"admin@company.com\"]"));
     }
 
-    @Test
-    void protectedProfileAcceptsValidRsaToken() throws Exception {
-        authenticateToken("valid-rsa-token", Role.VIEWER, true);
+    @ParameterizedTest
+    @EnumSource(Role.class)
+    void protectedProfileReturnsOnlyCurrentUsersDisplayFields(Role role) throws Exception {
+        authenticateToken("valid-rsa-token", role, true);
 
         mockMvc.perform(get("/auth/profile")
                         .header("Authorization", "Bearer valid-rsa-token"))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Welcome to Protected Profile"));
+                .andExpect(content().json("""
+                        {"name":"Abhay Thakur","email":"user@company.com","role":"%s"}
+                        """.formatted(role.name()), true));
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = "   ")
+    void protectedProfileSupportsLegacyMissingNames(String name) throws Exception {
+        User currentUser = authenticateToken("legacy-token", Role.VIEWER, true);
+        currentUser.setName(name);
+
+        mockMvc.perform(get("/auth/profile")
+                        .header("Authorization", "Bearer legacy-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value(name))
+                .andExpect(jsonPath("$.email").value("user@company.com"));
+    }
+
+    @Test
+    void profileRefreshUsesCurrentStoredName() throws Exception {
+        User currentUser = authenticateToken("valid-token", Role.ADMIN, true);
+        mockMvc.perform(get("/auth/profile")
+                        .header("Authorization", "Bearer valid-token"))
+                .andExpect(jsonPath("$.name").value("Abhay Thakur"));
+
+        currentUser.setName("Updated Name");
+        mockMvc.perform(get("/auth/profile")
+                        .header("Authorization", "Bearer valid-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Updated Name"));
+    }
+
+    @Test
+    void protectedProfileRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/auth/profile"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -148,8 +190,9 @@ class AuthRecipientsSecurityTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    private void authenticateToken(String token, Role role, boolean valid) {
+    private User authenticateToken(String token, Role role, boolean valid) {
         User currentUser = User.builder()
+                .name("Abhay Thakur")
                 .email("user@company.com")
                 .password("encoded")
                 .role(role)
@@ -159,6 +202,7 @@ class AuthRecipientsSecurityTest {
                 .thenReturn(currentUser);
         when(jwtService.isTokenValid(token, "user@company.com"))
                 .thenReturn(valid);
+        return currentUser;
     }
 
     @RestController

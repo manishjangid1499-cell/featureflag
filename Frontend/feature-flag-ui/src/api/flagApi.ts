@@ -1,28 +1,14 @@
 import api from "./axios";
-import type { FeatureFlag, FlagRequest, FlagEvaluationResponse } from "../types/featureFlag";
+import type { FeatureFlag, FlagRequest, FlagUpdateRequest, FlagEvaluationResponse } from "../types/featureFlag";
+import { DEFAULT_PAGE_SIZE, type PageResponse } from "../types/page";
 
-export const getAllFlags = async (): Promise<FeatureFlag[]> => {
-  const response = await api.get<FeatureFlag[]>("/flags");
-  return response.data;
-};
-
-export const getFlagById = async (id: number): Promise<FeatureFlag> => {
-  const response = await api.get<FeatureFlag>(`/flags/id/${id}`);
-  return response.data;
-};
-
-export const getFlagByKey = async (
-  key: string,
-  environment: string
-): Promise<FeatureFlag> => {
-  const params = new URLSearchParams({
-    environment,
+export const getAllFlags = async (
+  page = 0,
+  size = DEFAULT_PAGE_SIZE,
+): Promise<PageResponse<FeatureFlag>> => {
+  const response = await api.get<PageResponse<FeatureFlag>>("/flags", {
+    params: { page, size },
   });
-
-  const response = await api.get<FeatureFlag>(
-    `/flags/${encodeURIComponent(key)}?${params.toString()}`
-  );
-
   return response.data;
 };
 
@@ -31,7 +17,7 @@ export const createFlag = async (flag: FlagRequest): Promise<FeatureFlag> => {
   return response.data;
 };
 
-export const updateFlag = async (id: number, flag: FlagRequest): Promise<FeatureFlag> => {
+export const updateFlag = async (id: number, flag: FlagUpdateRequest): Promise<FeatureFlag> => {
   const response = await api.put<FeatureFlag>(`/flags/${id}`, flag);
   return response.data;
 };

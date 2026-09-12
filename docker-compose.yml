@@ -79,6 +79,7 @@ services:
       - |
         set -euo pipefail
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists --topic feature-flag-events --partitions 1 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists --topic feature-flag-evaluations --partitions 1 --replication-factor 1
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists --topic notification-events --partitions 1 --replication-factor 1
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists --topic feature-flag-events-audit-dlt --partitions 1 --replication-factor 1
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists --topic feature-flag-events-analytics-dlt --partitions 1 --replication-factor 1
@@ -156,10 +157,16 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: docker
       FLAG_DB_USERNAME: "${FLAG_DB_USERNAME:?FLAG_DB_USERNAME is required}"
+      CORS_ALLOWED_ORIGINS: &browser_origins "${CORS_ALLOWED_ORIGINS:-http://localhost:${FRONTEND_PORT:-3000},http://127.0.0.1:${FRONTEND_PORT:-3000},http://localhost:5173,http://127.0.0.1:5173}"
+      REDIS_CONNECT_TIMEOUT: "${REDIS_CONNECT_TIMEOUT:-500ms}"
+      REDIS_COMMAND_TIMEOUT: "${REDIS_COMMAND_TIMEOUT:-500ms}"
+      KAFKA_MAX_BLOCK_MS: "${KAFKA_MAX_BLOCK_MS:-1000}"
+      EVALUATION_TELEMETRY_QUEUE_CAPACITY: "${EVALUATION_TELEMETRY_QUEUE_CAPACITY:-256}"
       FLAG_DB_PASSWORD: "${FLAG_DB_PASSWORD:?FLAG_DB_PASSWORD is required}"
       JWT_PUBLIC_KEY_LOCATION: "file:/run/secrets/jwt-public.pem"
       JWT_ISSUER: "${JWT_ISSUER:?JWT_ISSUER is required}"
       JWT_AUDIENCE: "${JWT_AUDIENCE:?JWT_AUDIENCE is required}"
+      AUTH_RECIPIENTS_SERVICE_KEY: "${AUTH_RECIPIENTS_SERVICE_KEY:?AUTH_RECIPIENTS_SERVICE_KEY is required}"
     volumes:
       - type: bind
         source: "${JWT_PUBLIC_KEY_FILE:?JWT_PUBLIC_KEY_FILE is required}"
@@ -175,12 +182,14 @@ services:
       mysql:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
       eureka-server:
+        condition: service_healthy
+      auth-service:
         condition: service_healthy
 
   audit-service:
@@ -194,6 +203,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: docker
       AUDIT_DB_USERNAME: "${AUDIT_DB_USERNAME:?AUDIT_DB_USERNAME is required}"
+      CORS_ALLOWED_ORIGINS: *browser_origins
       AUDIT_DB_PASSWORD: "${AUDIT_DB_PASSWORD:?AUDIT_DB_PASSWORD is required}"
       JWT_PUBLIC_KEY_LOCATION: "file:/run/secrets/jwt-public.pem"
       JWT_ISSUER: "${JWT_ISSUER:?JWT_ISSUER is required}"
@@ -263,6 +273,8 @@ services:
       dockerfile: Dockerfile
     security_opt:
       - no-new-privileges:true
+    environment:
+      CORS_ALLOWED_ORIGINS: *browser_origins
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "4", "http://127.0.0.1:8080/actuator/health/readiness"]
       interval: 10s
@@ -271,9 +283,15 @@ services:
       start_period: 60s
     depends_on:
       auth-service:
-        condition: service_started
+        condition: service_healthy
       flag-service:
-        condition: service_started
+        condition: service_healthy
+      audit-service:
+        condition: service_healthy
+      analytics-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
       eureka-server:
         condition: service_healthy
 
@@ -294,7 +312,6 @@ services:
       NOTIFICATION_MAIL_CONNECTION_TIMEOUT_MS: "${NOTIFICATION_MAIL_CONNECTION_TIMEOUT_MS:-10000}"
       NOTIFICATION_MAIL_READ_TIMEOUT_MS: "${NOTIFICATION_MAIL_READ_TIMEOUT_MS:-10000}"
       NOTIFICATION_MAIL_WRITE_TIMEOUT_MS: "${NOTIFICATION_MAIL_WRITE_TIMEOUT_MS:-10000}"
-      AUTH_RECIPIENTS_SERVICE_KEY: "${AUTH_RECIPIENTS_SERVICE_KEY:?AUTH_RECIPIENTS_SERVICE_KEY is required}"
       NOTIFICATION_INTERNAL_SERVICE_KEY: "${NOTIFICATION_INTERNAL_SERVICE_KEY:?NOTIFICATION_INTERNAL_SERVICE_KEY is required}"
       JWT_PUBLIC_KEY_LOCATION: "file:/run/secrets/jwt-public.pem"
       JWT_ISSUER: "${JWT_ISSUER:?JWT_ISSUER is required}"

@@ -1,90 +1,102 @@
 package com.featureflag.auth_service.exception;
 
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.validation.FieldError;
-import org.springframework.web.servlet.resource.NoResourceFoundException;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-
-import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
+import com.featureflag.auth_service.security.LoginRateLimitExceededException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 @RestControllerAdvice
-public class GlobalExceptionHandler {
+@Import(ApiProblemDetails.class)
+public class GlobalExceptionHandler extends ApiExceptionHandler {
 
-    @ExceptionHandler(NoResourceFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleNoResourceFoundException(
-            NoResourceFoundException ex
+    public GlobalExceptionHandler(ApiProblemDetails problems) {
+        super(problems);
+    }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleResourceNotFound(
+            ResourceNotFoundException exception, HttpServletRequest request
     ) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("timestamp", LocalDateTime.now().toString());
-        response.put("status", HttpStatus.NOT_FOUND.value());
-        response.put("error", "Not Found");
-        response.put("message", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+        return problems.response(HttpStatus.NOT_FOUND, "resource-not-found", "Not Found",
+                "The requested resource was not found", request);
     }
 
     @ExceptionHandler(ForbiddenException.class)
-    public ResponseEntity<Map<String, Object>> handleForbiddenException(ForbiddenException ex) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("timestamp", LocalDateTime.now().toString());
-        response.put("status", HttpStatus.FORBIDDEN.value());
-        response.put("error", "Forbidden");
-        response.put("message", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+    public ResponseEntity<ProblemDetail> handleForbiddenException(
+            ForbiddenException exception, HttpServletRequest request
+    ) {
+        return problems.response(HttpStatus.FORBIDDEN, "forbidden", "Forbidden",
+                exception.getMessage(), request);
     }
 
     @ExceptionHandler(BadCredentialsException.class)
-    public ResponseEntity<Map<String, Object>> handleBadCredentials(BadCredentialsException ex) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("timestamp", LocalDateTime.now().toString());
-        response.put("status", HttpStatus.UNAUTHORIZED.value());
-        response.put("error", "Unauthorized");
-        response.put("message", "Invalid email or password");
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+    public ResponseEntity<ProblemDetail> handleBadCredentials(
+            BadCredentialsException exception, HttpServletRequest request
+    ) {
+        return problems.response(HttpStatus.UNAUTHORIZED, "invalid-credentials", "Unauthorized",
+                "Invalid email or password", request);
     }
 
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<Map<String, Object>> handleRuntimeException(RuntimeException ex) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("timestamp", LocalDateTime.now().toString());
-        response.put("status", HttpStatus.BAD_REQUEST.value());
-        response.put("error", "Bad Request");
-        response.put("message", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    @ExceptionHandler(InvitationConflictException.class)
+    public ResponseEntity<ProblemDetail> handleInvitationConflict(
+            InvitationConflictException exception, HttpServletRequest request
+    ) {
+        return problems.response(HttpStatus.CONFLICT, "invitation-conflict", "Conflict",
+                exception.getMessage(), request);
     }
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, Object>> handleValidationExceptions(MethodArgumentNotValidException ex) {
-        Map<String, Object> response = new HashMap<>();
-        Map<String, String> errors = new HashMap<>();
+    @ExceptionHandler(InvalidOperationException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidOperation(
+            InvalidOperationException exception, HttpServletRequest request
+    ) {
+        return problems.response(HttpStatus.BAD_REQUEST, "invalid-operation", "Invalid Operation",
+                exception.getMessage(), request);
+    }
 
-        ex.getBindingResult().getAllErrors().forEach((error) -> {
-            String fieldName = ((FieldError) error).getField();
-            String errorMessage = error.getDefaultMessage();
-            errors.put(fieldName, errorMessage);
-        });
+    @ExceptionHandler(LoginRateLimitExceededException.class)
+    public ResponseEntity<ProblemDetail> handleLoginRateLimit(
+            LoginRateLimitExceededException exception, HttpServletRequest request
+    ) {
+        ProblemDetail problem = problems.create(HttpStatus.TOO_MANY_REQUESTS,
+                "login-rate-limited", "Too Many Requests",
+                "Too many login attempts. Try again later.", request);
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(exception.getRetryAfterSeconds()))
+                .body(problem);
+    }
 
-        response.put("timestamp", LocalDateTime.now().toString());
-        response.put("status", HttpStatus.BAD_REQUEST.value());
-        response.put("error", "Validation Error");
-        response.put("message", "Validation failed for one or more fields");
-        response.put("validationErrors", errors);
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ProblemDetail> handleDataIntegrityViolation(
+            DataIntegrityViolationException exception, HttpServletRequest request
+    ) {
+        return problems.response(HttpStatus.CONFLICT, "resource-conflict", "Conflict",
+                "Request conflicts with an existing resource", request);
+    }
 
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ProblemDetail> handleOptimisticLock(
+            ObjectOptimisticLockingFailureException exception, HttpServletRequest request
+    ) {
+        return problems.response(HttpStatus.CONFLICT, "optimistic-lock-conflict", "Conflict",
+                "Resource was modified by another request", request);
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, Object>> handleGeneralException(Exception ex) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("timestamp", LocalDateTime.now().toString());
-        response.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
-        response.put("error", "Internal Server Error");
-        response.put("message", "An unexpected error occurred");
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+    public ResponseEntity<ProblemDetail> handleGeneralException(
+            Exception exception, HttpServletRequest request
+    ) {
+        logUnexpectedFailure(exception);
+        return problems.response(HttpStatus.INTERNAL_SERVER_ERROR, "internal-error", "Internal Server Error",
+                "An unexpected error occurred", request);
     }
 }

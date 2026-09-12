@@ -1,10 +1,12 @@
 package com.featureflag.notification_service.security;
 
+import com.featureflag.notification_service.exception.ApiProblemDetails;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -31,12 +33,15 @@ public class InternalNotificationServiceKeyFilter
             "/internal/notifications/invitations";
 
     private final String configuredServiceKey;
+    private final ApiProblemDetails problems;
 
     public InternalNotificationServiceKeyFilter(
             @Value("${NOTIFICATION_INTERNAL_SERVICE_KEY:}")
-            String configuredServiceKey
+            String configuredServiceKey,
+            ApiProblemDetails problems
     ) {
         this.configuredServiceKey = configuredServiceKey;
+        this.problems = problems;
     }
 
     @Override
@@ -57,7 +62,9 @@ public class InternalNotificationServiceKeyFilter
 
         if (!isValidServiceKey(providedServiceKey)) {
             SecurityContextHolder.clearContext();
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+            problems.write(request, response, HttpStatus.UNAUTHORIZED,
+                    "invalid-service-key", "Unauthorized",
+                    "Valid service authentication is required");
             return;
         }
 

@@ -5,7 +5,9 @@ import com.featureflag.auth_service.dto.LoginRequest;
 import com.featureflag.auth_service.entity.Role;
 import com.featureflag.auth_service.entity.User;
 import com.featureflag.auth_service.repository.UserRepository;
+import com.featureflag.auth_service.observability.AuthMetrics;
 import com.featureflag.auth_service.security.JwtService;
+import com.featureflag.auth_service.security.LoginRateLimiter;
 import com.featureflag.auth_service.util.EmailNormalizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,15 +28,27 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final LoginRateLimiter loginRateLimiter;
+    private final AuthMetrics authMetrics;
 
     public AuthResponse login(LoginRequest request) {
         String normalizedEmail = EmailNormalizer.normalize(request.getEmail());
 
-        User user = userRepository
-                .findByEmail(normalizedEmail)
-                .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
+        loginRateLimiter.checkAllowed(normalizedEmail);
 
-        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+        User user = userRepository.findByEmail(normalizedEmail).orElse(null);
+
+        boolean passwordMatches = user != null
+                && passwordEncoder.matches(
+                        request.getPassword(),
+                        user.getPassword()
+                );
+
+        if (user == null
+                || !passwordMatches
+                || !user.isEnabled()) {
+            loginRateLimiter.recordFailure(normalizedEmail);
+            authMetrics.loginFailed();
             throw new BadCredentialsException("Invalid email or password");
         }
 
@@ -43,6 +57,9 @@ public class AuthService {
                 canonicalEmail,
                 user.getRole().name()
         );
+
+        loginRateLimiter.recordSuccess(normalizedEmail);
+        authMetrics.loginSucceeded();
 
         return new AuthResponse(
                 token,

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { FeatureFlag } from "../../types/featureFlag";
 import { deleteFlag } from "../../api/flagApi";
+import { getApiErrorMessage } from "../../api/errors";
 
 interface DeleteFlagModalProps {
   flag: FeatureFlag | null;
@@ -22,9 +23,8 @@ export function DeleteFlagModal({ flag, isOpen, onClose, onSuccess }: DeleteFlag
       await deleteFlag(flag.id);
       onSuccess(flag.id);
       onClose();
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || "Failed to delete feature flag.";
-      setError(msg);
+    } catch (error: unknown) {
+      setError(getApiErrorMessage(error, "Failed to delete feature flag."));
     } finally {
       setLoading(false);
     }

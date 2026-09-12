@@ -1,14 +1,20 @@
 package com.featureflag.analytics_service.service;
 
 import com.featureflag.analytics_service.entity.AnalyticsEvent;
+import com.featureflag.analytics_service.exception.ResourceNotFoundException;
 import com.featureflag.analytics_service.repository.AnalyticsEventRepository;
+import com.featureflag.analytics_service.observability.AnalyticsMetrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 import java.util.List;
 import java.util.Optional;
@@ -22,6 +28,9 @@ class AnalyticsServiceTest {
 
     @Mock
     private AnalyticsEventRepository repository;
+
+    @Mock
+    private AnalyticsMetrics analyticsMetrics;
 
     @InjectMocks
     private AnalyticsService service;
@@ -40,27 +49,32 @@ class AnalyticsServiceTest {
     }
 
     @Test
-    @DisplayName("Get All Analytics - Returns list of records")
+    @DisplayName("Get All Analytics - Returns a database-backed page")
     void testGetAllAnalytics() {
-        when(repository.findAll()).thenReturn(List.of(testEvent));
+        PageRequest pageable = PageRequest.of(0, 20);
+        when(repository.findAll(pageable))
+                .thenReturn(new PageImpl<>(List.of(testEvent), pageable, 1));
 
-        List<AnalyticsEvent> results = service.getAllAnalytics();
+        Page<AnalyticsEvent> results = service.getAllAnalytics(pageable);
 
         assertNotNull(results);
-        assertEquals(1, results.size());
-        assertEquals("NEW_CHECKOUT", results.get(0).getFlagKey());
+        assertEquals(1, results.getTotalElements());
+        assertEquals("NEW_CHECKOUT", results.getContent().getFirst().getFlagKey());
     }
 
     @Test
-    @DisplayName("Get Analytics By Flag Key - Returns matching events")
+    @DisplayName("Get Analytics By Flag Key - Returns matching page")
     void testGetAnalyticsByFlagKey() {
-        when(repository.findByFlagKey("NEW_CHECKOUT")).thenReturn(List.of(testEvent));
+        PageRequest pageable = PageRequest.of(0, 20);
+        when(repository.findByFlagKey("NEW_CHECKOUT", pageable))
+                .thenReturn(new PageImpl<>(List.of(testEvent), pageable, 1));
 
-        List<AnalyticsEvent> results = service.getAnalyticsByFlagKey("NEW_CHECKOUT");
+        Page<AnalyticsEvent> results =
+                service.getAnalyticsByFlagKey("NEW_CHECKOUT", pageable);
 
         assertNotNull(results);
-        assertEquals(1, results.size());
-        assertEquals(5L, results.get(0).getCount());
+        assertEquals(1, results.getTotalElements());
+        assertEquals(5L, results.getContent().getFirst().getCount());
     }
 
     @Test
@@ -75,50 +89,71 @@ class AnalyticsServiceTest {
     }
 
     @Test
-    @DisplayName("Get Analytics By ID - Not Found Throws RuntimeException")
+    @DisplayName("Get Analytics By ID - Not Found Throws Domain Exception")
     void testGetAnalyticsById_NotFound() {
         when(repository.findById(999L)).thenReturn(Optional.empty());
 
-        assertThrows(RuntimeException.class, () -> service.getAnalyticsById(999L));
+        assertThrows(ResourceNotFoundException.class, () -> service.getAnalyticsById(999L));
     }
 
     @Test
-    @DisplayName("Process Event - New Event Initializes Count to 1")
+    @DisplayName("Process Event - Atomically Creates Count One")
     void testProcessEvent_NewEvent() {
+        AnalyticsEvent created = AnalyticsEvent.builder()
+                .id(2L)
+                .flagKey("DARK_MODE")
+                .environment("DEV")
+                .eventType("FLAG_CREATED")
+                .count(1L)
+                .build();
         when(
                 repository.findByFlagKeyAndEnvironmentAndEventType(
                         "DARK_MODE",
                         "DEV",
                         "FLAG_CREATED"
                 )
-        ).thenReturn(Optional.empty());
-        when(repository.save(any(AnalyticsEvent.class))).thenAnswer(i -> i.getArgument(0));
+        ).thenReturn(Optional.of(created));
 
-        AnalyticsEvent created =
+        AnalyticsEvent result =
                 service.processEvent(
                         "DARK_MODE",
                         "DEV",
                         "FLAG_CREATED"
                 );
 
-        assertNotNull(created);
-        assertEquals(1L, created.getCount());
-        assertEquals("DARK_MODE", created.getFlagKey());
-        assertEquals("DEV", created.getEnvironment());
-        assertEquals("FLAG_CREATED", created.getEventType());
+        assertSame(created, result);
+        InOrder inOrder = inOrder(repository);
+        inOrder.verify(repository).incrementOrCreate(
+                "DARK_MODE",
+                "DEV",
+                "FLAG_CREATED"
+        );
+        inOrder.verify(repository)
+                .findByFlagKeyAndEnvironmentAndEventType(
+                        "DARK_MODE",
+                        "DEV",
+                        "FLAG_CREATED"
+                );
+        verify(repository, never()).save(any(AnalyticsEvent.class));
     }
 
     @Test
-    @DisplayName("Process Event - Existing Event Increments Count from 5 to 6")
+    @DisplayName("Process Event - Atomically Increments Existing Aggregate")
     void testProcessEvent_ExistingEvent() {
+        AnalyticsEvent updatedEvent = AnalyticsEvent.builder()
+                .id(1L)
+                .flagKey("NEW_CHECKOUT")
+                .environment("DEV")
+                .eventType("FLAG_EVALUATED")
+                .count(6L)
+                .build();
         when(
                 repository.findByFlagKeyAndEnvironmentAndEventType(
                         "NEW_CHECKOUT",
                         "DEV",
                         "FLAG_EVALUATED"
                 )
-        ).thenReturn(Optional.of(testEvent));
-        when(repository.save(any(AnalyticsEvent.class))).thenAnswer(i -> i.getArgument(0));
+        ).thenReturn(Optional.of(updatedEvent));
 
         AnalyticsEvent updated =
                 service.processEvent(
@@ -130,50 +165,69 @@ class AnalyticsServiceTest {
         assertNotNull(updated);
         assertEquals(6L, updated.getCount());
         assertEquals("DEV", updated.getEnvironment());
+        InOrder inOrder = inOrder(repository);
+        inOrder.verify(repository).incrementOrCreate(
+                "NEW_CHECKOUT",
+                "DEV",
+                "FLAG_EVALUATED"
+        );
+        inOrder.verify(repository)
+                .findByFlagKeyAndEnvironmentAndEventType(
+                        "NEW_CHECKOUT",
+                        "DEV",
+                        "FLAG_EVALUATED"
+                );
+        verify(repository, never()).save(any(AnalyticsEvent.class));
     }
 
     @Test
     @DisplayName("Process Event - Same Flag Uses Separate Environment Aggregate")
     void testProcessEvent_SameFlagDifferentEnvironment() {
+        AnalyticsEvent created = AnalyticsEvent.builder()
+                .id(3L)
+                .flagKey("NEW_CHECKOUT")
+                .environment("PROD")
+                .eventType("FLAG_EVALUATED")
+                .count(1L)
+                .build();
         when(
                 repository.findByFlagKeyAndEnvironmentAndEventType(
                         "NEW_CHECKOUT",
                         "PROD",
                         "FLAG_EVALUATED"
                 )
-        ).thenReturn(Optional.empty());
-        when(repository.save(any(AnalyticsEvent.class)))
-                .thenAnswer(i -> i.getArgument(0));
-        AnalyticsEvent created =
+        ).thenReturn(Optional.of(created));
+        AnalyticsEvent result =
                 service.processEvent(
                         "NEW_CHECKOUT",
                         "PROD",
                         "FLAG_EVALUATED"
                 );
-        assertNotNull(created);
-        assertNotSame(testEvent, created);
-        assertEquals("NEW_CHECKOUT", created.getFlagKey());
-        assertEquals("PROD", created.getEnvironment());
-        assertEquals("FLAG_EVALUATED", created.getEventType());
-        assertEquals(1L, created.getCount());
+        assertSame(created, result);
+        verify(repository).incrementOrCreate(
+                "NEW_CHECKOUT",
+                "PROD",
+                "FLAG_EVALUATED"
+        );
+        verify(repository, never()).save(any(AnalyticsEvent.class));
     }
 
     @Test
     @DisplayName("Delete Analytics - Success")
     void testDeleteAnalytics_Success() {
-        when(repository.existsById(1L)).thenReturn(true);
+        when(repository.findById(1L)).thenReturn(Optional.of(testEvent));
 
         service.deleteAnalytics(1L);
 
-        verify(repository, times(1)).deleteById(1L);
+        verify(repository, times(1)).delete(testEvent);
     }
 
     @Test
-    @DisplayName("Delete Analytics - Not Found Throws RuntimeException")
+    @DisplayName("Delete Analytics - Not Found Throws Domain Exception")
     void testDeleteAnalytics_NotFound() {
-        when(repository.existsById(999L)).thenReturn(false);
+        when(repository.findById(999L)).thenReturn(Optional.empty());
 
-        assertThrows(RuntimeException.class, () -> service.deleteAnalytics(999L));
-        verify(repository, never()).deleteById(anyLong());
+        assertThrows(ResourceNotFoundException.class, () -> service.deleteAnalytics(999L));
+        verify(repository, never()).delete(any(AnalyticsEvent.class));
     }
 }

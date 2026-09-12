@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../hooks/useAuth";
 import { getAllFlags } from "../api/flagApi";
 import { getAllAuditLogs } from "../api/auditApi";
 import type { FeatureFlag } from "../types/featureFlag";
 import type { AuditLog } from "../types/audit";
+import { collectAllPages } from "../types/page";
 
 export function Dashboard() {
   const { user, isViewer, canManageMembers } = useAuth();
+  const displayName = user?.name?.trim() || user?.email;
   const navigate = useNavigate();
 
   const [flags, setFlags] = useState<FeatureFlag[]>([]);
@@ -20,24 +22,21 @@ export function Dashboard() {
       setLoading(true);
       setError("");
       const [flagsRes, auditRes] = await Promise.allSettled([
-        getAllFlags(),
-        getAllAuditLogs(),
+        collectAllPages(getAllFlags),
+        getAllAuditLogs(0, 5),
       ]);
 
-      if (flagsRes.status === "fulfilled" && Array.isArray(flagsRes.value)) {
+      if (flagsRes.status === "fulfilled") {
         setFlags(flagsRes.value);
       } else if (flagsRes.status === "rejected") {
-        console.error("Flags load error:", flagsRes.reason);
         setError("Could not load flags from backend.");
       }
 
-      if (auditRes.status === "fulfilled" && Array.isArray(auditRes.value)) {
-        setAuditLogs(auditRes.value.slice(0, 5));
+      if (auditRes.status === "fulfilled") {
+        setAuditLogs(auditRes.value.content);
       } else if (auditRes.status === "rejected") {
-        console.error("Audit load error:", auditRes.reason);
       }
-    } catch (e) {
-      console.error("Dashboard error:", e);
+    } catch {
       setError("Failed to communicate with API Gateway.");
     } finally {
       setLoading(false);
@@ -93,7 +92,7 @@ export function Dashboard() {
             {user?.role} CONSOLE
           </span>
           <h1 style={{ margin: "10px 0 6px 0", fontSize: "26px", fontWeight: 800 }}>
-            Welcome back, {user?.email}
+            Welcome back, {displayName}
           </h1>
           <p style={{ margin: 0, fontSize: "14px", color: "#c7d2fe", maxWidth: "600px" }}>
             {isViewer

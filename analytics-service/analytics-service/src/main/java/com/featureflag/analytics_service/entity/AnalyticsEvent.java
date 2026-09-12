@@ -4,7 +4,17 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "analytics_events")
+@Table(
+        name = "analytics_events",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_analytics_events_dimensions",
+                columnNames = {
+                        "flag_key",
+                        "environment",
+                        "event_type"
+                }
+        )
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -22,5 +32,7 @@ public class AnalyticsEvent {
 
     private String eventType;
 
-    private Long count;
+    @Builder.Default
+    @Column(nullable = false)
+    private Long count = 0L;
 }

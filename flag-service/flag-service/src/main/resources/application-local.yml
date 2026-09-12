@@ -9,18 +9,27 @@ spring:
     redis:
       host: ${SPRING_REDIS_HOST:localhost}
       port: ${SPRING_REDIS_PORT:6379}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:500ms}
+      timeout: ${REDIS_COMMAND_TIMEOUT:500ms}
 
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      properties:
+        max.block.ms: ${KAFKA_MAX_BLOCK_MS:1000}
 
   datasource:
     url: jdbc:mysql://localhost:3306/flag_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
     username: ${FLAG_DB_USERNAME}
     password: ${FLAG_DB_PASSWORD}
 
+  flyway:
+    enabled: true
+    baseline-on-migrate: false
+
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
 
 eureka:
@@ -34,14 +43,26 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:health,metrics,prometheus}
   endpoint:
     health:
       show-details: never
       show-components: never
+
+clients:
+  auth-recipients:
+    connect-timeout-ms: ${AUTH_RECIPIENTS_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${AUTH_RECIPIENTS_READ_TIMEOUT_MS:3000}
 
 security:
   jwt:
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION}
     issuer: ${JWT_ISSUER}
     audience: ${JWT_AUDIENCE}
+
+outbox:
+  retention:
+    published-age: ${OUTBOX_PUBLISHED_RETENTION:PT168H}
+    batch-size: ${OUTBOX_RETENTION_BATCH_SIZE:100}
+    initial-delay-ms: ${OUTBOX_RETENTION_INITIAL_DELAY_MS:60000}
+    cleanup-interval-ms: ${OUTBOX_RETENTION_INTERVAL_MS:3600000}

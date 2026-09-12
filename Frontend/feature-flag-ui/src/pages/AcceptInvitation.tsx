@@ -2,6 +2,7 @@ import { useState, useEffect, type FormEvent } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { validateInvitation, acceptInvitation } from "../api/authApi";
 import type { ValidateInvitationResponse } from "../types/auth";
+import { getApiErrorMessage } from "../api/errors";
 
 export function AcceptInvitation() {
   const [searchParams] = useSearchParams();
@@ -35,9 +36,8 @@ export function AcceptInvitation() {
         } else {
           setValidationError(res.errorMessage || "This invitation link is invalid or expired.");
         }
-      } catch (err: any) {
-        console.error("Token validation error:", err);
-        setValidationError(err?.response?.data?.message || "Failed to validate invitation.");
+      } catch (error: unknown) {
+        setValidationError(getApiErrorMessage(error, "Failed to validate invitation."));
       } finally {
         setValidating(false);
       }
@@ -68,9 +68,8 @@ export function AcceptInvitation() {
         confirmPassword,
       });
       setSuccessMessage(msg || "Account created successfully! You can now sign in.");
-    } catch (err: any) {
-      console.error("Accept invitation failed:", err);
-      setSubmitError(err?.response?.data?.message || "Failed to create account. Please try again.");
+    } catch (error: unknown) {
+      setSubmitError(getApiErrorMessage(error, "Failed to create account. Please try again."));
     } finally {
       setSubmitting(false);
     }
@@ -280,7 +279,7 @@ export function AcceptInvitation() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    placeholder="Minimum 6 characters"
+                    placeholder="Minimum 8 characters"
                     style={{
                       width: "100%",
                       padding: "10px 14px",

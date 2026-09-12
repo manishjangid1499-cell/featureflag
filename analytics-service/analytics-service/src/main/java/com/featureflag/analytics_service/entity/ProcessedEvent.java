@@ -10,7 +10,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "processed_kafka_events")
@@ -34,5 +34,5 @@ public class ProcessedEvent {
     private String topic;
 
     @Column(name = "processed_at", nullable = false)
-    private LocalDateTime processedAt;
+    private Instant processedAt;
 }

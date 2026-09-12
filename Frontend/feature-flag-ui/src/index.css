@@ -223,38 +223,8 @@ textarea {
   font-weight: 600;
 }
 
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #22c55e;
-}
-
 .page-content {
   padding: 32px;
-}
-
-/* =========================
-   PAGE HEADER
-   ========================= */
-
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 28px;
-}
-
-.page-header h1 {
-  margin: 0;
-  font-size: 27px;
-  color: #111827;
-}
-
-.page-header p {
-  margin: 7px 0 0;
-  color: #6b7280;
-  font-size: 14px;
 }
 
 /* =========================

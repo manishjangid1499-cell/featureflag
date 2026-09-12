@@ -1,10 +1,12 @@
 package com.featureflag.auth_service.security;
 
+import com.featureflag.auth_service.exception.ApiProblemDetails;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -25,11 +27,14 @@ public class AuthRecipientsServiceKeyFilter extends OncePerRequestFilter {
     private static final String RECIPIENTS_PATH = "/auth/recipients";
 
     private final String configuredServiceKey;
+    private final ApiProblemDetails problems;
 
     public AuthRecipientsServiceKeyFilter(
-            @Value("${AUTH_RECIPIENTS_SERVICE_KEY:}") String configuredServiceKey
+            @Value("${AUTH_RECIPIENTS_SERVICE_KEY:}") String configuredServiceKey,
+            ApiProblemDetails problems
     ) {
         this.configuredServiceKey = configuredServiceKey;
+        this.problems = problems;
     }
 
     @Override
@@ -49,7 +54,9 @@ public class AuthRecipientsServiceKeyFilter extends OncePerRequestFilter {
 
         if (!isValidServiceKey(providedServiceKey)) {
             SecurityContextHolder.clearContext();
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+            problems.write(request, response, HttpStatus.UNAUTHORIZED,
+                    "invalid-service-key", "Unauthorized",
+                    "Valid service authentication is required");
             return;
         }
 

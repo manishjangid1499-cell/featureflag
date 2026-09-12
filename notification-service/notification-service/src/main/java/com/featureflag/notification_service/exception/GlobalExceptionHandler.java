@@ -1,187 +1,67 @@
 package com.featureflag.notification_service.exception;
 
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
-
 @RestControllerAdvice
-public class GlobalExceptionHandler {
+@Import(ApiProblemDetails.class)
+public class GlobalExceptionHandler extends ApiExceptionHandler {
+
+    public GlobalExceptionHandler(ApiProblemDetails problems) {
+        super(problems);
+    }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleResourceNotFound(
+            ResourceNotFoundException exception, HttpServletRequest request
+    ) {
+        return problems.response(HttpStatus.NOT_FOUND, "resource-not-found", "Not Found",
+                "The requested resource was not found", request);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ProblemDetail> handleIllegalArgument(
+            IllegalArgumentException exception, HttpServletRequest request
+    ) {
+        return problems.response(HttpStatus.BAD_REQUEST, "invalid-request", "Bad Request",
+                "Invalid request", request);
+    }
+
+    @ExceptionHandler(InvitationDeliveryException.class)
+    public ResponseEntity<ProblemDetail> handleInvitationDelivery(
+            InvitationDeliveryException exception, HttpServletRequest request
+    ) {
+        return problems.response(HttpStatus.BAD_GATEWAY, "notification-delivery-failed", "Bad Gateway",
+                "Invitation email delivery failed", request);
+    }
+
+    @ExceptionHandler(NotificationConflictException.class)
+    public ResponseEntity<ProblemDetail> handleNotificationConflict(
+            NotificationConflictException exception, HttpServletRequest request
+    ) {
+        return problems.response(HttpStatus.CONFLICT, "notification-conflict", "Conflict",
+                exception.getMessage(), request);
+    }
 
     @ExceptionHandler(ForbiddenException.class)
-    public ResponseEntity<Map<String, Object>> handleForbidden(ForbiddenException ex) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("timestamp", LocalDateTime.now());
-        response.put("status", HttpStatus.FORBIDDEN.value());
-        response.put("error", "Forbidden");
-        response.put("message", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
-    }
-
-    /**
-     * Handle resource not found.
-     */
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<Map<String, Object>>
-    handleResourceNotFound(
-            ResourceNotFoundException ex
+    public ResponseEntity<ProblemDetail> handleForbidden(
+            ForbiddenException exception, HttpServletRequest request
     ) {
-
-        Map<String, Object> response =
-                new HashMap<>();
-
-        response.put(
-                "timestamp",
-                LocalDateTime.now()
-        );
-
-        response.put(
-                "status",
-                HttpStatus.NOT_FOUND.value()
-        );
-
-        response.put(
-                "error",
-                "Not Found"
-        );
-
-        response.put(
-                "message",
-                ex.getMessage()
-        );
-
-        return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
-                .body(response);
+        return problems.response(HttpStatus.FORBIDDEN, "forbidden", "Forbidden",
+                exception.getMessage(), request);
     }
 
-    /**
-     * Handle validation errors.
-     */
-    @ExceptionHandler(
-            MethodArgumentNotValidException.class
-    )
-    public ResponseEntity<Map<String, Object>>
-    handleValidationErrors(
-            MethodArgumentNotValidException ex
-    ) {
-
-        Map<String, Object> errors =
-                new HashMap<>();
-
-        ex.getBindingResult()
-                .getFieldErrors()
-                .forEach(error ->
-                        errors.put(
-                                error.getField(),
-                                error.getDefaultMessage()
-                        )
-                );
-
-        Map<String, Object> response =
-                new HashMap<>();
-
-        response.put(
-                "timestamp",
-                LocalDateTime.now()
-        );
-
-        response.put(
-                "status",
-                HttpStatus.BAD_REQUEST.value()
-        );
-
-        response.put(
-                "error",
-                "Validation Failed"
-        );
-
-        response.put(
-                "messages",
-                errors
-        );
-
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(response);
-    }
-
-    /**
-     * Handle illegal arguments.
-     */
-    @ExceptionHandler(
-            IllegalArgumentException.class
-    )
-    public ResponseEntity<Map<String, Object>>
-    handleIllegalArgument(
-            IllegalArgumentException ex
-    ) {
-
-        Map<String, Object> response =
-                new HashMap<>();
-
-        response.put(
-                "timestamp",
-                LocalDateTime.now()
-        );
-
-        response.put(
-                "status",
-                HttpStatus.BAD_REQUEST.value()
-        );
-
-        response.put(
-                "error",
-                "Bad Request"
-        );
-
-        response.put(
-                "message",
-                ex.getMessage()
-        );
-
-        return ResponseEntity
-                .badRequest()
-                .body(response);
-    }
-
-    /**
-     * Handle unexpected errors.
-     */
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, Object>>
-    handleGenericException(Exception ex) {
-
-        Map<String, Object> response =
-                new HashMap<>();
-
-        response.put(
-                "timestamp",
-                LocalDateTime.now()
-        );
-
-        response.put(
-                "status",
-                HttpStatus.INTERNAL_SERVER_ERROR.value()
-        );
-
-        response.put(
-                "error",
-                "Internal Server Error"
-        );
-
-        response.put(
-                "message",
-                "An unexpected error occurred"
-        );
-
-        return ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(response);
+    public ResponseEntity<ProblemDetail> handleGenericException(
+            Exception exception, HttpServletRequest request
+    ) {
+        logUnexpectedFailure(exception);
+        return problems.response(HttpStatus.INTERNAL_SERVER_ERROR, "internal-error", "Internal Server Error",
+                "An unexpected error occurred", request);
     }
 }

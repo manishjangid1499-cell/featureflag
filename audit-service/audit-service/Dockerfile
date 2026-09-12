@@ -14,7 +14,10 @@ RUN --mount=type=cache,target=/root/.m2,sharing=locked \
 
 FROM eclipse-temurin:21.0.11_10-jre AS runtime
 
-RUN groupadd --gid 10001 appgroup \
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 appgroup \
     && useradd --uid 10001 --gid appgroup --no-create-home --home-dir /app --shell /usr/sbin/nologin appuser
 
 WORKDIR /app

@@ -1,5 +1,5 @@
 import type { FeatureFlag } from "../../types/featureFlag";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../hooks/useAuth";
 
 interface FlagTableProps {
   flags: FeatureFlag[];

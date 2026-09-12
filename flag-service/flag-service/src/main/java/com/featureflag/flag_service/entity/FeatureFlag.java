@@ -34,6 +34,10 @@ public class FeatureFlag implements Serializable {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
     private String name;
 
     @Column(name = "flag_key", nullable = false)

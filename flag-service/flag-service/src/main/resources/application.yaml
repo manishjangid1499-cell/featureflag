@@ -1,3 +1,12 @@
 spring:
   profiles:
     active: local
+
+logging:
+  pattern:
+    level: "%5p [correlationId=%X{correlationId:-}]"
+
+telemetry:
+  evaluation:
+    queue-capacity: ${EVALUATION_TELEMETRY_QUEUE_CAPACITY:256}
+    topic: ${EVALUATION_TELEMETRY_TOPIC:feature-flag-evaluations}
