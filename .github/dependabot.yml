@@ -20,9 +20,11 @@ updates:
         update-types: [minor, patch]
     ignore:
       - dependency-name: "org.springframework.boot:*"
-        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+        update-types: [ "version-update:semver-major", "version-update:semver-minor" ]
       - dependency-name: "org.springframework.cloud:*"
-        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+        update-types: [ "version-update:semver-major", "version-update:semver-minor" ]
+      - dependency-name: "org.springdoc:springdoc-openapi-starter-webmvc-ui"
+        update-types: [ "version-update:semver-major" ]
 
   - package-ecosystem: npm
     directory: /Frontend/feature-flag-ui
