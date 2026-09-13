@@ -28,9 +28,7 @@ textarea {
   font: inherit;
 }
 
-/* =========================
-   APPLICATION SHELL
-   ========================= */
+/* Application shell */
 
 .app-shell {
   min-height: 100vh;
@@ -38,9 +36,7 @@ textarea {
   background: #f5f7fb;
 }
 
-/* =========================
-   SIDEBAR
-   ========================= */
+/* Sidebar */
 
 .sidebar {
   width: 250px;
@@ -189,9 +185,7 @@ textarea {
   background: #1f2937;
 }
 
-/* =========================
-   MAIN
-   ========================= */
+/* Main */
 
 .main-content {
   margin-left: 250px;
@@ -227,9 +221,7 @@ textarea {
   padding: 32px;
 }
 
-/* =========================
-   RESPONSIVE
-   ========================= */
+/* Responsive */
 
 @media (max-width: 900px) {
   .sidebar {

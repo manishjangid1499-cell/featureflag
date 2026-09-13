@@ -14,7 +14,6 @@ export function Notifications() {
   const { canManageMembers } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Form
   const [recipient, setRecipient] = useState("");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");

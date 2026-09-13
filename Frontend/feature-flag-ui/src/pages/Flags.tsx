@@ -21,12 +21,10 @@ export function Flags() {
 
   const [togglingId, setTogglingId] = useState<number | null>(null);
 
-  // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedEnv, setSelectedEnv] = useState("ALL");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
 
-  // Modals
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingFlag, setEditingFlag] = useState<FeatureFlag | null>(null);
   const [deletingFlag, setDeletingFlag] = useState<FeatureFlag | null>(null);
@@ -60,7 +58,6 @@ export function Flags() {
     void loadFlags();
   };
 
-  // Metrics
   const total = flags.length;
   const enabled = flags.filter((f) => Boolean(f?.enabled)).length;
   const disabled = total - enabled;
@@ -70,7 +67,6 @@ export function Flags() {
       ? Math.round(flags.reduce((acc, f) => acc + (f?.rolloutPercentage || 0), 0) / total)
       : 0;
 
-  // Filtered List with safe null checks
   const filteredFlags = flags.filter((flag) => {
     if (!flag) return false;
     const name = (flag.name || "").toLowerCase();

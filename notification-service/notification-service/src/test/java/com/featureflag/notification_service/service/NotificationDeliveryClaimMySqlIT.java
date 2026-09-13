@@ -507,7 +507,6 @@ class NotificationDeliveryClaimMySqlIT {
                 Timestamp.from(NOW)
         );
         assertPlanUsesIndex(
-                "due",
                 plan,
                 "idx_notifications_delivery_due"
         );
@@ -592,14 +591,12 @@ class NotificationDeliveryClaimMySqlIT {
                 Timestamp.from(NOW)
         );
         assertPlanUsesIndex(
-                "recovery",
                 plan,
                 "idx_notifications_delivery_lease"
         );
     }
 
     private void assertPlanUsesIndex(
-            String planName,
             List<Map<String, Object>> plan,
             String expectedIndex
     ) {
@@ -612,16 +609,6 @@ class NotificationDeliveryClaimMySqlIT {
                 ));
         String extra = String.valueOf(selected.get("Extra"));
         assertFalse(extra.toLowerCase().contains("filesort"));
-        System.out.printf(
-                "%s EXPLAIN key=%s possible_keys=%s rows=%s "
-                        + "filtered=%s Extra=%s%n",
-                planName,
-                selected.get("key"),
-                selected.get("possible_keys"),
-                selected.get("rows"),
-                selected.get("filtered"),
-                selected.get("Extra")
-        );
     }
 
     private Notification.NotificationBuilder notification(

@@ -32,7 +32,7 @@ export interface MemberResponse {
   enabled: boolean;
 }
 
-export type InvitationStatus = "PENDING" | "ACCEPTED" | "EXPIRED" | "REVOKED";
+type InvitationStatus = "PENDING" | "ACCEPTED" | "EXPIRED" | "REVOKED";
 
 export interface InviteMemberRequest {
   name?: string;

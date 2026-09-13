@@ -16,11 +16,8 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* PUBLIC ROUTES */}
         <Route path="/login" element={<Login />} />
         <Route path="/accept-invitation" element={<AcceptInvitation />} />
-
-        {/* AUTHENTICATED ROUTES */}
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
             <Route path="/dashboard" element={<Dashboard />} />
@@ -28,8 +25,6 @@ function App() {
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/audit" element={<AuditLogs />} />
             <Route path="/notifications" element={<Notifications />} />
-
-            {/* RESTRICTED ROUTES (OWNER / ADMIN ONLY) */}
             <Route
               path="/members"
               element={
@@ -40,8 +35,6 @@ function App() {
             />
           </Route>
         </Route>
-
-        {/* FALLBACK REDIRECT */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>

@@ -1,6 +1,5 @@
 package com.featureflag.flag_service.service;
 
-import com.featureflag.flag_service.entity.FeatureFlag;
 import com.featureflag.flag_service.repository.FeatureFlagRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Page;

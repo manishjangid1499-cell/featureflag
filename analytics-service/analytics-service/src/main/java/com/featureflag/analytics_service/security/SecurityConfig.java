@@ -12,7 +12,6 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.web.SecurityFilterChain;
 
-
 @Configuration
 public class SecurityConfig {
 
@@ -36,10 +35,6 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
 
-                        // =========================
-                        // PUBLIC
-                        // =========================
-
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
@@ -49,12 +44,6 @@ public class SecurityConfig {
                                 "/actuator/health/**"
                         ).permitAll()
 
-
-                        // =========================
-                        // DELETE ANALYTICS
-                        // OWNER + ADMIN
-                        // =========================
-
                         .requestMatchers(
                                 HttpMethod.DELETE,
                                 "/analytics/**"
@@ -62,12 +51,6 @@ public class SecurityConfig {
                                 "OWNER",
                                 "ADMIN"
                         )
-
-
-                        // =========================
-                        // READ ANALYTICS
-                        // ALL ROLES
-                        // =========================
 
                         .requestMatchers(
                                 HttpMethod.GET,
@@ -78,11 +61,6 @@ public class SecurityConfig {
                                 "DEVELOPER",
                                 "VIEWER"
                         )
-
-
-                        // =========================
-                        // EVERYTHING ELSE
-                        // =========================
 
                         .anyRequest()
                         .authenticated()

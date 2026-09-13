@@ -39,7 +39,6 @@ export function Members() {
   const [deliveryWarning, setDeliveryWarning] = useState("");
   const [resendingId, setResendingId] = useState<number | null>(null);
 
-  // Modal
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");

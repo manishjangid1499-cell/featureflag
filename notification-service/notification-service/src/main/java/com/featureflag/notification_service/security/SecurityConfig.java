@@ -13,7 +13,6 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
-
 @Configuration
 public class SecurityConfig {
 
@@ -40,20 +39,12 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
 
-                        // =========================
-                        // INTERNAL SERVICE-TO-SERVICE
-                        // =========================
-
                         .requestMatchers(
                                 HttpMethod.POST,
                                 InternalNotificationServiceKeyFilter.INVITATION_PATH
                         ).hasAuthority(
                                 InternalNotificationServiceKeyFilter.AUTHORITY
                         )
-
-                        // =========================
-                        // PUBLIC
-                        // =========================
 
                         .requestMatchers(
                                 "/swagger-ui/**",
@@ -63,11 +54,6 @@ public class SecurityConfig {
                                 "/actuator/health",
                                 "/actuator/health/**"
                         ).permitAll()
-
-                        // =========================
-                        // CREATE NOTIFICATION
-                        // OWNER + ADMIN
-                        // =========================
 
                         .requestMatchers(
                                 HttpMethod.POST,
@@ -85,11 +71,6 @@ public class SecurityConfig {
                                 "OWNER"
                         )
 
-                        // =========================
-                        // DELETE NOTIFICATION
-                        // OWNER + ADMIN
-                        // =========================
-
                         .requestMatchers(
                                 HttpMethod.DELETE,
                                 "/api/notifications/**"
@@ -97,11 +78,6 @@ public class SecurityConfig {
                                 "OWNER",
                                 "ADMIN"
                         )
-
-                        // =========================
-                        // READ NOTIFICATIONS
-                        // ALL ROLES
-                        // =========================
 
                         .requestMatchers(
                                 HttpMethod.GET,
@@ -112,10 +88,6 @@ public class SecurityConfig {
                                 "DEVELOPER",
                                 "VIEWER"
                         )
-
-                        // =========================
-                        // EVERYTHING ELSE
-                        // =========================
 
                         .anyRequest()
                         .authenticated()

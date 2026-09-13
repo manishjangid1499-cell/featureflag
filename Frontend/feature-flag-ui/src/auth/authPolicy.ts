@@ -6,7 +6,7 @@ const PUBLIC_AUTH_PATHS = new Set([
   "/auth/invitations/accept",
 ]);
 
-export type RouteDecision = "pending" | "login" | "allow" | "forbidden";
+type RouteDecision = "pending" | "login" | "allow" | "forbidden";
 
 export function shouldAttachAuthentication(
   requestUrl: string | undefined,

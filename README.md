@@ -602,7 +602,7 @@ assets, and validates CSP. Backend tests cover roles, SDK credential isolation,
 error/status/correlation contracts, concurrency, retries, and domain behavior.
 See the [CI workflow](.github/workflows/ci.yml) for the exact module/profile matrix
 and packaged-artifact checks. It is configured to run on pushes to `main` and pull
-requests; local validation is not evidence of a remote GitHub Actions run.
+requests.
 
 The [disposable end-to-end smoke tests](scripts/e2e/README.md) exercise the real
 Compose stack, browser workflows, invitation emails through a local SMTP sink,

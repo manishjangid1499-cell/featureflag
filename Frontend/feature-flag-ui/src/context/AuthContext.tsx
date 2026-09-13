@@ -117,7 +117,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const isDeveloper = role === "DEVELOPER";
   const isViewer = role === "VIEWER";
 
-  // Permission helpers
   const canManageFlags = isOwner || isAdmin || isDeveloper;
   const canDeleteFlags = isOwner || isAdmin;
   const canManageMembers = isOwner || isAdmin;
