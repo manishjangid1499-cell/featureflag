@@ -30,7 +30,7 @@ updates:
       - dependency-name: "org.springframework.cloud:*"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
-      - dependency-name: "org.springdoc:springdoc-openapi-starter-webmvc-ui"
+      - dependency-name: "org.springdoc:*"
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
