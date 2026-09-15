@@ -31,7 +31,7 @@ export function DeleteFlagModal({ flag, isOpen, onClose, onSuccess }: DeleteFlag
   };
 
   return (
-    <div style={{
+    <div className="modal-overlay" style={{
       position: "fixed",
       top: 0,
       left: 0,
@@ -45,7 +45,7 @@ export function DeleteFlagModal({ flag, isOpen, onClose, onSuccess }: DeleteFlag
       zIndex: 50,
       padding: "20px"
     }}>
-      <div style={{
+      <div className="modal-panel modal-panel-padded" style={{
         background: "white",
         borderRadius: "14px",
         width: "100%",
@@ -94,7 +94,7 @@ export function DeleteFlagModal({ flag, isOpen, onClose, onSuccess }: DeleteFlag
           </div>
         )}
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+        <div className="responsive-actions" style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
           <button
             type="button"
             onClick={onClose}

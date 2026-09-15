@@ -18,6 +18,7 @@ export function PaginationControls({
   return (
     <nav
       aria-label="Pagination"
+      className="responsive-row"
       style={{
         display: "flex",
         justifyContent: "space-between",
@@ -29,7 +30,7 @@ export function PaginationControls({
       }}
     >
       <span>{totalElements} records</span>
-      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+      <div className="responsive-actions" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
         <button
           type="button"
           disabled={disabled || page === 0}

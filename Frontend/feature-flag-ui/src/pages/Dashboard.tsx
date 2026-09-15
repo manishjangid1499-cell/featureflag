@@ -66,7 +66,7 @@ export function Dashboard() {
   return (
     <div style={{ maxWidth: "1600px", margin: "0 auto" }}>
       {/* GREETING HERO */}
-      <div style={{
+      <div className="dashboard-hero" style={{
         background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%)",
         borderRadius: "16px",
         padding: "32px",
@@ -101,7 +101,7 @@ export function Dashboard() {
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: "10px" }}>
+        <div className="responsive-actions" style={{ display: "flex", gap: "10px" }}>
           <button
             type="button"
             onClick={fetchDashboardData}
@@ -138,7 +138,7 @@ export function Dashboard() {
       </div>
 
       {error && (
-        <div style={{
+        <div className="responsive-row" style={{
           background: "#fff1f2",
           border: "1px solid #fecdd3",
           borderRadius: "10px",
@@ -213,10 +213,10 @@ export function Dashboard() {
       </div>
 
       {/* SPLIT LAYOUT: RECENT ACTIVITY & QUICK ACTIONS */}
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "24px", alignItems: "start" }}>
+      <div className="dashboard-split" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "24px", alignItems: "start" }}>
         {/* RECENT AUDIT ACTIVITY */}
         <div style={{ background: "white", borderRadius: "14px", border: "1px solid #e5e7eb", padding: "24px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" }}>
+          <div className="responsive-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" }}>
             <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#111827" }}>
               Recent Flag Activity
             </h3>
@@ -238,6 +238,7 @@ export function Dashboard() {
               {auditLogs.map((log) => (
                 <div
                   key={log.id}
+                  className="responsive-row"
                   style={{
                     padding: "12px 14px",
                     background: "#f9fafb",

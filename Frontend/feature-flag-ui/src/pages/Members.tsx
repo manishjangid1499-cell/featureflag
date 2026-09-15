@@ -177,6 +177,7 @@ export function Members() {
     <div style={{ maxWidth: "1600px", margin: "0 auto" }}>
       {/* HEADER */}
       <div
+        className="page-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -206,7 +207,7 @@ export function Members() {
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: "10px" }}>
+        <div className="responsive-actions" style={{ display: "flex", gap: "10px" }}>
           <button
             type="button"
             onClick={() => void loadData()}
@@ -311,6 +312,7 @@ export function Members() {
           </div>
         ) : (
           <div
+            className="table-scroll member-table-scroll"
             style={{
               background: "white",
               borderRadius: "14px",
@@ -579,6 +581,7 @@ export function Members() {
           </div>
         ) : (
           <div
+            className="table-scroll member-table-scroll"
             style={{
               background: "white",
               borderRadius: "14px",
@@ -814,6 +817,7 @@ export function Members() {
       {/* INVITE MEMBER MODAL */}
       {isInviteOpen && (
         <div
+          className="modal-overlay"
           style={{
             position: "fixed",
             top: 0,
@@ -829,6 +833,7 @@ export function Members() {
           }}
         >
           <div
+            className="modal-panel modal-panel-padded"
             style={{
               background: "white",
               borderRadius: "16px",
@@ -966,6 +971,7 @@ export function Members() {
               </div>
 
               <div
+                className="responsive-actions"
                 style={{
                   display: "flex",
                   justifyContent: "flex-end",

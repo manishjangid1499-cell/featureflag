@@ -43,7 +43,7 @@ export function FlagEvaluationModal({ flag, isOpen, onClose }: FlagEvaluationMod
   };
 
   return (
-    <div style={{
+    <div className="modal-overlay" style={{
       position: "fixed",
       top: 0,
       left: 0,
@@ -57,7 +57,7 @@ export function FlagEvaluationModal({ flag, isOpen, onClose }: FlagEvaluationMod
       zIndex: 50,
       padding: "20px"
     }}>
-      <div style={{
+      <div className="modal-panel" style={{
         background: "white",
         borderRadius: "14px",
         width: "100%",
@@ -67,7 +67,7 @@ export function FlagEvaluationModal({ flag, isOpen, onClose }: FlagEvaluationMod
         boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
         border: "1px solid #e5e7eb"
       }}>
-        <div style={{
+        <div className="modal-header" style={{
           padding: "20px 24px",
           borderBottom: "1px solid #f3f4f6",
           display: "flex",
@@ -91,9 +91,9 @@ export function FlagEvaluationModal({ flag, isOpen, onClose }: FlagEvaluationMod
           </button>
         </div>
 
-        <div style={{ padding: "24px" }}>
+        <div className="modal-body" style={{ padding: "24px" }}>
           <form onSubmit={handleEvaluate}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" }}>
+            <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" }}>
               <div>
                 <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
                   Environment
@@ -166,7 +166,7 @@ export function FlagEvaluationModal({ flag, isOpen, onClose }: FlagEvaluationMod
               borderRadius: "10px",
               padding: "18px"
             }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+              <div className="responsive-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
                 <span style={{ fontSize: "13px", fontWeight: 600, color: "#4b5563" }}>
                   Evaluation Verdict:
                 </span>
@@ -182,7 +182,7 @@ export function FlagEvaluationModal({ flag, isOpen, onClose }: FlagEvaluationMod
                 </span>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", fontSize: "12px" }}>
+              <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", fontSize: "12px" }}>
                 <div style={{ padding: "8px 12px", background: "white", borderRadius: "6px", border: "1px solid #f3f4f6" }}>
                   <span style={{ color: "#6b7280" }}>Within Schedule:</span>{" "}
                   <strong>{evaluationResult.withinSchedule ? "Yes" : "No"}</strong>
