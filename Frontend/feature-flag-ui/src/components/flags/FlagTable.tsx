@@ -42,7 +42,7 @@ export function FlagTable({
       boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
       overflow: "hidden"
     }}>
-      <div style={{
+      <div className="responsive-row" style={{
         padding: "20px 24px",
         borderBottom: "1px solid #f3f4f6",
         display: "flex",
@@ -90,7 +90,7 @@ export function FlagTable({
           </p>
         </div>
       ) : (
-        <div style={{ overflowX: "auto" }}>
+        <div className="table-scroll flag-table-scroll" style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
             <thead>
               <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>

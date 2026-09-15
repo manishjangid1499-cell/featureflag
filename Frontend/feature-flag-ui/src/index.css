@@ -223,6 +223,11 @@ textarea {
 
 /* Responsive */
 
+.mobile-menu-button,
+.sidebar-backdrop {
+  display: none;
+}
+
 @media (max-width: 900px) {
   .sidebar {
     width: 210px;
@@ -236,44 +241,239 @@ textarea {
   .page-content {
     padding: 24px;
   }
+
+  /* The tablet sidebar also leaves less room for wide tables. */
+  .table-scroll {
+    overflow-x: auto !important;
+  }
 }
 
 @media (max-width: 700px) {
+  .app-shell {
+    width: 100%;
+    overflow-x: clip;
+  }
+
   .sidebar {
-    width: 70px;
+    width: min(280px, calc(100% - 40px));
+    height: 100dvh;
+    min-height: 0;
+    visibility: hidden;
+    transform: translateX(-100%);
+    z-index: 40;
+  }
+
+  .sidebar-open {
+    visibility: visible;
+    transform: translateX(0);
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(17, 24, 39, 0.6);
+    z-index: 30;
+  }
+
+  .mobile-menu-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: white;
+    color: #374151;
+    font-size: 22px;
+    cursor: pointer;
+  }
+
+  .sidebar-close {
+    align-self: flex-end;
+    margin: 12px 12px 0;
+    background: transparent;
+    border-color: #374151;
+    color: #d1d5db;
   }
 
   .brand {
-    justify-content: center;
-    padding: 0;
+    padding: 0 20px;
+    flex-shrink: 0;
   }
 
-  .brand > div:not(.brand-icon),
-  .sidebar-link:not(.active)::after,
-  .nav-section-title,
-  .user-info,
-  .logout-button {
-    display: none;
+  .sidebar-nav {
+    min-height: 0;
+    padding-top: 10px;
+    overscroll-behavior: contain;
   }
 
-  .sidebar-link {
-    justify-content: center;
-  }
-
+  .sidebar-bottom,
+  .avatar,
   .sidebar-link span {
-    margin: 0;
+    flex-shrink: 0;
+  }
+
+  .user-info strong {
+    max-width: 100%;
   }
 
   .main-content {
-    margin-left: 70px;
-    width: calc(100% - 70px);
+    margin-left: 0;
+    width: 100%;
+    min-width: 0;
   }
 
   .topbar {
-    padding: 0 20px;
+    padding: 0 12px;
+    gap: 10px;
+  }
+
+  .topbar-heading,
+  .topbar-label {
+    min-width: 0;
+  }
+
+  .topbar-user {
+    flex-shrink: 0;
   }
 
   .page-content {
-    padding: 20px;
+    padding: 16px 12px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .page-content input,
+  .page-content select,
+  .page-content textarea {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .page-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .page-header > div {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .responsive-actions,
+  .responsive-row {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .responsive-actions > *,
+  .responsive-row > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .responsive-actions > button,
+  .page-header > button {
+    flex-shrink: 0;
+    max-width: 100%;
+  }
+
+  .dashboard-hero {
+    padding: 20px !important;
+  }
+
+  .dashboard-hero > div {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* Override only the inline desktop column definitions. */
+  .dashboard-split,
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .dashboard-split > *,
+  .form-grid > * {
+    min-width: 0;
+  }
+
+  .flag-filters {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+
+  .flag-search {
+    min-width: 0 !important;
+  }
+
+  .flag-search input {
+    max-width: none !important;
+  }
+
+  .table-scroll {
+    max-width: 100%;
+    overscroll-behavior-x: contain;
+  }
+
+  .table-scroll table {
+    min-width: 640px;
+  }
+
+  .flag-table-scroll table {
+    min-width: 960px;
+  }
+
+  .member-table-scroll table {
+    min-width: 760px;
+  }
+
+  .table-scroll td {
+    max-width: 320px;
+    overflow-wrap: anywhere;
+  }
+
+  .table-scroll th,
+  .table-scroll td > span {
+    white-space: nowrap;
+  }
+
+  .table-scroll td > span {
+    display: inline-block;
+  }
+
+  .modal-overlay {
+    padding: 12px !important;
+  }
+
+  .modal-panel {
+    min-width: 0;
+    max-height: min(90dvh, calc(100dvh - 24px)) !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    overflow-wrap: anywhere;
+  }
+
+  .modal-panel-padded,
+  .modal-header,
+  .modal-body {
+    padding: 16px !important;
+  }
+
+  .modal-header {
+    align-items: flex-start !important;
+    gap: 10px;
+  }
+
+  .modal-header > div {
+    min-width: 0;
+  }
+
+  .modal-header > button {
+    flex-shrink: 0;
   }
 }

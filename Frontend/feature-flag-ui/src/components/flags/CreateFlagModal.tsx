@@ -85,7 +85,7 @@ export function CreateFlagModal({ isOpen, onClose, onSuccess }: CreateFlagModalP
   };
 
   return (
-    <div style={{
+    <div className="modal-overlay" style={{
       position: "fixed",
       top: 0,
       left: 0,
@@ -99,7 +99,7 @@ export function CreateFlagModal({ isOpen, onClose, onSuccess }: CreateFlagModalP
       zIndex: 50,
       padding: "20px"
     }}>
-      <div style={{
+      <div className="modal-panel" style={{
         background: "white",
         borderRadius: "14px",
         width: "100%",
@@ -109,7 +109,7 @@ export function CreateFlagModal({ isOpen, onClose, onSuccess }: CreateFlagModalP
         boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
         border: "1px solid #e5e7eb"
       }}>
-        <div style={{
+        <div className="modal-header" style={{
           padding: "20px 24px",
           borderBottom: "1px solid #f3f4f6",
           display: "flex",
@@ -133,7 +133,7 @@ export function CreateFlagModal({ isOpen, onClose, onSuccess }: CreateFlagModalP
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ padding: "24px" }}>
+        <form className="modal-body" onSubmit={handleSubmit} style={{ padding: "24px" }}>
           {error && (
             <div style={{
               background: "#fef2f2",
@@ -148,7 +148,7 @@ export function CreateFlagModal({ isOpen, onClose, onSuccess }: CreateFlagModalP
             </div>
           )}
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+          <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
                 Flag Name *
@@ -178,7 +178,7 @@ export function CreateFlagModal({ isOpen, onClose, onSuccess }: CreateFlagModalP
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+          <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
                 Environment *
@@ -243,7 +243,7 @@ export function CreateFlagModal({ isOpen, onClose, onSuccess }: CreateFlagModalP
             />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+          <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
                 Scheduled Start (Optional)
@@ -282,7 +282,7 @@ export function CreateFlagModal({ isOpen, onClose, onSuccess }: CreateFlagModalP
             />
           </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", paddingTop: "14px", borderTop: "1px solid #f3f4f6" }}>
+          <div className="responsive-actions" style={{ display: "flex", justifyContent: "flex-end", gap: "12px", paddingTop: "14px", borderTop: "1px solid #f3f4f6" }}>
             <button
               type="button"
               onClick={onClose}

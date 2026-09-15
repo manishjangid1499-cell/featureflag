@@ -18,7 +18,7 @@ export function AuditLogs() {
 
   return (
     <div style={{ maxWidth: "1600px", margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
+      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
         <div>
           <h1 style={{ margin: 0, fontSize: "24px", fontWeight: 800, color: "#111827" }}>
             Audit Logs
@@ -72,7 +72,7 @@ export function AuditLogs() {
           <p style={{ margin: 0, fontSize: "13px", color: "#6b7280" }}>Audit entries will appear as flags are created, toggled, and updated.</p>
         </div>
       ) : (
-        <div style={{ background: "white", borderRadius: "14px", border: "1px solid #e5e7eb", overflow: "hidden" }}>
+        <div className="table-scroll" style={{ background: "white", borderRadius: "14px", border: "1px solid #e5e7eb", overflow: "hidden" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
             <thead>
               <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>

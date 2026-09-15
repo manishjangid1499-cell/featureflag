@@ -92,7 +92,7 @@ export function Flags() {
   return (
     <div style={{ maxWidth: "1600px", margin: "0 auto" }}>
       {/* PAGE HEADER */}
-      <div style={{
+      <div className="page-header" style={{
         display: "flex",
         justifyContent: "space-between",
         alignItems: "flex-start",
@@ -109,7 +109,7 @@ export function Flags() {
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: "10px" }}>
+        <div className="responsive-actions" style={{ display: "flex", gap: "10px" }}>
           <button
             type="button"
             onClick={() => void loadFlags(page)}
@@ -159,7 +159,7 @@ export function Flags() {
       />
 
       {/* FILTER & SEARCH BAR */}
-      <div style={{
+      <div className="flag-filters" style={{
         background: "white",
         borderRadius: "12px",
         border: "1px solid #e5e7eb",
@@ -171,7 +171,7 @@ export function Flags() {
         flexWrap: "wrap",
         gap: "14px"
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: "260px" }}>
+        <div className="flag-search" style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: "260px" }}>
           <input
             type="text"
             placeholder="Filter this page by flag name or key..."
@@ -188,7 +188,7 @@ export function Flags() {
           />
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <div className="responsive-row" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: 600 }}>Env:</span>
             <select
@@ -233,7 +233,7 @@ export function Flags() {
 
       {/* ERROR STATE */}
       {error && (
-        <div style={{
+        <div className="responsive-row" style={{
           background: "#fff1f2",
           border: "1px solid #fecdd3",
           borderRadius: "10px",

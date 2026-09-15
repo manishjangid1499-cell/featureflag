@@ -56,7 +56,7 @@ export function Notifications() {
 
   return (
     <div style={{ maxWidth: "1600px", margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
+      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
         <div>
           <h1 style={{ margin: 0, fontSize: "24px", fontWeight: 800, color: "#111827" }}>
             Notifications & Dispatcher
@@ -66,7 +66,7 @@ export function Notifications() {
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: "10px" }}>
+        <div className="responsive-actions" style={{ display: "flex", gap: "10px" }}>
           <button
             type="button"
             onClick={() => void loadNotifications(page)}
@@ -121,7 +121,7 @@ export function Notifications() {
           <p style={{ margin: 0, fontSize: "13px", color: "#6b7280" }}>Notifications will appear as flag mutation emails are dispatched.</p>
         </div>
       ) : (
-        <div style={{ background: "white", borderRadius: "14px", border: "1px solid #e5e7eb", overflow: "hidden" }}>
+        <div className="table-scroll" style={{ background: "white", borderRadius: "14px", border: "1px solid #e5e7eb", overflow: "hidden" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
             <thead>
               <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
@@ -193,7 +193,7 @@ export function Notifications() {
 
       {/* SEND MODAL */}
       {isModalOpen && (
-        <div style={{
+        <div className="modal-overlay" style={{
           position: "fixed",
           top: 0,
           left: 0,
@@ -206,7 +206,7 @@ export function Notifications() {
           zIndex: 50,
           padding: "20px"
         }}>
-          <div style={{ background: "white", borderRadius: "14px", width: "100%", maxWidth: "500px", padding: "24px" }}>
+          <div className="modal-panel modal-panel-padded" style={{ background: "white", borderRadius: "14px", width: "100%", maxWidth: "500px", padding: "24px" }}>
             <h3 style={{ margin: "0 0 16px 0", fontSize: "18px", color: "#111827", fontWeight: 700 }}>
               Dispatch Email Notification
             </h3>
@@ -247,7 +247,7 @@ export function Notifications() {
                 />
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <div className="responsive-actions" style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
