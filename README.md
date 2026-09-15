@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/manishjangid1499-cell/featureflag/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/manishjangid1499-cell/featureflag/actions/workflows/ci.yml)
 ![Java](https://img.shields.io/badge/Java-21-007396?logo=openjdk&logoColor=white)
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.5-6DB33F?logo=springboot&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.16-6DB33F?logo=springboot&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111827)
 ![Kafka](https://img.shields.io/badge/Apache%20Kafka-4.3.1-231F20?logo=apachekafka&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-8.10.0-DC382D?logo=redis&logoColor=white)
@@ -10,6 +10,8 @@
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 
 A full-stack **feature flag management and runtime evaluation platform** built with Java 21, Spring Boot microservices, React, Kafka, Redis, MySQL, and Docker.
+
+> **Live Demo:** https://featureflag-mj.duckdns.org
 
 The platform separates the **control plane** used by people who manage feature flags from the **runtime evaluation plane** used by applications. Teams can manage environment-specific flags, schedule releases, target individual subjects, perform deterministic percentage rollouts, issue SDK credentials, inspect audit history and analytics, and deliver operational notifications without coupling feature releases to application deployments.
 
@@ -47,8 +49,8 @@ The project focuses on practical backend and distributed-systems concerns: **sec
 
 | Area | Technologies |
 |---|---|
-| Backend | Java 21, Spring Boot 3.5.5, Spring Data JPA, Hibernate |
-| Microservices | Spring Cloud 2025.0.0, Spring Cloud Gateway, Eureka, OpenFeign |
+| Backend | Java 21, Spring Boot 3.5.16, Spring Data JPA, Hibernate |
+| Microservices | Spring Cloud 2025.0.3, Spring Cloud Gateway, Eureka, OpenFeign |
 | Security | Spring Security, RSA/RS256 JWT, BCrypt, RBAC |
 | Persistence | MySQL 8.4, Flyway |
 | Messaging | Apache Kafka 4.3.1 |
@@ -172,6 +174,58 @@ flowchart LR
 ```
 
 The flag mutation and outbox row commit in the same database transaction. Publishing happens after commit. Delivery is therefore **at least once**, not distributed exactly once. Consumers persist event IDs and apply effects transactionally so duplicate Kafka delivery does not duplicate database effects.
+
+---
+
+
+## Cloud Deployment
+
+A live deployment of the platform is hosted on an AWS EC2 Ubuntu server and runs the complete application stack with Docker Compose.
+
+**Live application:** https://featureflag-mj.duckdns.org
+
+For the complete deployment and operations guide, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+```mermaid
+flowchart TD
+    Internet[Internet] --> DNS[DuckDNS]
+    DNS --> HTTPS[HTTPS :443]
+    HTTPS --> Nginx[Frontend / Nginx]
+    Nginx --> Gateway[API Gateway]
+
+    Gateway --> Auth[Auth Service]
+    Gateway --> Flag[Flag Service]
+    Gateway --> Audit[Audit Service]
+    Gateway --> Analytics[Analytics Service]
+    Gateway --> Notification[Notification Service]
+
+    Flag --> Redis[(Redis)]
+    Flag --> Kafka[(Kafka)]
+
+    Auth --> MySQL[(MySQL)]
+    Flag --> MySQL
+    Audit --> MySQL
+    Analytics --> MySQL
+    Notification --> MySQL
+```
+
+The deployment uses:
+
+- AWS EC2 with Ubuntu 24.04 LTS
+- Docker Engine and Docker Compose
+- Nginx as the public frontend and same-origin API ingress
+- DuckDNS for hostname resolution and dynamic IP updates
+- Let's Encrypt certificates managed by Certbot
+- automatic certificate renewal
+- automatic DuckDNS IP synchronization through a systemd timer
+- persistent Docker volumes for MySQL and Kafka
+- container health checks and restart policies
+
+Only the public web entry points are exposed externally. HTTP and HTTPS are available on ports `80` and `443`; backend application services, MySQL, Redis, and Eureka remain internal to the Docker network. Kafka's external listener is bound to loopback rather than the public interface.
+
+The production environment keeps database credentials, JWT signing keys, internal service credentials, SMTP credentials, and TLS private keys outside Git.
+
+> The live portfolio environment may occasionally be offline when the EC2 instance is intentionally stopped.
 
 ---
 
