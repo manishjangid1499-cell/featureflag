@@ -11,7 +11,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 @Data
@@ -54,9 +54,9 @@ public class FlagRequest {
     @Max(value = 100, message = "rolloutPercentage cannot be greater than 100")
     private Integer rolloutPercentage;
 
-    private LocalDateTime startDate;
+    private Instant startDate;
 
-    private LocalDateTime endDate;
+    private Instant endDate;
 
     private List<
             @NotBlank(message = "target user cannot be blank")

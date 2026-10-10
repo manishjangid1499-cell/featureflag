@@ -28,3 +28,7 @@ security:
     public-key-location: classpath:test-public-key.pem
     issuer: feature-flag-auth
     audience: feature-flag-api
+
+features:
+  evaluation:
+    config-cache-enabled: false

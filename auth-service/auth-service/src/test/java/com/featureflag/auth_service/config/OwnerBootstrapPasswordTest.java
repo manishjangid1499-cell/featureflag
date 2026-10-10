@@ -15,6 +15,7 @@ class OwnerBootstrapPasswordTest {
     @ValueSource(strings = {"a", "\u00e9", "\ud83d\udd12"})
     void oversizedBootstrapPasswordFailsWithSafeConfigurationError(String character) {
         UserRepository users = mock(UserRepository.class);
+        com.featureflag.auth_service.repository.SystemInvariantRepository invariants = mock(com.featureflag.auth_service.repository.SystemInvariantRepository.class);
         PasswordEncoder encoder = mock(PasswordEncoder.class);
         OwnerBootstrapProperties properties = new OwnerBootstrapProperties();
         properties.setEnabled(true);
@@ -22,7 +23,7 @@ class OwnerBootstrapPasswordTest {
         properties.setEmail("owner@example.test");
         properties.setPassword(character.repeat(73));
 
-        assertThatThrownBy(() -> new OwnerBootstrapService(users, encoder, properties)
+        assertThatThrownBy(() -> new OwnerBootstrapService(users, invariants, encoder, properties)
                 .run(new DefaultApplicationArguments()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Bootstrap OWNER password must not exceed 72 UTF-8 bytes.");

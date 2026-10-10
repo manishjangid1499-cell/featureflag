@@ -49,26 +49,25 @@ public class JwtAuthenticationFilter
                 authHeader.substring(7);
 
         try {
+            String email = jwtService.extractEmail(token);
+            Long tokenUserId = jwtService.extractUserId(token);
+            Long tokenVersion = jwtService.extractTokenVersion(token);
 
-            String email =
-                    jwtService.extractEmail(token);
+            if (email != null && tokenUserId != null
+                    && SecurityContextHolder.getContext().getAuthentication() == null) {
 
-            if (email != null &&
-                    SecurityContextHolder
-                            .getContext()
-                            .getAuthentication() == null) {
+                UserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
-                UserDetails userDetails =
-                        userDetailsService
-                                .loadUserByUsername(email);
+                boolean userMatches = (userDetails instanceof com.featureflag.auth_service.entity.User user)
+                        && tokenUserId.equals(user.getId())
+                        && tokenVersion != null
+                        && tokenVersion.equals(user.getCredentialVersion());
 
-                if (userDetails.isEnabled()
-                        && jwtService.isTokenValid(
-                                token,
-                                userDetails.getUsername())) {
+                if (userMatches
+                        && userDetails.isEnabled()
+                        && jwtService.isTokenValid(token, userDetails.getUsername())) {
 
-                    UsernamePasswordAuthenticationToken
-                            authToken =
+                    UsernamePasswordAuthenticationToken authToken =
                             new UsernamePasswordAuthenticationToken(
                                     userDetails,
                                     null,
@@ -76,21 +75,14 @@ public class JwtAuthenticationFilter
                             );
 
                     authToken.setDetails(
-                            new WebAuthenticationDetailsSource()
-                                    .buildDetails(request)
+                            new WebAuthenticationDetailsSource().buildDetails(request)
                     );
 
-                    SecurityContextHolder
-                            .getContext()
-                            .setAuthentication(
-                                    authToken
-                            );
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
                 }
             }
-
         } catch (Exception e) {
-
-            // Invalid JWT.
+            // Invalid JWT, missing userId, or identity mismatch.
             // Request continues without authentication.
         }
 

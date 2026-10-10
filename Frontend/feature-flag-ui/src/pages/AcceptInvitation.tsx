@@ -1,17 +1,17 @@
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, useEffect, useRef, type FormEvent } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { validateInvitation, acceptInvitation } from "../api/authApi";
 import type { ValidateInvitationResponse } from "../types/auth";
 import { getApiErrorMessage } from "../api/errors";
 
-export function AcceptInvitation() {
-  const [searchParams] = useSearchParams();
+function AcceptInvitationSession({ token }: { token: string }) {
   const navigate = useNavigate();
-  const token = searchParams.get("token") || "";
 
-  const [validating, setValidating] = useState(true);
+  const [validating, setValidating] = useState(() => Boolean(token));
   const [invitationData, setInvitationData] = useState<ValidateInvitationResponse | null>(null);
-  const [validationError, setValidationError] = useState("");
+  const [validationError, setValidationError] = useState(() =>
+    token ? "" : "Invitation token is missing from the URL."
+  );
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -20,30 +20,42 @@ export function AcceptInvitation() {
   const [submitError, setSubmitError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
+  const submissionActive = useRef(true);
+  useEffect(() => {
+    return () => {
+      submissionActive.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     if (!token) {
-      setValidating(false);
-      setValidationError("Invitation token is missing from the URL.");
       return;
     }
 
-    const checkToken = async () => {
-      try {
-        setValidating(true);
-        const res = await validateInvitation(token);
+    let isCancelled = false;
+
+    validateInvitation(token)
+      .then((res) => {
+        if (isCancelled) return;
         if (res.valid) {
           setInvitationData(res);
         } else {
           setValidationError(res.errorMessage || "This invitation link is invalid or expired.");
         }
-      } catch (error: unknown) {
+      })
+      .catch((error: unknown) => {
+        if (isCancelled) return;
         setValidationError(getApiErrorMessage(error, "Failed to validate invitation."));
-      } finally {
-        setValidating(false);
-      }
-    };
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setValidating(false);
+        }
+      });
 
-    checkToken();
+    return () => {
+      isCancelled = true;
+    };
   }, [token]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -67,11 +79,15 @@ export function AcceptInvitation() {
         password,
         confirmPassword,
       });
+      if (!submissionActive.current) return;
       setSuccessMessage(msg || "Account created successfully! You can now sign in.");
     } catch (error: unknown) {
+      if (!submissionActive.current) return;
       setSubmitError(getApiErrorMessage(error, "Failed to create account. Please try again."));
     } finally {
-      setSubmitting(false);
+      if (submissionActive.current) {
+        setSubmitting(false);
+      }
     }
   };
 
@@ -279,7 +295,6 @@ export function AcceptInvitation() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    placeholder="Minimum 8 characters"
                     style={{
                       width: "100%",
                       padding: "10px 14px",
@@ -300,7 +315,6 @@ export function AcceptInvitation() {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
-                    placeholder="Re-enter your password"
                     style={{
                       width: "100%",
                       padding: "10px 14px",
@@ -336,6 +350,18 @@ export function AcceptInvitation() {
         </div>
       </div>
     </div>
+  );
+}
+
+export function AcceptInvitation() {
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get("token") || "";
+
+  return (
+    <AcceptInvitationSession
+      key={token || "__missing_token__"}
+      token={token}
+    />
   );
 }
 

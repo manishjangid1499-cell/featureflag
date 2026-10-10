@@ -123,16 +123,14 @@ public class SecurityConfig {
                         .hasAnyRole("OWNER", "ADMIN", "DEVELOPER")
 
                         .requestMatchers(HttpMethod.DELETE, "/flags/**")
-                        .hasAnyRole("OWNER", "ADMIN")
+                        .hasAnyRole("OWNER", "ADMIN", "DEVELOPER")
 
                         // EVERYTHING ELSE
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint((request, response, exception) ->
-                                problems.write(request, response, HttpStatus.UNAUTHORIZED,
-                                        "unauthenticated", "Unauthorized",
-                                        "Authentication is required"))
+                                handleAuthenticationFailure(request, response, exception, problems))
                         .accessDeniedHandler((request, response, exception) ->
                                 problems.write(request, response, HttpStatus.FORBIDDEN,
                                         "forbidden", "Forbidden",
@@ -141,9 +139,7 @@ public class SecurityConfig {
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter))
                         .authenticationEntryPoint((request, response, exception) ->
-                                problems.write(request, response, HttpStatus.UNAUTHORIZED,
-                                        "unauthenticated", "Unauthorized",
-                                        "Authentication is required"))
+                                handleAuthenticationFailure(request, response, exception, problems))
                 );
 
         return http.build();
@@ -172,5 +168,43 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/**", configuration);
 
         return source;
+    }
+
+    private static void handleAuthenticationFailure(
+            jakarta.servlet.http.HttpServletRequest request,
+            jakarta.servlet.http.HttpServletResponse response,
+            org.springframework.security.core.AuthenticationException exception,
+            ApiProblemDetails problems
+    ) throws java.io.IOException {
+        if (isServiceUnavailable(exception)) {
+            problems.write(
+                    request,
+                    response,
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "service-unavailable",
+                    "Service Unavailable",
+                    "Authentication provider is temporarily unavailable"
+            );
+            return;
+        }
+        problems.write(
+                request,
+                response,
+                HttpStatus.UNAUTHORIZED,
+                "unauthenticated",
+                "Unauthorized",
+                "Authentication is required"
+        );
+    }
+
+    private static boolean isServiceUnavailable(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof AuthServiceUnavailableException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }

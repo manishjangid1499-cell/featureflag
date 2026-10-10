@@ -2,9 +2,13 @@ package com.featureflag.notification_service.controller;
 
 import com.featureflag.notification_service.dto.NotificationRequest;
 import com.featureflag.notification_service.entity.Notification;
+import com.featureflag.notification_service.security.AuthAccountStatusClient;
+import com.featureflag.notification_service.security.AuthoritativeJwtAuthenticationConverter;
 import com.featureflag.notification_service.security.JwtSecurityConfig;
 import com.featureflag.notification_service.security.SecurityConfig;
+import com.featureflag.notification_service.security.UserAccountStatus;
 import com.featureflag.notification_service.service.NotificationService;
+import org.mockito.Mockito;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -48,6 +52,9 @@ class NotificationAuthorizationTest {
 
     @MockitoBean
     private JwtDecoder jwtDecoder;
+
+    @Autowired
+    private AuthAccountStatusClient authAccountStatusClient;
 
     @Test
     void ownerCanQueryOrganizationWideStatus() throws Exception {
@@ -210,8 +217,11 @@ class NotificationAuthorizationTest {
                 now.minusSeconds(10),
                 now.plusSeconds(300),
                 Map.of("alg", "RS256"),
-                Map.of("sub", email, "role", role)
+                Map.of("sub", email, "role", role, "userId", 1L, "tokenVersion", 1L)
         ));
+        when(authAccountStatusClient.getAccountStatus(eq(email), any())).thenReturn(
+                java.util.Optional.of(new UserAccountStatus(1L, email, role, true, 1L))
+        );
     }
 
     private String validNotificationJson(String creatorEmail) {
@@ -241,8 +251,15 @@ class NotificationAuthorizationTest {
     static class TestJwtConfiguration {
 
         @Bean
-        Converter<Jwt, ? extends AbstractAuthenticationToken> jwtAuthenticationConverter() {
-            return new JwtSecurityConfig().jwtAuthenticationConverter();
+        AuthAccountStatusClient authAccountStatusClient() {
+            return Mockito.mock(AuthAccountStatusClient.class);
+        }
+
+        @Bean
+        Converter<Jwt, ? extends AbstractAuthenticationToken> jwtAuthenticationConverter(
+                AuthAccountStatusClient authAccountStatusClient
+        ) {
+            return new AuthoritativeJwtAuthenticationConverter(authAccountStatusClient);
         }
     }
 }

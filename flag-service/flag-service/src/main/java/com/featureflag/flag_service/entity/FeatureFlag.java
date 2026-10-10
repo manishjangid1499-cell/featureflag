@@ -1,10 +1,12 @@
 package com.featureflag.flag_service.entity;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.featureflag.flag_service.config.LenientInstantDeserializer;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.io.Serializable;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -63,14 +65,18 @@ public class FeatureFlag implements Serializable {
      * If current time is before this value,
      * the flag is considered inactive.
      */
-    private LocalDateTime startDate;
+    @Column(name = "start_date")
+    @JsonDeserialize(using = LenientInstantDeserializer.class)
+    private Instant startDate;
 
     /**
      * Optional scheduled expiration date/time.
      * If current time is after this value,
      * the flag is considered inactive.
      */
-    private LocalDateTime endDate;
+    @Column(name = "end_date")
+    @JsonDeserialize(using = LenientInstantDeserializer.class)
+    private Instant endDate;
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(

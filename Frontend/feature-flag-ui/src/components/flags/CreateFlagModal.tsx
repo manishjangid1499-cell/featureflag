@@ -2,6 +2,12 @@ import { useState, type FormEvent } from "react";
 import type { FlagRequest, FeatureFlag } from "../../types/featureFlag";
 import { createFlag } from "../../api/flagApi";
 import { getApiErrorMessage } from "../../api/errors";
+import { useAuth } from "../../hooks/useAuth";
+import {
+  getUserTimeZone,
+  localInputValueToUtcIso,
+  validateScheduleInputs,
+} from "../../utils/scheduleTime";
 
 interface CreateFlagModalProps {
   isOpen: boolean;
@@ -10,6 +16,7 @@ interface CreateFlagModalProps {
 }
 
 export function CreateFlagModal({ isOpen, onClose, onSuccess }: CreateFlagModalProps) {
+  const { isDeveloper } = useAuth();
   const [name, setName] = useState("");
   const [flagKey, setFlagKey] = useState("");
   const [description, setDescription] = useState("");
@@ -50,8 +57,9 @@ export function CreateFlagModal({ isOpen, onClose, onSuccess }: CreateFlagModalP
       return;
     }
 
-    if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
-      setError("End date must be after start date.");
+    const scheduleError = validateScheduleInputs(startDate, endDate);
+    if (scheduleError) {
+      setError(scheduleError);
       return;
     }
 
@@ -67,8 +75,8 @@ export function CreateFlagModal({ isOpen, onClose, onSuccess }: CreateFlagModalP
       environment,
       rolloutPercentage,
       enabled,
-      startDate: startDate ? new Date(startDate).toISOString().slice(0, 19) : null,
-      endDate: endDate ? new Date(endDate).toISOString().slice(0, 19) : null,
+      startDate: localInputValueToUtcIso(startDate),
+      endDate: localInputValueToUtcIso(endDate),
       targetUsers,
     };
 
@@ -157,7 +165,6 @@ export function CreateFlagModal({ isOpen, onClose, onSuccess }: CreateFlagModalP
                 type="text"
                 value={name}
                 onChange={(e) => handleNameChange(e.target.value)}
-                placeholder="e.g. Modern Header"
                 required
                 style={{ width: "100%", padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: "7px", fontSize: "13px" }}
               />
@@ -171,7 +178,6 @@ export function CreateFlagModal({ isOpen, onClose, onSuccess }: CreateFlagModalP
                 type="text"
                 value={flagKey}
                 onChange={(e) => setFlagKey(e.target.value)}
-                placeholder="e.g. MODERN_HEADER"
                 required
                 style={{ width: "100%", padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: "7px", fontSize: "13px", fontFamily: "monospace" }}
               />
@@ -191,8 +197,13 @@ export function CreateFlagModal({ isOpen, onClose, onSuccess }: CreateFlagModalP
                 <option value="DEV">DEV</option>
                 <option value="QA">QA</option>
                 <option value="STAGING">STAGING</option>
-                <option value="PROD">PROD</option>
+                {!isDeveloper && <option value="PROD">PROD</option>}
               </select>
+              {isDeveloper && (
+                <span style={{ display: "block", marginTop: "4px", fontSize: "11px", color: "#6b7280" }}>
+                  Developer role can create flags in DEV, QA, and STAGING. Production requires Owner or Admin.
+                </span>
+              )}
             </div>
 
             <div>
@@ -237,7 +248,6 @@ export function CreateFlagModal({ isOpen, onClose, onSuccess }: CreateFlagModalP
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Explain the feature purpose and rollout goals..."
               rows={2}
               style={{ width: "100%", padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: "7px", fontSize: "13px", resize: "vertical" }}
             />
@@ -246,7 +256,7 @@ export function CreateFlagModal({ isOpen, onClose, onSuccess }: CreateFlagModalP
           <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
-                Scheduled Start (Optional)
+                Scheduled Start (Optional) <span style={{ fontSize: "11px", color: "#6b7280", fontWeight: 400 }}>({getUserTimeZone()})</span>
               </label>
               <input
                 type="datetime-local"
@@ -258,7 +268,7 @@ export function CreateFlagModal({ isOpen, onClose, onSuccess }: CreateFlagModalP
 
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
-                Scheduled Expiration (Optional)
+                Scheduled Expiration (Optional) <span style={{ fontSize: "11px", color: "#6b7280", fontWeight: 400 }}>({getUserTimeZone()})</span>
               </label>
               <input
                 type="datetime-local"
@@ -277,7 +287,6 @@ export function CreateFlagModal({ isOpen, onClose, onSuccess }: CreateFlagModalP
               type="text"
               value={targetUsersInput}
               onChange={(e) => setTargetUsersInput(e.target.value)}
-              placeholder="e.g. usr_101, beta_tester_2, admin@corp.io"
               style={{ width: "100%", padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: "7px", fontSize: "13px" }}
             />
           </div>

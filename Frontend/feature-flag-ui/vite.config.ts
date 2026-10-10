@@ -5,7 +5,8 @@ export default defineConfig({
   plugins: [react()],
 
   server: {
-    port: 5173,
+    port: 5174,
+    strictPort: true,
 
     proxy: {
       '/auth': {
@@ -31,6 +32,15 @@ export default defineConfig({
       '/members': {
         target: 'http://localhost:8080',
         changeOrigin: true,
+      },
+      '/sdk-keys': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        bypass(req) {
+          if (req.headers.accept?.includes('text/html')) {
+            return '/index.html'
+          }
+        },
       },
     },
   },

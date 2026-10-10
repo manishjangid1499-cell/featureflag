@@ -17,6 +17,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import com.featureflag.auth_service.repository.SystemInvariantRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -25,6 +27,12 @@ class MemberServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private SystemInvariantRepository systemInvariantRepository;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
 
     @InjectMocks
     private MemberService memberService;
@@ -41,15 +49,13 @@ class MemberServiceTest {
     @Test
     @DisplayName("Update Role - Cannot change own role")
     void testUpdateRole_CannotChangeOwnRole() {
-        when(userRepository.findById(1L)).thenReturn(Optional.of(ownerUser));
-
         assertThrows(RuntimeException.class, () -> memberService.updateRole(1L, Role.ADMIN, ownerUser));
     }
 
     @Test
     @DisplayName("Delete Member - ADMIN cannot delete OWNER")
     void testDeleteMember_AdminCannotDeleteOwner() {
-        when(userRepository.findById(1L)).thenReturn(Optional.of(ownerUser));
+        when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(ownerUser));
 
         assertThrows(RuntimeException.class, () -> memberService.deleteMember(1L, adminUser));
     }
@@ -62,7 +68,7 @@ class MemberServiceTest {
                 .email("developer@company.com")
                 .role(Role.DEVELOPER)
                 .build();
-        when(userRepository.findById(3L))
+        when(userRepository.findByIdForUpdate(3L))
                 .thenReturn(Optional.of(developer));
         when(userRepository.save(developer)).thenReturn(developer);
 
@@ -97,9 +103,6 @@ class MemberServiceTest {
     @Test
     @DisplayName("Member cannot disable their own account")
     void updateEnabled_CannotDisableSelf() {
-        when(userRepository.findById(1L))
-                .thenReturn(Optional.of(ownerUser));
-
         assertThrows(
                 RuntimeException.class,
                 () -> memberService.updateEnabled(
@@ -118,7 +121,7 @@ class MemberServiceTest {
                 .email("second-admin@company.com")
                 .role(Role.ADMIN)
                 .build();
-        when(userRepository.findById(4L))
+        when(userRepository.findByIdForUpdate(4L))
                 .thenReturn(Optional.of(secondAdmin));
 
         assertThrows(

@@ -64,7 +64,7 @@ try {
   await waitUntil(()=>browser.evaluate('document.body.innerText.includes("Invite Member")'),'Members page');
   const browserRecipient='invitation-browser-'+suffix+'@example.test';
   await browserInvite(browserRecipient);
-  await waitUntil(()=>browser.evaluate('document.body.innerText.includes("Invitation sent successfully")'),'browser delivery success');
+  await waitUntil(()=>browser.evaluate('document.body.innerText.includes("Outbound email dispatch accepted")'),'browser delivery success');
   await messageFor(browserRecipient);
   record('Browser Send Invitation shows confirmed sending; SMTP sink receives mail');
   await fetch(mailApi + '/fail',{method:'POST'});
@@ -76,7 +76,7 @@ try {
   record('SMTP 451 produces a visible warning while invitation remains PENDING');
   await fetch(mailApi + '/recover',{method:'POST'});
   await browser.evaluate('(() => {const row=[...document.querySelectorAll("tr")].find(r=>r.textContent.includes('+JSON.stringify(failureRecipient)+')); [...row.querySelectorAll("button")].find(b=>b.textContent.trim()==="Resend").click(); return true;})()');
-  await waitUntil(()=>browser.evaluate('document.body.innerText.includes("Invitation sent successfully") && !document.querySelector("[role=alert]")'),'browser resend recovery');
+  await waitUntil(()=>browser.evaluate('document.body.innerText.includes("Outbound email dispatch accepted") && !document.querySelector("[role=alert]")'),'browser resend recovery');
   const acceptedMail=await messageFor(failureRecipient);
   record('Browser Resend recovers after SMTP restoration');
   await browser.call('Page.navigate',{url:acceptedMail.url});

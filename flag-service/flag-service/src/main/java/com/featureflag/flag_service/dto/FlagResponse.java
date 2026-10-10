@@ -1,8 +1,9 @@
 package com.featureflag.flag_service.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.featureflag.flag_service.entity.FeatureFlag;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 public record FlagResponse(
@@ -14,8 +15,10 @@ public record FlagResponse(
         String environment,
         Boolean enabled,
         Integer rolloutPercentage,
-        LocalDateTime startDate,
-        LocalDateTime endDate,
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
+        Instant startDate,
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
+        Instant endDate,
         List<String> targetUsers
 ) {
     public static FlagResponse from(FeatureFlag flag) {

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.featureflag.flag_service.dto.FlagEvaluationResponse;
 import com.featureflag.flag_service.dto.FlagRequest;
 import com.featureflag.flag_service.entity.FeatureFlag;
+import com.featureflag.flag_service.exception.InvalidOperationException;
 import com.featureflag.flag_service.exception.ResourceNotFoundException;
 import com.featureflag.flag_service.repository.FeatureFlagRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,14 +13,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.time.Clock;
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -45,7 +50,9 @@ class FlagServiceTest {
     @Mock
     private OutboxService outboxService;
 
-    @InjectMocks
+    @Spy
+    private Clock clock = Clock.fixed(Instant.parse("2026-10-06T12:00:00Z"), ZoneOffset.UTC);
+
     private FlagService flagService;
 
     private FeatureFlag testFlag;
@@ -54,12 +61,22 @@ class FlagServiceTest {
     void setUp() {
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 
+        flagService = new FlagService(
+                repository,
+                redisTemplate,
+                objectMapper,
+                outboxService,
+                clock,
+                false
+        );
+
         testFlag = FeatureFlag.builder()
                 .id(1L)
                 .name("New Checkout Flow")
                 .flagKey("NEW_CHECKOUT")
                 .environment("DEV")
                 .enabled(true)
+                .version(0L)
                 .rolloutPercentage(75)
                 .description("Checkout redesign")
                 .targetUsers(List.of("user123", "user456"))
@@ -140,7 +157,7 @@ class FlagServiceTest {
     @Test
     @DisplayName("CASE 6: Outside scheduled window - Returns FALSE")
     void testEvaluateFlag_OutOfScheduleWindow() {
-        testFlag.setStartDate(LocalDateTime.now().plusDays(2)); // Future start
+        testFlag.setStartDate(clock.instant().plus(Duration.ofDays(2))); // Future start
         when(repository.findByFlagKeyAndEnvironment("NEW_CHECKOUT", "DEV")).thenReturn(Optional.of(testFlag));
 
         FlagEvaluationResponse response = flagService.evaluateFlag("NEW_CHECKOUT", "user123", "DEV");
@@ -206,6 +223,14 @@ class FlagServiceTest {
     @DisplayName("Evaluate Flag - Cache hit uses Redis configuration without MySQL")
     void testEvaluateFlag_CacheHit_UsesRedisWithoutDb()
             throws Exception {
+        FlagService flagServiceWithCache = new FlagService(
+                repository,
+                redisTemplate,
+                objectMapper,
+                outboxService,
+                clock,
+                true
+        );
         String cacheKey =
                 "flag:config:DEV:NEW_CHECKOUT";
         String cachedJson =
@@ -223,7 +248,7 @@ class FlagServiceTest {
                 )
         ).thenReturn(testFlag);
         FlagEvaluationResponse response =
-                flagService.evaluateFlag(
+                flagServiceWithCache.evaluateFlag(
                         "NEW_CHECKOUT",
                         "user123",
                         "DEV"
@@ -244,10 +269,19 @@ class FlagServiceTest {
                 anyString()
         );
     }
+
     @Test
     @DisplayName("Evaluate Flag - Cache miss loads MySQL and caches configuration with TTL")
     void testEvaluateFlag_CacheMiss_LoadsDbAndCachesWithTtl()
             throws Exception {
+        FlagService flagServiceWithCache = new FlagService(
+                repository,
+                redisTemplate,
+                objectMapper,
+                outboxService,
+                clock,
+                true
+        );
         String cacheKey =
                 "flag:config:DEV:NEW_CHECKOUT";
         String cachedJson =
@@ -268,7 +302,7 @@ class FlagServiceTest {
                 objectMapper.writeValueAsString(testFlag)
         ).thenReturn(cachedJson);
         FlagEvaluationResponse response =
-                flagService.evaluateFlag(
+                flagServiceWithCache.evaluateFlag(
                         "NEW_CHECKOUT",
                         "user123",
                         "DEV"
@@ -290,10 +324,19 @@ class FlagServiceTest {
                         Duration.ofMinutes(5)
                 );
     }
+
     @Test
     @DisplayName("Evaluate Flag - Redis read failure falls back to MySQL")
     void testEvaluateFlag_RedisReadFailure_FallsBackToDb()
             throws Exception {
+        FlagService flagServiceWithCache = new FlagService(
+                repository,
+                redisTemplate,
+                objectMapper,
+                outboxService,
+                clock,
+                true
+        );
         String cacheKey =
                 "flag:config:DEV:NEW_CHECKOUT";
         String cachedJson =
@@ -318,7 +361,7 @@ class FlagServiceTest {
                 objectMapper.writeValueAsString(testFlag)
         ).thenReturn(cachedJson);
         FlagEvaluationResponse response =
-                flagService.evaluateFlag(
+                flagServiceWithCache.evaluateFlag(
                         "NEW_CHECKOUT",
                         "user123",
                         "DEV"
@@ -331,6 +374,72 @@ class FlagServiceTest {
                         "NEW_CHECKOUT",
                         "DEV"
                 );
+    }
+
+    @Test
+    @DisplayName("Evaluate Flag - Caching disabled reads from DB and never touches Redis")
+    void testEvaluateFlag_CacheDisabled_ReadsFromDbDirectly_ZeroRedisInteractions() {
+        when(repository.findByFlagKeyAndEnvironment("NEW_CHECKOUT", "DEV"))
+                .thenReturn(Optional.of(testFlag));
+
+        FlagEvaluationResponse response = flagService.evaluateFlag("NEW_CHECKOUT", "user123", "DEV");
+
+        assertNotNull(response);
+        assertTrue(response.isEnabled());
+        verify(repository).findByFlagKeyAndEnvironment("NEW_CHECKOUT", "DEV");
+        verifyNoInteractions(redisTemplate);
+    }
+
+    @Test
+    @DisplayName("Evaluate Flag - Caching disabled fails fast on DB error without consulting Redis")
+    void testEvaluateFlag_CacheDisabled_DbFailureThrows_NeverFallsBackToStaleRedis() {
+        when(repository.findByFlagKeyAndEnvironment("NEW_CHECKOUT", "DEV"))
+                .thenThrow(new org.springframework.dao.QueryTimeoutException("DB timeout"));
+
+        assertThrows(org.springframework.dao.QueryTimeoutException.class, () ->
+                flagService.evaluateFlag("NEW_CHECKOUT", "user123", "DEV")
+        );
+        verifyNoInteractions(redisTemplate);
+    }
+
+    @Test
+    @DisplayName("Evaluate Flag - Caching disabled throws ResourceNotFoundException on deleted flag")
+    void testEvaluateFlag_CacheDisabled_DeletedFlagThrowsNotFound_NeverServesStaleRedis() {
+        when(repository.findByFlagKeyAndEnvironment("DELETED_FLAG", "DEV"))
+                .thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () ->
+                flagService.evaluateFlag("DELETED_FLAG", "user123", "DEV")
+        );
+        verifyNoInteractions(redisTemplate);
+    }
+
+    @Test
+    @DisplayName("Evaluate Flag - Caching disabled immediately reflects updated configuration (rollout, schedule, enabled)")
+    void testEvaluateFlag_CacheDisabled_ReflectsCommittedMutationsImmediately() {
+        testFlag.setEnabled(true);
+        testFlag.setRolloutPercentage(100);
+        when(repository.findByFlagKeyAndEnvironment("NEW_CHECKOUT", "DEV"))
+                .thenReturn(Optional.of(testFlag));
+
+        FlagEvaluationResponse first = flagService.evaluateFlag("NEW_CHECKOUT", "user123", "DEV");
+        assertTrue(first.isEnabled());
+
+        FeatureFlag updatedFlag = FeatureFlag.builder()
+                .id(1L)
+                .name("New Checkout Flow")
+                .flagKey("NEW_CHECKOUT")
+                .environment("DEV")
+                .enabled(false)
+                .version(1L)
+                .rolloutPercentage(0)
+                .build();
+        when(repository.findByFlagKeyAndEnvironment("NEW_CHECKOUT", "DEV"))
+                .thenReturn(Optional.of(updatedFlag));
+
+        FlagEvaluationResponse second = flagService.evaluateFlag("NEW_CHECKOUT", "user123", "DEV");
+        assertFalse(second.isEnabled());
+        verifyNoInteractions(redisTemplate);
     }
 
     @Test
@@ -354,12 +463,12 @@ class FlagServiceTest {
                 );
     }
     @Test
-    @DisplayName("Update Flag - Invalidates old and new evaluation configuration identities")
+    @DisplayName("Update Flag - Invalidates evaluation configuration cache for canonical identity")
     void testUpdateFlag_InvalidatesOldAndNewEvaluationCacheKeys() {
         FlagRequest request = new FlagRequest();
         request.setName("Updated Checkout");
-        request.setFlagKey("NEW_CHECKOUT_V2");
-        request.setEnvironment("PROD");
+        request.setFlagKey("NEW_CHECKOUT");
+        request.setEnvironment("DEV");
         request.setEnabled(false);
         request.setRolloutPercentage(50);
         when(
@@ -382,10 +491,6 @@ class FlagServiceTest {
         verify(redisTemplate)
                 .delete(
                         "flag:config:DEV:NEW_CHECKOUT"
-                );
-        verify(redisTemplate)
-                .delete(
-                        "flag:config:PROD:NEW_CHECKOUT_V2"
                 );
     }
     @Test
@@ -418,7 +523,7 @@ class FlagServiceTest {
                 invocation ->
                         invocation.getArgument(0)
         );
-        flagService.toggleFlag(1L);
+        flagService.setEnabledState(1L, false, 0L);
         verify(redisTemplate)
                 .delete(
                         "flag:config:DEV:NEW_CHECKOUT"
@@ -472,8 +577,8 @@ class FlagServiceTest {
     void testUpdateFlag_CacheInvalidationsDeferredUntilAfterCommit() {
         FlagRequest request = new FlagRequest();
         request.setName("Updated Checkout");
-        request.setFlagKey("NEW_CHECKOUT_V2");
-        request.setEnvironment("PROD");
+        request.setFlagKey("NEW_CHECKOUT");
+        request.setEnvironment("DEV");
         request.setEnabled(false);
         request.setRolloutPercentage(50);
         when(repository.findById(1L)).thenReturn(Optional.of(testFlag));
@@ -483,7 +588,6 @@ class FlagServiceTest {
         try {
             flagService.updateFlag(1L, request);
             verify(redisTemplate, never()).delete("flag:config:DEV:NEW_CHECKOUT");
-            verify(redisTemplate, never()).delete("flag:config:PROD:NEW_CHECKOUT_V2");
 
             List<TransactionSynchronization> synchronizations =
                     TransactionSynchronizationManager.getSynchronizations();
@@ -491,7 +595,6 @@ class FlagServiceTest {
             synchronizations.forEach(TransactionSynchronization::afterCommit);
 
             verify(redisTemplate).delete("flag:config:DEV:NEW_CHECKOUT");
-            verify(redisTemplate).delete("flag:config:PROD:NEW_CHECKOUT_V2");
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
         }
@@ -526,7 +629,7 @@ class FlagServiceTest {
 
         TransactionSynchronizationManager.initSynchronization();
         try {
-            flagService.toggleFlag(1L);
+            flagService.setEnabledState(1L, false, 0L);
             verify(redisTemplate, never()).delete("flag:config:DEV:NEW_CHECKOUT");
 
             List<TransactionSynchronization> synchronizations =
@@ -620,24 +723,8 @@ class FlagServiceTest {
         request.setName("New Checkout Flow");
         request.setFlagKey("NEW_CHECKOUT");
         request.setEnvironment("DEV");
-        request.setStartDate(
-                LocalDateTime.of(
-                        2026,
-                        8,
-                        22,
-                        10,
-                        0
-                )
-        );
-        request.setEndDate(
-                LocalDateTime.of(
-                        2026,
-                        8,
-                        21,
-                        10,
-                        0
-                )
-        );
+        request.setStartDate(Instant.parse("2026-08-22T10:00:00Z"));
+        request.setEndDate(Instant.parse("2026-08-21T10:00:00Z"));
         assertThrows(
                 IllegalArgumentException.class,
                 () -> flagService.createFlag(request)
@@ -754,6 +841,7 @@ class FlagServiceTest {
     @Test
     @DisplayName("Update Flag - Environment is normalized")
     void testUpdateFlag_NormalizesEnvironment() {
+        testFlag.setEnvironment("QA");
         FlagRequest request =
                 new FlagRequest();
         request.setName("Updated Checkout");
@@ -804,24 +892,8 @@ class FlagServiceTest {
         FlagRequest request =
                 new FlagRequest();
         request.setEnvironment("DEV");
-        request.setStartDate(
-                LocalDateTime.of(
-                        2026,
-                        8,
-                        22,
-                        10,
-                        0
-                )
-        );
-        request.setEndDate(
-                LocalDateTime.of(
-                        2026,
-                        8,
-                        21,
-                        10,
-                        0
-                )
-        );
+        request.setStartDate(Instant.parse("2026-08-22T10:00:00Z"));
+        request.setEndDate(Instant.parse("2026-08-21T10:00:00Z"));
         assertThrows(
                 IllegalArgumentException.class,
                 () -> flagService.updateFlag(
@@ -854,13 +926,14 @@ class FlagServiceTest {
     }
 
     @Test
-    @DisplayName("Toggle Flag - Switches enabled state")
+    @DisplayName("Toggle Flag - Switches enabled state with valid expectedVersion")
     void testToggleFlag_Success() {
         testFlag.setEnabled(true);
+        testFlag.setVersion(0L);
         when(repository.findById(1L)).thenReturn(Optional.of(testFlag));
         when(repository.save(any(FeatureFlag.class))).thenAnswer(i -> i.getArgument(0));
 
-        FeatureFlag toggled = flagService.toggleFlag(1L);
+        FeatureFlag toggled = flagService.setEnabledState(1L, false, 0L);
 
         assertNotNull(toggled);
         assertFalse(toggled.getEnabled());
@@ -870,5 +943,104 @@ class FlagServiceTest {
                         "NEW_CHECKOUT",
                         "DEV"
                 );
+    }
+
+    @Test
+    @DisplayName("Toggle Flag - Setting already-matching state with current version is a no-op")
+    void testToggleFlag_AlreadyMatchingStateIsNoOp() {
+        testFlag.setEnabled(true);
+        testFlag.setVersion(1L);
+        when(repository.findById(1L)).thenReturn(Optional.of(testFlag));
+
+        FeatureFlag result = flagService.setEnabledState(1L, true, 1L);
+
+        assertNotNull(result);
+        assertTrue(result.getEnabled());
+        verify(repository, never()).save(any(FeatureFlag.class));
+        verify(outboxService, never()).enqueueFlagEvent(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Toggle Flag - Stale version throws ObjectOptimisticLockingFailureException")
+    void testToggleFlag_StaleVersionThrowsConflict() {
+        testFlag.setEnabled(true);
+        testFlag.setVersion(2L);
+        when(repository.findById(1L)).thenReturn(Optional.of(testFlag));
+
+        assertThrows(
+                org.springframework.orm.ObjectOptimisticLockingFailureException.class,
+                () -> flagService.setEnabledState(1L, false, 1L)
+        );
+        verify(repository, never()).save(any(FeatureFlag.class));
+    }
+
+    @Test
+    @DisplayName("Toggle Flag - Missing or negative expectedVersion throws InvalidOperationException")
+    void testToggleFlag_InvalidVersionThrows() {
+        assertThrows(
+                com.featureflag.flag_service.exception.InvalidOperationException.class,
+                () -> flagService.setEnabledState(1L, false, null)
+        );
+        assertThrows(
+                com.featureflag.flag_service.exception.InvalidOperationException.class,
+                () -> flagService.setEnabledState(1L, false, -1L)
+        );
+        assertThrows(
+                com.featureflag.flag_service.exception.InvalidOperationException.class,
+                () -> flagService.setEnabledState(1L, null, 0L)
+        );
+    }
+
+    @Test
+    @DisplayName("Update Flag - Changing flagKey throws InvalidOperationException")
+    void testUpdateFlag_ChangingFlagKeyThrows() {
+        when(repository.findById(1L)).thenReturn(Optional.of(testFlag));
+        FlagRequest request = new FlagRequest();
+        request.setName("Renamed Flag");
+        request.setFlagKey("DIFFERENT_KEY");
+        request.setEnvironment("DEV");
+
+        assertThrows(
+                InvalidOperationException.class,
+                () -> flagService.updateFlag(1L, request)
+        );
+        verify(repository, never()).save(any(FeatureFlag.class));
+    }
+
+    @Test
+    @DisplayName("Update Flag - Changing environment throws InvalidOperationException")
+    void testUpdateFlag_ChangingEnvironmentThrows() {
+        when(repository.findById(1L)).thenReturn(Optional.of(testFlag));
+        FlagRequest request = new FlagRequest();
+        request.setName("Moved Flag");
+        request.setFlagKey("NEW_CHECKOUT");
+        request.setEnvironment("PROD");
+
+        assertThrows(
+                InvalidOperationException.class,
+                () -> flagService.updateFlag(1L, request)
+        );
+        verify(repository, never()).save(any(FeatureFlag.class));
+    }
+
+    @Test
+    @DisplayName("Update Flag - Equivalent case preserves stored identity")
+    void testUpdateFlag_EquivalentCasePreservesStoredIdentity() {
+        testFlag.setFlagKey("NEW_CHECKOUT");
+        testFlag.setEnvironment("DEV");
+        when(repository.findById(1L)).thenReturn(Optional.of(testFlag));
+        when(repository.save(any(FeatureFlag.class))).thenAnswer(i -> i.getArgument(0));
+
+        FlagRequest request = new FlagRequest();
+        request.setName("Updated Display Name");
+        request.setFlagKey("new_checkout");
+        request.setEnvironment("dev");
+        request.setEnabled(true);
+        request.setRolloutPercentage(100);
+
+        FeatureFlag updated = flagService.updateFlag(1L, request);
+        assertEquals("NEW_CHECKOUT", updated.getFlagKey());
+        assertEquals("DEV", updated.getEnvironment());
+        assertEquals("Updated Display Name", updated.getName());
     }
 }

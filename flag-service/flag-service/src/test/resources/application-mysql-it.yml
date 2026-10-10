@@ -8,6 +8,10 @@ spring:
       ddl-auto: validate
     database-platform: org.hibernate.dialect.MySQLDialect
     show-sql: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
 
   cloud:
     discovery:
@@ -18,3 +22,7 @@ eureka:
     enabled: false
     register-with-eureka: false
     fetch-registry: false
+
+features:
+  evaluation:
+    config-cache-enabled: false

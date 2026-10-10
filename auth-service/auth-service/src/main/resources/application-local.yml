@@ -50,8 +50,15 @@ app:
       name: ${BOOTSTRAP_OWNER_NAME:}
       email: ${BOOTSTRAP_OWNER_EMAIL:}
       password: ${BOOTSTRAP_OWNER_PASSWORD:}
+  password-reset:
+    expiration-minutes: ${PASSWORD_RESET_EXPIRATION_MINUTES:15}
+    frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+  invitation:
+    frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
 
 security:
+  internal-service-key: ${AUTH_INTERNAL_SERVICE_KEY:${AUTH_RECIPIENTS_SERVICE_KEY:}}
+  recipients-service-key: ${AUTH_RECIPIENTS_SERVICE_KEY:}
   login-rate-limit:
     enabled: ${LOGIN_RATE_LIMIT_ENABLED:true}
     max-failures: ${LOGIN_RATE_LIMIT_MAX_FAILURES:5}

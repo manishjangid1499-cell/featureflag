@@ -1,8 +1,10 @@
 package com.featureflag.flag_service.service;
 
 import com.featureflag.flag_service.dto.FlagRequest;
+import com.featureflag.flag_service.dto.FlagToggleRequest;
 import com.featureflag.flag_service.entity.FeatureFlag;
 import com.featureflag.flag_service.event.FlagAuditSnapshot;
+import com.featureflag.flag_service.security.FlagPermissionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,11 +20,14 @@ public class FlagMutationAuditService {
 
     private final FlagService flagService;
     private final FlagAuditContext auditContext;
+    private final FlagPermissionService permissionService;
 
     public FeatureFlag createFlag(
             FlagRequest request,
             String actor
     ) {
+        String canonicalEnv = FlagService.normalizeEnvironment(request.getEnvironment());
+        permissionService.validateMutationPermission(canonicalEnv);
         request.setFlagKey(request.getFlagKey().toLowerCase(Locale.ROOT));
         return auditContext.within(
                 new FlagAuditContext.AuditDetails(
@@ -39,15 +44,18 @@ public class FlagMutationAuditService {
             String actor
     ) {
         FeatureFlag existing = flagService.getById(id);
+        permissionService.validateMutationPermission(existing.getEnvironment());
         if (request.getExpectedVersion() == null) {
             throw new InvalidOperationException("expectedVersion is required when updating a flag");
         }
         if (!Objects.equals(existing.getVersion(), request.getExpectedVersion())) {
             throw new ObjectOptimisticLockingFailureException(FeatureFlag.class, id);
         }
-        // Preserve legacy canonical spelling so a case-only edit cannot reshuffle cohorts.
-        request.setFlagKey(existing.getFlagKey().equalsIgnoreCase(request.getFlagKey())
-                ? existing.getFlagKey() : request.getFlagKey().toLowerCase(Locale.ROOT));
+        FlagService.validateIdentityImmutability(existing, request);
+
+        // Preserve stored canonical identity so an edit cannot alter stored casing or identity.
+        request.setFlagKey(existing.getFlagKey());
+        request.setEnvironment(existing.getEnvironment());
         FlagAuditSnapshot before = FlagAuditSnapshot.from(
                 existing
         );
@@ -62,8 +70,10 @@ public class FlagMutationAuditService {
     }
 
     public String deleteFlag(Long id, String actor) {
+        FeatureFlag existing = flagService.getById(id);
+        permissionService.validateMutationPermission(existing.getEnvironment());
         FlagAuditSnapshot before = FlagAuditSnapshot.from(
-                flagService.getById(id)
+                existing
         );
 
         return auditContext.within(
@@ -75,9 +85,31 @@ public class FlagMutationAuditService {
         );
     }
 
-    public FeatureFlag toggleFlag(Long id, String actor) {
+    public FeatureFlag toggleFlag(Long id, FlagToggleRequest request, String actor) {
+        FeatureFlag existing = flagService.getById(id);
+        permissionService.validateMutationPermission(existing.getEnvironment());
+        if (request == null) {
+            throw new InvalidOperationException("Request body is required");
+        }
+        if (request.getEnabled() == null) {
+            throw new InvalidOperationException("enabled is required");
+        }
+        if (request.getExpectedVersion() == null) {
+            throw new InvalidOperationException("expectedVersion is required when toggling a flag");
+        }
+        if (request.getExpectedVersion() < 0) {
+            throw new InvalidOperationException("expectedVersion cannot be negative");
+        }
+        if (!Objects.equals(existing.getVersion(), request.getExpectedVersion())) {
+            throw new ObjectOptimisticLockingFailureException(FeatureFlag.class, id);
+        }
+
+        if (Objects.equals(existing.getEnabled(), request.getEnabled())) {
+            return existing;
+        }
+
         FlagAuditSnapshot before = FlagAuditSnapshot.from(
-                flagService.getById(id)
+                existing
         );
 
         return auditContext.within(
@@ -85,7 +117,7 @@ public class FlagMutationAuditService {
                         actor,
                         before
                 ),
-                () -> flagService.toggleFlag(id)
+                () -> flagService.setEnabledState(id, request.getEnabled(), request.getExpectedVersion())
         );
     }
 }

@@ -18,7 +18,7 @@ export function AuditLogs() {
 
   return (
     <div style={{ maxWidth: "1600px", margin: "0 auto" }}>
-      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
+      <div className="page-header" style={{ marginBottom: "24px" }}>
         <div>
           <h1 style={{ margin: 0, fontSize: "24px", fontWeight: 800, color: "#111827" }}>
             Audit Logs
@@ -27,49 +27,79 @@ export function AuditLogs() {
             Immutable chronological record of all feature flag modifications and administrative actions
           </p>
         </div>
-
-        <button
-          type="button"
-          onClick={() => void loadAuditLogs(page)}
-          style={{
-            padding: "9px 15px",
-            border: "1px solid #d1d5db",
-            background: "white",
-            color: "#374151",
-            borderRadius: "8px",
-            fontSize: "13px",
-            fontWeight: 600,
-            cursor: "pointer"
-          }}
-        >
-          ↻ Refresh
-        </button>
       </div>
 
       <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e5e7eb", padding: "14px 20px", marginBottom: "20px" }}>
+        <label htmlFor="audit-search" style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
+          Search
+        </label>
         <input
+          id="audit-search"
           type="text"
-          placeholder="Filter this page by flag key or event type..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{ width: "100%", maxWidth: "400px", padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: "7px", fontSize: "13px" }}
         />
       </div>
 
-      {error && (
-        <div style={{ background: "#fff1f2", border: "1px solid #fecdd3", borderRadius: "10px", padding: "14px 18px", color: "#9f1239", marginBottom: "20px" }}>
-          <strong>Service Error:</strong> {error}
+      {error ? (
+        <div style={{
+          background: "white",
+          borderRadius: "14px",
+          border: "1px solid #fee2e2",
+          padding: "48px 20px",
+          textAlign: "center",
+          marginBottom: "20px"
+        }}>
+          <div style={{
+            width: "48px",
+            height: "48px",
+            borderRadius: "50%",
+            background: "#fee2e2",
+            color: "#dc2626",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "20px",
+            margin: "0 auto 14px auto"
+          }}>
+            !
+          </div>
+          <h3 style={{ margin: "0 0 8px 0", fontSize: "16px", fontWeight: 700, color: "#991b1b" }}>
+            Failed to Load Audit Logs
+          </h3>
+          <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "#6b7280" }}>
+            {error}
+          </p>
+          <button
+            type="button"
+            onClick={() => void loadAuditLogs(page)}
+            style={{
+              padding: "8px 16px",
+              background: "#be123c",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: "pointer"
+            }}
+          >
+            ↻ Retry
+          </button>
         </div>
-      )}
-
-      {loading ? (
+      ) : loading ? (
         <div style={{ background: "white", padding: "60px 20px", borderRadius: "14px", border: "1px solid #e5e7eb", textAlign: "center", color: "#6b7280" }}>
           <p style={{ margin: 0, fontSize: "14px", fontWeight: 600 }}>Loading audit logs from Kafka pipeline...</p>
         </div>
       ) : filteredLogs.length === 0 ? (
         <div style={{ background: "white", padding: "60px 20px", borderRadius: "14px", border: "1px solid #e5e7eb", textAlign: "center" }}>
-          <h3 style={{ margin: "0 0 6px 0", fontSize: "16px", color: "#111827" }}>No audit log events recorded</h3>
-          <p style={{ margin: 0, fontSize: "13px", color: "#6b7280" }}>Audit entries will appear as flags are created, toggled, and updated.</p>
+          <h3 style={{ margin: "0 0 6px 0", fontSize: "16px", color: "#111827" }}>
+            {search.trim() ? "No matching audit log events found" : "No audit log events recorded"}
+          </h3>
+          <p style={{ margin: 0, fontSize: "13px", color: "#6b7280" }}>
+            {search.trim() ? "Try clearing or modifying your filter." : "Audit entries will appear as flags are created, toggled, and updated."}
+          </p>
         </div>
       ) : (
         <div className="table-scroll" style={{ background: "white", borderRadius: "14px", border: "1px solid #e5e7eb", overflow: "hidden" }}>

@@ -1,7 +1,5 @@
 import { useState } from "react";
-import { useAuth } from "../hooks/useAuth";
-import { getAllAnalytics, deleteAnalytics } from "../api/analyticsApi";
-import { getApiErrorMessage } from "../api/errors";
+import { getAllAnalytics } from "../api/analyticsApi";
 import { PaginationControls } from "../components/PaginationControls";
 import type { AnalyticsEvent } from "../types/analytics";
 import { usePagedResource } from "../hooks/usePagedResource";
@@ -11,19 +9,7 @@ export function Analytics() {
     loading, error, reload: loadAnalytics } = usePagedResource<AnalyticsEvent>(
       getAllAnalytics, "Failed to connect to Analytics Service.",
     );
-  const { canDeleteFlags } = useAuth();
   const [search, setSearch] = useState("");
-
-  const handleDelete = async (id: number) => {
-    if (!window.confirm("Are you sure you want to delete this analytics record?")) return;
-
-    try {
-      await deleteAnalytics(id);
-      await loadAnalytics();
-    } catch (error: unknown) {
-      alert(getApiErrorMessage(error, "Failed to delete analytics record."));
-    }
-  };
 
   const totalEventCount = events.reduce((sum, e) => sum + (e.count || 0), 0);
 
@@ -34,32 +20,15 @@ export function Analytics() {
 
   return (
     <div style={{ maxWidth: "1600px", margin: "0 auto" }}>
-      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
+      <div className="page-header" style={{ marginBottom: "24px" }}>
         <div>
           <h1 style={{ margin: 0, fontSize: "24px", fontWeight: 800, color: "#111827" }}>
             Feature Flag Analytics
           </h1>
           <p style={{ margin: "6px 0 0", fontSize: "13px", color: "#6b7280" }}>
-            Aggregated lifecycle mutation events and usage telemetry consumed from Kafka
+            Aggregated lifecycle mutation events and runtime evaluation telemetry consumed from Kafka
           </p>
         </div>
-
-        <button
-          type="button"
-          onClick={() => void loadAnalytics(page)}
-          style={{
-            padding: "9px 15px",
-            border: "1px solid #d1d5db",
-            background: "white",
-            color: "#374151",
-            borderRadius: "8px",
-            fontSize: "13px",
-            fontWeight: 600,
-            cursor: "pointer"
-          }}
-        >
-          ↻ Refresh
-        </button>
       </div>
 
       {/* SUMMARY BANNER */}
@@ -67,43 +36,104 @@ export function Analytics() {
         <div style={{ background: "white", borderRadius: "12px", padding: "20px", border: "1px solid #e5e7eb" }}>
           <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: 600 }}>FLAG KEYS (THIS PAGE)</span>
           <div style={{ fontSize: "28px", fontWeight: 800, color: "#111827", marginTop: "4px" }}>
-            {new Set(events.map((e) => e.flagKey)).size}
+            {error ? "—" : loading ? "..." : new Set(events.map((e) => e.flagKey)).size}
           </div>
         </div>
 
         <div style={{ background: "white", borderRadius: "12px", padding: "20px", border: "1px solid #e5e7eb" }}>
           <span style={{ fontSize: "12px", color: "#4f46e5", fontWeight: 600 }}>EVENT COUNT (THIS PAGE)</span>
           <div style={{ fontSize: "28px", fontWeight: 800, color: "#4f46e5", marginTop: "4px" }}>
-            {totalEventCount}
+            {error ? "—" : loading ? "..." : totalEventCount}
           </div>
         </div>
       </div>
 
+      {/* INFORMATION NOTICE */}
+      <div style={{
+        background: "#f8fafc",
+        border: "1px solid #e2e8f0",
+        borderRadius: "10px",
+        padding: "14px 18px",
+        marginBottom: "20px",
+        fontSize: "13px",
+        color: "#475569",
+        lineHeight: "1.5"
+      }}>
+        <strong style={{ color: "#1e293b" }}>Evaluation & Lifecycle Telemetry:</strong> Aggregates count total runtime evaluation and mutation events; they do not represent unique users or conversion statistics. Note that historical counts may include dashboard previews executed prior to preview telemetry separation. Manual deletion or reset is disabled to ensure Kafka replay consistency.
+      </div>
+
       {/* SEARCH BAR */}
       <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e5e7eb", padding: "14px 20px", marginBottom: "20px" }}>
+        <label htmlFor="analytics-search" style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
+          Search
+        </label>
         <input
+          id="analytics-search"
           type="text"
-          placeholder="Filter this page by flag key or event type..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{ width: "100%", maxWidth: "400px", padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: "7px", fontSize: "13px" }}
         />
       </div>
 
-      {error && (
-        <div style={{ background: "#fff1f2", border: "1px solid #fecdd3", borderRadius: "10px", padding: "14px 18px", color: "#9f1239", marginBottom: "20px" }}>
-          <strong>Service Error:</strong> {error}
+      {error ? (
+        <div style={{
+          background: "white",
+          borderRadius: "14px",
+          border: "1px solid #fee2e2",
+          padding: "48px 20px",
+          textAlign: "center",
+          marginBottom: "20px"
+        }}>
+          <div style={{
+            width: "48px",
+            height: "48px",
+            borderRadius: "50%",
+            background: "#fee2e2",
+            color: "#dc2626",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "20px",
+            margin: "0 auto 14px auto"
+          }}>
+            !
+          </div>
+          <h3 style={{ margin: "0 0 8px 0", fontSize: "16px", fontWeight: 700, color: "#991b1b" }}>
+            Failed to Load Analytics
+          </h3>
+          <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "#6b7280" }}>
+            {error}
+          </p>
+          <button
+            type="button"
+            onClick={() => void loadAnalytics(page)}
+            style={{
+              padding: "8px 16px",
+              background: "#be123c",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: "pointer"
+            }}
+          >
+            ↻ Retry
+          </button>
         </div>
-      )}
-
-      {loading ? (
+      ) : loading ? (
         <div style={{ background: "white", padding: "60px 20px", borderRadius: "14px", border: "1px solid #e5e7eb", textAlign: "center", color: "#6b7280" }}>
           <p style={{ margin: 0, fontSize: "14px", fontWeight: 600 }}>Loading analytics stream...</p>
         </div>
       ) : filteredEvents.length === 0 ? (
         <div style={{ background: "white", padding: "60px 20px", borderRadius: "14px", border: "1px solid #e5e7eb", textAlign: "center" }}>
-          <h3 style={{ margin: "0 0 6px 0", fontSize: "16px", color: "#111827" }}>No analytics records found</h3>
-          <p style={{ margin: 0, fontSize: "13px", color: "#6b7280" }}>Mutation events will appear as flags are created and modified.</p>
+          <h3 style={{ margin: "0 0 6px 0", fontSize: "16px", color: "#111827" }}>
+            {search.trim() ? "No matching analytics records found" : "No analytics records found"}
+          </h3>
+          <p style={{ margin: 0, fontSize: "13px", color: "#6b7280" }}>
+            {search.trim() ? "Try clearing or modifying your filter." : "Mutation events will appear as flags are created and modified."}
+          </p>
         </div>
       ) : (
         <div className="table-scroll" style={{ background: "white", borderRadius: "14px", border: "1px solid #e5e7eb", overflow: "hidden" }}>
@@ -113,7 +143,6 @@ export function Analytics() {
                 <th style={{ padding: "12px 20px", fontSize: "11px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>Flag Key</th>
                 <th style={{ padding: "12px 20px", fontSize: "11px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>Event Type</th>
                 <th style={{ padding: "12px 20px", fontSize: "11px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>Count</th>
-                {canDeleteFlags && <th style={{ padding: "12px 20px", fontSize: "11px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", textAlign: "right" }}>Action</th>}
               </tr>
             </thead>
             <tbody>
@@ -137,25 +166,6 @@ export function Analytics() {
                   <td style={{ padding: "14px 20px", fontSize: "14px", fontWeight: 700, color: "#4f46e5" }}>
                     {evt.count}
                   </td>
-                  {canDeleteFlags && (
-                    <td style={{ padding: "14px 20px", textAlign: "right" }}>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(evt.id)}
-                        style={{
-                          padding: "5px 10px",
-                          border: "1px solid #fee2e2",
-                          background: "#fff5f5",
-                          color: "#dc2626",
-                          borderRadius: "5px",
-                          fontSize: "11px",
-                          cursor: "pointer"
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  )}
                 </tr>
               ))}
             </tbody>

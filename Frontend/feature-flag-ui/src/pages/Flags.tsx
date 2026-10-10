@@ -6,8 +6,9 @@ import CreateFlagModal from "../components/flags/CreateFlagModal";
 import EditFlagModal from "../components/flags/EditFlagModal";
 import DeleteFlagModal from "../components/flags/DeleteFlagModal";
 import FlagEvaluationModal from "../components/flags/FlagEvaluationModal";
-import { getAllFlags, toggleFlag } from "../api/flagApi";
+import { getAllFlags, toggleFlag, getFlagById } from "../api/flagApi";
 import { getApiErrorMessage } from "../api/errors";
+import { isAxiosError } from "axios";
 import { PaginationControls } from "../components/PaginationControls";
 import type { FeatureFlag } from "../types/featureFlag";
 import { usePagedResource } from "../hooks/usePagedResource";
@@ -30,15 +31,29 @@ export function Flags() {
   const [deletingFlag, setDeletingFlag] = useState<FeatureFlag | null>(null);
   const [evaluatingFlag, setEvaluatingFlag] = useState<FeatureFlag | null>(null);
 
-  const handleToggle = async (id: number) => {
+  const handleToggle = async (flag: FeatureFlag) => {
+    const desiredEnabled = !flag.enabled;
+    const expectedVersion = flag.version ?? 0;
     try {
-      setTogglingId(id);
-      const updated = await toggleFlag(id);
+      setTogglingId(flag.id);
+      const updated = await toggleFlag(flag.id, desiredEnabled, expectedVersion);
       setFlags((current) =>
-        current.map((flag) => (flag.id === id ? updated : flag))
+        current.map((f) => (f.id === flag.id ? updated : f))
       );
     } catch (error: unknown) {
-      alert(getApiErrorMessage(error, "Failed to toggle feature flag."));
+      if (isAxiosError(error) && error.response?.status === 409) {
+        try {
+          const freshFlag = await getFlagById(flag.id);
+          setFlags((current) =>
+            current.map((f) => (f.id === flag.id ? freshFlag : f))
+          );
+        } catch {
+          void loadFlags();
+        }
+        alert("This flag was modified by another change. The latest state has been refreshed. Please review and try again if needed.");
+      } else {
+        alert(getApiErrorMessage(error, "Failed to toggle feature flag."));
+      }
     } finally {
       setTogglingId(null);
     }
@@ -110,23 +125,6 @@ export function Flags() {
         </div>
 
         <div className="responsive-actions" style={{ display: "flex", gap: "10px" }}>
-          <button
-            type="button"
-            onClick={() => void loadFlags(page)}
-            style={{
-              padding: "9px 15px",
-              border: "1px solid #d1d5db",
-              background: "white",
-              color: "#374151",
-              borderRadius: "8px",
-              fontSize: "13px",
-              fontWeight: 600,
-              cursor: "pointer"
-            }}
-          >
-            ↻ Refresh
-          </button>
-
           {canManageFlags && (
             <button
               type="button"
@@ -151,11 +149,11 @@ export function Flags() {
 
       {/* STATS OVERVIEW */}
       <FlagStats
-        total={total}
-        enabled={enabled}
-        disabled={disabled}
-        prodCount={prodFlags.length}
-        avgRollout={avgRollout}
+        total={error ? null : total}
+        enabled={error ? null : enabled}
+        disabled={error ? null : disabled}
+        prodCount={error ? null : prodFlags.length}
+        avgRollout={error ? null : avgRollout}
       />
 
       {/* FILTER & SEARCH BAR */}
@@ -171,10 +169,13 @@ export function Flags() {
         flexWrap: "wrap",
         gap: "14px"
       }}>
-        <div className="flag-search" style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: "260px" }}>
+        <div className="flag-search" style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: "260px" }}>
+          <label htmlFor="flag-search-input" style={{ fontSize: "12px", fontWeight: 600, color: "#374151", whiteSpace: "nowrap" }}>
+            Search
+          </label>
           <input
+            id="flag-search-input"
             type="text"
-            placeholder="Filter this page by flag name or key..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -266,7 +267,7 @@ export function Flags() {
         </div>
       )}
 
-      {/* LOADING STATE */}
+      {/* LOADING / ERROR / TABLE STATE */}
       {loading ? (
         <div style={{
           background: "white",
@@ -286,6 +287,51 @@ export function Flags() {
             margin: "0 auto 14px auto"
           }} />
           <p style={{ margin: 0, fontSize: "14px", fontWeight: 600 }}>Loading feature flags from Redis/MySQL...</p>
+        </div>
+      ) : error ? (
+        <div style={{
+          background: "white",
+          borderRadius: "14px",
+          border: "1px solid #fee2e2",
+          padding: "48px 20px",
+          textAlign: "center"
+        }}>
+          <div style={{
+            width: "48px",
+            height: "48px",
+            borderRadius: "50%",
+            background: "#fee2e2",
+            color: "#dc2626",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "20px",
+            margin: "0 auto 14px auto"
+          }}>
+            !
+          </div>
+          <h3 style={{ margin: "0 0 8px 0", fontSize: "16px", fontWeight: 700, color: "#991b1b" }}>
+            Failed to Load Feature Flags
+          </h3>
+          <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "#6b7280" }}>
+            {error}
+          </p>
+          <button
+            type="button"
+            onClick={() => void loadFlags(page)}
+            style={{
+              padding: "8px 16px",
+              background: "#be123c",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: "pointer"
+            }}
+          >
+            ↻ Retry
+          </button>
         </div>
       ) : (
         <FlagTable

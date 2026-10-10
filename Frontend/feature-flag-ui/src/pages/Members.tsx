@@ -9,6 +9,7 @@ import {
   getAllInvitations,
   resendInvitation,
   revokeInvitation,
+  transferOwnership,
 } from "../api/memberApi";
 import { getApiErrorMessage } from "../api/errors";
 import { invitationDeliveryFeedback } from "../api/invitationDelivery";
@@ -38,6 +39,7 @@ export function Members() {
   const [successMessage, setSuccessMessage] = useState("");
   const [deliveryWarning, setDeliveryWarning] = useState("");
   const [resendingId, setResendingId] = useState<number | null>(null);
+  const [invitationFilter, setInvitationFilter] = useState<"ALL" | "PENDING" | "ACCEPTED" | "EXPIRED" | "REVOKED">("ALL");
 
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [name, setName] = useState("");
@@ -45,6 +47,13 @@ export function Members() {
   const [role, setRole] = useState<UserRole>("DEVELOPER");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
+  const [transferTargetId, setTransferTargetId] = useState<number | "">("");
+  const [transferPassword, setTransferPassword] = useState("");
+  const [transferConfirmed, setTransferConfirmed] = useState(false);
+  const [transferSubmitting, setTransferSubmitting] = useState(false);
+  const [transferError, setTransferError] = useState("");
 
   const loadData = async () => {
     await Promise.all([reloadMembers(), reloadInvitations()]);
@@ -173,6 +182,50 @@ export function Members() {
     }
   };
 
+  const eligibleAdmins = members.filter(
+    (m) => m.role === "ADMIN" && m.enabled && m.email !== user?.email,
+  );
+
+  const handleTransferOwnership = async (e: FormEvent) => {
+    e.preventDefault();
+    setTransferError("");
+
+    if (!transferTargetId) {
+      setTransferError("Please select an eligible administrator.");
+      return;
+    }
+    if (!transferPassword.trim()) {
+      setTransferError("Current password is required.");
+      return;
+    }
+    if (!transferConfirmed) {
+      setTransferError("Please confirm that you understand this action cannot be undone.");
+      return;
+    }
+
+    try {
+      setTransferSubmitting(true);
+      await transferOwnership({
+        newOwnerId: Number(transferTargetId),
+        currentPassword: transferPassword,
+      });
+
+      // Clear authentication storage and redirect to login
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.href = "/login?transferred=true";
+    } catch (err: unknown) {
+      setTransferError(
+        getApiErrorMessage(
+          err,
+          "Failed to transfer ownership. Please verify current ownership and try again.",
+        ),
+      );
+    } finally {
+      setTransferSubmitting(false);
+    }
+  };
+
   return (
     <div style={{ maxWidth: "1600px", margin: "0 auto" }}>
       {/* HEADER */}
@@ -194,7 +247,7 @@ export function Members() {
               color: "#111827",
             }}
           >
-            Member Management
+            Members
           </h1>
           <p
             style={{
@@ -203,27 +256,35 @@ export function Members() {
               color: "#6b7280",
             }}
           >
-            Invite teammates, manage role authorizations, and track onboarding invitations
+            Manage team access and invitations.
           </p>
         </div>
 
         <div className="responsive-actions" style={{ display: "flex", gap: "10px" }}>
-          <button
-            type="button"
-            onClick={() => void loadData()}
-            style={{
-              padding: "9px 15px",
-              border: "1px solid #d1d5db",
-              background: "white",
-              color: "#374151",
-              borderRadius: "8px",
-              fontSize: "13px",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            ↻ Refresh
-          </button>
+          {isOwner && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsTransferOpen(true);
+                setTransferError("");
+                setTransferPassword("");
+                setTransferConfirmed(false);
+                setTransferTargetId("");
+              }}
+              style={{
+                padding: "9px 18px",
+                border: "1px solid #7c3aed",
+                background: "#f5f3ff",
+                color: "#6d28d9",
+                borderRadius: "8px",
+                fontSize: "13px",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Transfer Ownership
+            </button>
+          )}
 
           <button
             type="button"
@@ -281,9 +342,30 @@ export function Members() {
             padding: "14px 18px",
             color: "#9f1239",
             marginBottom: "20px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
           }}
         >
-          <strong>Error:</strong> {error}
+          <div>
+            <strong>Error:</strong> {error}
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadData()}
+            style={{
+              padding: "6px 14px",
+              background: "#be123c",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "12px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Retry
+          </button>
         </div>
       )}
 
@@ -291,7 +373,7 @@ export function Members() {
       <div style={{ marginBottom: "36px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
           <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#1e293b" }}>
-            Platform Members ({memberPageData.totalElements})
+            Members
           </h2>
         </div>
 
@@ -355,17 +437,6 @@ export function Members() {
                     }}
                   >
                     Role
-                  </th>
-                  <th
-                    style={{
-                      padding: "12px 20px",
-                      fontSize: "11px",
-                      fontWeight: 700,
-                      color: "#6b7280",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Access Tier
                   </th>
                   <th
                     style={{
@@ -461,22 +532,6 @@ export function Members() {
                         </span>
                       </td>
 
-                      <td
-                        style={{
-                          padding: "16px 20px",
-                          fontSize: "12px",
-                          color: "#6b7280",
-                        }}
-                      >
-                        {m.role === "OWNER"
-                          ? "Full Organization Control"
-                          : m.role === "ADMIN"
-                          ? "Platform Management"
-                          : m.role === "DEVELOPER"
-                          ? "Feature Flag Releases"
-                          : "Read-Only Viewer"}
-                      </td>
-
                       <td style={{ padding: "16px 20px", textAlign: "right" }}>
                         {canModifyTarget && (
                           <div
@@ -558,10 +613,37 @@ export function Members() {
 
       {/* INVITATIONS SECTION */}
       <div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
-          <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#1e293b" }}>
-            Member Invitations ({invitationPageData.totalElements})
-          </h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "12px", marginBottom: "14px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#1e293b" }}>
+              Invitation history
+            </h2>
+            <p style={{ margin: 0, fontSize: "12px", color: "#6b7280" }}>
+              Pending invitations require member acceptance. Outbound delivery status reflects mail service dispatch confirmation, not guaranteed mailbox receipt. Resending an invitation generates a new security token and invalidates any previous link. Resending replaces the previous invitation link.
+            </p>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: 600 }}>Status:</span>
+            <select
+              value={invitationFilter}
+              onChange={(e) => setInvitationFilter(e.target.value as "ALL" | "PENDING" | "ACCEPTED" | "EXPIRED" | "REVOKED")}
+              style={{
+                padding: "6px 10px",
+                border: "1px solid #d1d5db",
+                borderRadius: "6px",
+                fontSize: "12px",
+                background: "white",
+                color: "#374151"
+              }}
+            >
+              <option value="ALL">All</option>
+              <option value="PENDING">Pending</option>
+              <option value="ACCEPTED">Accepted</option>
+              <option value="EXPIRED">Expired</option>
+              <option value="REVOKED">Revoked</option>
+            </select>
+          </div>
         </div>
 
         {invitations.length === 0 ? (
@@ -662,8 +744,11 @@ export function Members() {
                 </tr>
               </thead>
               <tbody>
-                {invitations.map((inv) => {
+                {invitations
+                  .filter((inv) => invitationFilter === "ALL" || inv.status === invitationFilter)
+                  .map((inv) => {
                   const isPending = inv.status === "PENDING";
+                  const canManageInv = isPending && (isOwner || (user?.role === "ADMIN" && inv.invitedRole !== "ADMIN"));
 
                   return (
                     <tr key={inv.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
@@ -753,7 +838,7 @@ export function Members() {
                       </td>
 
                       <td style={{ padding: "14px 20px", textAlign: "right" }}>
-                        {isPending && (
+                        {canManageInv && (
                           <div
                             style={{
                               display: "inline-flex",
@@ -851,7 +936,7 @@ export function Members() {
                 fontWeight: 800,
               }}
             >
-              Invite Organization Member
+              Invite member
             </h3>
 
             <p
@@ -862,7 +947,7 @@ export function Members() {
                 lineHeight: "1.4",
               }}
             >
-              An invitation email will be sent to this email address. The member will create their own password.
+              The recipient can accept the invitation and create their password.
             </p>
 
             {formError && (
@@ -892,13 +977,12 @@ export function Members() {
                     marginBottom: "6px",
                   }}
                 >
-                  Full Name
+                  Full name
                 </label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Sarah Jenkins"
                   style={{
                     width: "100%",
                     padding: "9px 12px",
@@ -920,14 +1004,13 @@ export function Members() {
                     marginBottom: "6px",
                   }}
                 >
-                  Email Address *
+                  Email address
                 </label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  placeholder="e.g. sarah@corp.io"
                   style={{
                     width: "100%",
                     padding: "9px 12px",
@@ -949,7 +1032,7 @@ export function Members() {
                     marginBottom: "6px",
                   }}
                 >
-                  Role *
+                  Role
                 </label>
                 <select
                   value={role}
@@ -1007,7 +1090,233 @@ export function Members() {
                     boxShadow: "0 4px 12px rgba(79, 70, 229, 0.25)",
                   }}
                 >
-                  {submitting ? "Sending..." : "Send Invitation"}
+                  {submitting ? "Sending…" : "Send invitation"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* TRANSFER OWNERSHIP MODAL */}
+      {isTransferOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              background: "white",
+              borderRadius: "12px",
+              padding: "24px",
+              maxWidth: "520px",
+              width: "90%",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "16px",
+              }}
+            >
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: "18px",
+                  fontWeight: 800,
+                  color: "#6d28d9",
+                }}
+              >
+                Transfer Platform Ownership
+              </h2>
+              <button
+                type="button"
+                onClick={() => setIsTransferOpen(false)}
+                disabled={transferSubmitting}
+                style={{
+                  border: "none",
+                  background: "none",
+                  fontSize: "18px",
+                  cursor: "pointer",
+                  color: "#9ca3af",
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <p style={{ fontSize: "13px", color: "#4b5563", marginBottom: "16px", lineHeight: "1.5" }}>
+              Ownership transfer is immediate and permanent. The selected administrator will be promoted to
+              <strong> OWNER</strong> with exclusive authority. Your account will automatically become an
+              <strong> ADMIN</strong>. Existing active sessions for both accounts will be invalidated.
+            </p>
+
+            {transferError && (
+              <div
+                role="alert"
+                style={{
+                  background: "#fee2e2",
+                  color: "#b91c1c",
+                  padding: "10px 14px",
+                  borderRadius: "8px",
+                  fontSize: "13px",
+                  marginBottom: "16px",
+                }}
+              >
+                {transferError}
+              </div>
+            )}
+
+            <form onSubmit={handleTransferOwnership}>
+              <div style={{ marginBottom: "14px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    color: "#374151",
+                    marginBottom: "5px",
+                  }}
+                >
+                  Select New Owner (Active Admin) *
+                </label>
+                <select
+                  value={transferTargetId}
+                  onChange={(e) =>
+                    setTransferTargetId(e.target.value ? Number(e.target.value) : "")
+                  }
+                  disabled={transferSubmitting}
+                  style={{
+                    width: "100%",
+                    padding: "9px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "7px",
+                    fontSize: "13px",
+                    background: "white",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <option value="">-- Choose eligible administrator --</option>
+                  {eligibleAdmins.map((admin) => (
+                    <option key={admin.id} value={admin.id}>
+                      {admin.name ? `${admin.name} (${admin.email})` : admin.email}
+                    </option>
+                  ))}
+                </select>
+                {eligibleAdmins.length === 0 && (
+                  <p style={{ fontSize: "12px", color: "#b91c1c", marginTop: "4px" }}>
+                    No other active ADMIN accounts found. Appoint an active ADMIN before initiating transfer.
+                  </p>
+                )}
+              </div>
+
+              <div style={{ marginBottom: "14px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    color: "#374151",
+                    marginBottom: "5px",
+                  }}
+                >
+                  Confirm Current Password *
+                </label>
+                <input
+                  type="password"
+                  value={transferPassword}
+                  onChange={(e) => setTransferPassword(e.target.value)}
+                  disabled={transferSubmitting}
+                  style={{
+                    width: "100%",
+                    padding: "9px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "7px",
+                    fontSize: "13px",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: "20px" }}>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: "8px",
+                    fontSize: "12px",
+                    color: "#374151",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={transferConfirmed}
+                    onChange={(e) => setTransferConfirmed(e.target.checked)}
+                    disabled={transferSubmitting}
+                    style={{ marginTop: "2px" }}
+                  />
+                  <span>
+                    I confirm that I want to transfer organization ownership to the selected administrator.
+                    I understand I will be demoted to ADMIN and signed out immediately.
+                  </span>
+                </label>
+              </div>
+
+              <div
+                className="responsive-actions"
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: "10px",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setIsTransferOpen(false)}
+                  disabled={transferSubmitting}
+                  style={{
+                    padding: "8px 16px",
+                    border: "1px solid #d1d5db",
+                    background: "white",
+                    borderRadius: "7px",
+                    fontSize: "13px",
+                    cursor: transferSubmitting ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={transferSubmitting || !transferTargetId || !transferPassword || !transferConfirmed}
+                  style={{
+                    padding: "8px 20px",
+                    border: "none",
+                    background: transferSubmitting || !transferTargetId || !transferPassword || !transferConfirmed ? "#c4b5fd" : "#7c3aed",
+                    color: "white",
+                    borderRadius: "7px",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    cursor: transferSubmitting || !transferTargetId || !transferPassword || !transferConfirmed ? "not-allowed" : "pointer",
+                    boxShadow: "0 4px 12px rgba(124, 58, 237, 0.25)",
+                  }}
+                >
+                  {transferSubmitting ? "Transferring..." : "Confirm & Transfer Ownership"}
                 </button>
               </div>
             </form>

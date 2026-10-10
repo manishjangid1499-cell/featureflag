@@ -15,11 +15,24 @@ import org.springframework.transaction.annotation.Transactional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
 @DataJpaTest
 @ActiveProfiles("test")
-@Import(MemberService.class)
+@Import({MemberService.class, MemberConcurrencyTest.TestConfig.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class MemberConcurrencyTest {
+    @TestConfiguration
+    static class TestConfig {
+        @Bean
+        public PasswordEncoder passwordEncoder() {
+            return new BCryptPasswordEncoder(4);
+        }
+    }
+
     @Autowired private UserRepository users;
     @Autowired private MemberService members;
 

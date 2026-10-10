@@ -21,6 +21,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -84,7 +85,9 @@ class RedisFlagEvaluationInfrastructureIT {
                 repository,
                 redisTemplate,
                 new RedisConfig().objectMapper(),
-                outboxService
+                outboxService,
+                Clock.systemUTC(),
+                true
         );
 
         FlagEvaluationResponse miss = service.evaluateFlag(
@@ -112,7 +115,7 @@ class RedisFlagEvaluationInfrastructureIT {
                         "DEV"
                 );
 
-        service.toggleFlag(1L);
+        service.setEnabledState(1L, false, 0L);
 
         assertThat(redisTemplate.hasKey(CACHE_KEY)).isFalse();
         FlagEvaluationResponse afterInvalidation =
@@ -140,20 +143,48 @@ class RedisFlagEvaluationInfrastructureIT {
         when(repository.findById(1L)).thenReturn(Optional.of(flag));
         when(repository.save(flag)).thenReturn(flag);
         FlagService service = new FlagService(repository, redisTemplate,
-                new RedisConfig().objectMapper(), mock(OutboxService.class));
+                new RedisConfig().objectMapper(), mock(OutboxService.class),
+                Clock.systemUTC(), true);
 
         for (String alias : aliases) {
             assertThat(service.evaluateFlag(alias, "stable-user", "DEV").isEnabled()).isTrue();
         }
         verify(repository, times(1)).findByFlagKeyAndEnvironment(
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq("DEV"));
-        service.toggleFlag(1L);
+        service.setEnabledState(1L, false, 0L);
         for (String alias : aliases) {
             assertThat(service.evaluateFlag(alias, "stable-user", "DEV").isEnabled()).isFalse();
         }
         verify(repository, times(2)).findByFlagKeyAndEnvironment(
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq("DEV"));
         assertThat(redisTemplate.keys("flag:config:*")).hasSize(1);
+    }
+
+    @Test
+    void disabledCachingNeverReadsOrWritesRedis() {
+        FeatureFlagRepository repository = mock(FeatureFlagRepository.class);
+        FeatureFlag flag = enabledFlag();
+        when(repository.findByFlagKeyAndEnvironment("NEW_CHECKOUT", "DEV"))
+                .thenReturn(Optional.of(flag));
+
+        FlagService service = new FlagService(
+                repository,
+                redisTemplate,
+                new RedisConfig().objectMapper(),
+                mock(OutboxService.class),
+                Clock.systemUTC(),
+                false
+        );
+
+        FlagEvaluationResponse first = service.evaluateFlag("NEW_CHECKOUT", "user-1", "DEV");
+        FlagEvaluationResponse second = service.evaluateFlag("NEW_CHECKOUT", "user-2", "DEV");
+
+        assertThat(first.isEnabled()).isTrue();
+        assertThat(second.isEnabled()).isTrue();
+        verify(repository, times(2)).findByFlagKeyAndEnvironment("NEW_CHECKOUT", "DEV");
+
+        assertThat(redisTemplate.hasKey(CACHE_KEY)).isFalse();
+        assertThat(redisTemplate.keys("flag:config:*")).isEmpty();
     }
 
     @Test
@@ -184,7 +215,9 @@ class RedisFlagEvaluationInfrastructureIT {
                     repository,
                     unavailableTemplate,
                     new RedisConfig().objectMapper(),
-                    mock(OutboxService.class)
+                    mock(OutboxService.class),
+                    Clock.systemUTC(),
+                    true
             );
 
             long started = System.nanoTime();

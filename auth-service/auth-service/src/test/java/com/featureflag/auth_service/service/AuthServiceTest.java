@@ -44,6 +44,9 @@ class AuthServiceTest {
     @Mock
     private AuthMetrics authMetrics;
 
+    @Mock
+    private com.featureflag.auth_service.repository.PasswordResetTokenRepository passwordResetTokenRepository;
+
     @InjectMocks
     private AuthService authService;
 
@@ -69,7 +72,7 @@ class AuthServiceTest {
 
         when(userRepository.findByEmail("test@company.com")).thenReturn(Optional.of(testUser));
         when(passwordEncoder.matches("password123", "encoded_password")).thenReturn(true);
-        when(jwtService.generateToken("test@company.com", "DEVELOPER")).thenReturn("mocked_jwt_token");
+        when(jwtService.generateToken(1L, "test@company.com", "DEVELOPER", 1L)).thenReturn("mocked_jwt_token");
 
         AuthResponse response = authService.login(request);
 
@@ -163,8 +166,10 @@ class AuthServiceTest {
                 "encoded_password"
         )).thenReturn(true);
         when(jwtService.generateToken(
+                1L,
                 "test@company.com",
-                "DEVELOPER"
+                "DEVELOPER",
+                1L
         )).thenReturn("new-token");
 
         assertEquals("new-token", authService.login(request).getToken());
@@ -227,5 +232,151 @@ class AuthServiceTest {
         assertEquals(2, recipients.size());
         assertTrue(recipients.contains("owner@company.com"));
         assertTrue(recipients.contains("admin@company.com"));
+    }
+
+    @Test
+    @DisplayName("Get Account Status - matching email and matching userId succeeds")
+    void testGetUserAccountStatus_MatchingUserId_Success() {
+        when(userRepository.findByEmail("test@company.com")).thenReturn(Optional.of(testUser));
+
+        var response = authService.getUserAccountStatus("test@company.com", 1L);
+
+        assertNotNull(response);
+        assertEquals(1L, response.userId());
+        assertEquals("test@company.com", response.email());
+        assertEquals(Role.DEVELOPER, response.role());
+        assertTrue(response.enabled());
+        assertEquals(1L, response.credentialVersion());
+    }
+
+    @Test
+    @DisplayName("Get Account Status - null or non-positive userId throws IllegalArgumentException")
+    void testGetUserAccountStatus_NullOrInvalidUserId_ThrowsException() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> authService.getUserAccountStatus("test@company.com", null)
+        );
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> authService.getUserAccountStatus("test@company.com", 0L)
+        );
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> authService.getUserAccountStatus("test@company.com", -1L)
+        );
+    }
+
+    @Test
+    @DisplayName("Get Account Status - userId mismatch throws ResourceNotFoundException")
+    void testGetUserAccountStatus_MismatchedUserId_ThrowsNotFound() {
+        when(userRepository.findByEmail("test@company.com")).thenReturn(Optional.of(testUser));
+
+        assertThrows(
+                com.featureflag.auth_service.exception.ResourceNotFoundException.class,
+                () -> authService.getUserAccountStatus("test@company.com", 999L)
+        );
+    }
+
+    @Test
+    @DisplayName("Change Password - successful change updates password hash and increments credential version")
+    void testChangePassword_Success() {
+        var request = new com.featureflag.auth_service.dto.ChangePasswordRequest(
+                "oldPassword123",
+                "newPassword456",
+                "newPassword456"
+        );
+
+        when(userRepository.findByEmailForUpdate("test@company.com")).thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches("oldPassword123", "encoded_password")).thenReturn(true);
+        when(passwordEncoder.matches("newPassword456", "encoded_password")).thenReturn(false);
+        when(passwordEncoder.encode("newPassword456")).thenReturn("new_encoded_hash");
+
+        authService.changePassword("test@company.com", request);
+
+        assertEquals("new_encoded_hash", testUser.getPassword());
+        assertEquals(2L, testUser.getCredentialVersion());
+        verify(userRepository).save(testUser);
+    }
+
+    @Test
+    @DisplayName("Change Password - incorrect current password throws InvalidOperationException without mutating")
+    void testChangePassword_IncorrectCurrentPassword() {
+        var request = new com.featureflag.auth_service.dto.ChangePasswordRequest(
+                "wrongPassword",
+                "newPassword456",
+                "newPassword456"
+        );
+
+        when(userRepository.findByEmailForUpdate("test@company.com")).thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches("wrongPassword", "encoded_password")).thenReturn(false);
+
+        var ex = assertThrows(
+                com.featureflag.auth_service.exception.InvalidOperationException.class,
+                () -> authService.changePassword("test@company.com", request)
+        );
+
+        assertTrue(ex.getMessage().contains("Current password is incorrect"));
+        assertEquals("encoded_password", testUser.getPassword());
+        assertEquals(1L, testUser.getCredentialVersion());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Change Password - password reuse throws InvalidOperationException without mutating")
+    void testChangePassword_PasswordReuse() {
+        var request = new com.featureflag.auth_service.dto.ChangePasswordRequest(
+                "oldPassword123",
+                "oldPassword123",
+                "oldPassword123"
+        );
+
+        when(userRepository.findByEmailForUpdate("test@company.com")).thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches("oldPassword123", "encoded_password")).thenReturn(true);
+
+        var ex = assertThrows(
+                com.featureflag.auth_service.exception.InvalidOperationException.class,
+                () -> authService.changePassword("test@company.com", request)
+        );
+
+        assertTrue(ex.getMessage().contains("cannot be the same"));
+        assertEquals("encoded_password", testUser.getPassword());
+        assertEquals(1L, testUser.getCredentialVersion());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Change Password - mismatched confirm password throws InvalidOperationException")
+    void testChangePassword_MismatchedConfirmPassword() {
+        var request = new com.featureflag.auth_service.dto.ChangePasswordRequest(
+                "oldPassword123",
+                "newPassword456",
+                "differentConfirm"
+        );
+
+        var ex = assertThrows(
+                com.featureflag.auth_service.exception.InvalidOperationException.class,
+                () -> authService.changePassword("test@company.com", request)
+        );
+
+        assertTrue(ex.getMessage().contains("do not match"));
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    @DisplayName("Change Password - short password throws InvalidOperationException")
+    void testChangePassword_ShortPassword() {
+        var request = new com.featureflag.auth_service.dto.ChangePasswordRequest(
+                "oldPassword123",
+                "short",
+                "short"
+        );
+
+        var ex = assertThrows(
+                com.featureflag.auth_service.exception.InvalidOperationException.class,
+                () -> authService.changePassword("test@company.com", request)
+        );
+
+        assertTrue(ex.getMessage().contains("at least 8 characters"));
+        verifyNoInteractions(userRepository);
     }
 }

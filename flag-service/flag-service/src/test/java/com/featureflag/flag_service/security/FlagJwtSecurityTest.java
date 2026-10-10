@@ -3,7 +3,9 @@ package com.featureflag.flag_service.security;
 import com.featureflag.flag_service.config.OpenApiConfig;
 import com.featureflag.flag_service.config.TimeConfiguration;
 import com.featureflag.flag_service.controller.FlagController;
+import com.featureflag.flag_service.dto.FlagToggleRequest;
 import com.featureflag.flag_service.entity.FeatureFlag;
+import org.springframework.http.MediaType;
 import com.featureflag.flag_service.service.FlagEvaluationTelemetryService;
 import com.featureflag.flag_service.service.FlagMutationAuditService;
 import com.featureflag.flag_service.service.FlagQueryService;
@@ -46,11 +48,13 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(FlagController.class)
@@ -66,6 +70,7 @@ class FlagJwtSecurityTest {
     private static final String ISSUER = "feature-flag-auth";
     private static final String AUDIENCE = "feature-flag-api";
     private static final String EMAIL = "user@company.com";
+    private static final Long DEFAULT_USER_ID = 1L;
     private static final KeyPair SIGNING_KEY = generateRsaKeyPair();
 
     @Autowired
@@ -96,15 +101,20 @@ class FlagJwtSecurityTest {
     @MockitoBean
     private FlagMetrics flagMetrics;
 
+    @MockitoBean
+    private AuthAccountStatusClient authAccountStatusClient;
+
     @BeforeEach
     void setUp() {
         when(flagQueryService.findAll(
                 org.mockito.ArgumentMatchers.any()
         )).thenReturn(Page.empty());
-        when(flagMutationAuditService.toggleFlag(1L, EMAIL))
+        when(flagMutationAuditService.toggleFlag(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.any(FlagToggleRequest.class), org.mockito.ArgumentMatchers.eq(EMAIL)))
                 .thenReturn(FeatureFlag.builder().id(1L).build());
         when(flagMutationAuditService.deleteFlag(1L, EMAIL))
                 .thenReturn("deleted");
+        when(authAccountStatusClient.getAccountStatus(org.mockito.ArgumentMatchers.eq(EMAIL), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.Optional.of(new UserAccountStatus(DEFAULT_USER_ID, EMAIL, "ADMIN", true)));
     }
 
     @Test
@@ -179,8 +189,8 @@ class FlagJwtSecurityTest {
     }
 
     @Test
-    void developerRetainsReadAndPatchButNotDeleteAccess() throws Exception {
-        expectAllowedRole("DEVELOPER", true, false);
+    void developerRetainsReadPatchAndDeleteAccessAtFilterLevel() throws Exception {
+        expectAllowedRole("DEVELOPER", true, true);
     }
 
     @Test
@@ -206,10 +216,12 @@ class FlagJwtSecurityTest {
         mockMvc.perform(
                 patch("/flags/1/toggle")
                         .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"enabled\":true,\"expectedVersion\":0}")
         ).andExpect(status().isOk());
 
         verify(flagMutationAuditService)
-                .toggleFlag(1L, EMAIL);
+                .toggleFlag(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.any(FlagToggleRequest.class), org.mockito.ArgumentMatchers.eq(EMAIL));
     }
 
     @Test
@@ -231,17 +243,246 @@ class FlagJwtSecurityTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void demotedAccountUsesCurrentRoleNotJwtRole() throws Exception {
+        String token = validTimingToken("ADMIN");
+        when(authAccountStatusClient.getAccountStatus(EMAIL, DEFAULT_USER_ID))
+                .thenReturn(java.util.Optional.of(new UserAccountStatus(DEFAULT_USER_ID, EMAIL, "VIEWER", true)));
+
+        mockMvc.perform(get("/flags").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        mockMvc.perform(patch("/flags/1/toggle")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"enabled\":true,\"expectedVersion\":0}"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(delete("/flags/1").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void disabledAccountIsRejectedWithUnauthorized() throws Exception {
+        String token = validTimingToken("ADMIN");
+        when(authAccountStatusClient.getAccountStatus(EMAIL, DEFAULT_USER_ID))
+                .thenReturn(java.util.Optional.of(new UserAccountStatus(DEFAULT_USER_ID, EMAIL, "ADMIN", false)));
+
+        mockMvc.perform(get("/flags").header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void deletedAccountIsRejectedWithUnauthorized() throws Exception {
+        String token = validTimingToken("ADMIN");
+        when(authAccountStatusClient.getAccountStatus(EMAIL, DEFAULT_USER_ID))
+                .thenReturn(java.util.Optional.empty());
+
+        mockMvc.perform(get("/flags").header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void authServiceOutageRejectsAccessWithServiceUnavailable() throws Exception {
+        String token = validTimingToken("ADMIN");
+        when(authAccountStatusClient.getAccountStatus(EMAIL, DEFAULT_USER_ID))
+                .thenThrow(new AuthServiceUnavailableException("Auth service connection timed out"));
+
+        mockMvc.perform(get("/flags").header("Authorization", "Bearer " + token))
+                .andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
+    void tokenWithOldUserIdIsRejectedWhenAccountIsRecreated() throws Exception {
+        String tokenWithOldUserId = rsaToken(SIGNING_KEY, ISSUER, AUDIENCE,
+                Instant.now().minusSeconds(10), Instant.now().plusSeconds(300), "ADMIN", 101L);
+        when(authAccountStatusClient.getAccountStatus(EMAIL, 101L))
+                .thenReturn(java.util.Optional.empty());
+
+        mockMvc.perform(get("/flags").header("Authorization", "Bearer " + tokenWithOldUserId))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void tokenMissingUserIdIsRejectedWithoutCallingAuthService() throws Exception {
+        String tokenWithoutUserId = rsaToken(SIGNING_KEY, ISSUER, AUDIENCE,
+                Instant.now().minusSeconds(10), Instant.now().plusSeconds(300), "ADMIN", null);
+
+        mockMvc.perform(get("/flags").header("Authorization", "Bearer " + tokenWithoutUserId))
+                .andExpect(status().isUnauthorized());
+
+        verify(authAccountStatusClient, never()).getAccountStatus(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void tokenWithMalformedUserIdIsRejectedWithoutCallingAuthService() throws Exception {
+        JWTClaimsSet.Builder builder = new JWTClaimsSet.Builder()
+                .subject(EMAIL)
+                .issuer(ISSUER)
+                .audience(AUDIENCE)
+                .issueTime(Date.from(Instant.now().minusSeconds(10)))
+                .notBeforeTime(Date.from(Instant.now().minusSeconds(10)))
+                .expirationTime(Date.from(Instant.now().plusSeconds(300)))
+                .jwtID(UUID.randomUUID().toString())
+                .claim("role", "ADMIN")
+                .claim("userId", "not-a-number");
+
+        SignedJWT signedJWT = new SignedJWT(
+                new JWSHeader.Builder(JWSAlgorithm.RS256).type(JOSEObjectType.JWT).keyID("test-key").build(),
+                builder.build()
+        );
+        signedJWT.sign(new RSASSASigner((RSAPrivateKey) SIGNING_KEY.getPrivate()));
+        String malformedToken = signedJWT.serialize();
+
+        mockMvc.perform(get("/flags").header("Authorization", "Bearer " + malformedToken))
+                .andExpect(status().isUnauthorized());
+
+        verify(authAccountStatusClient, never()).getAccountStatus(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void tokenMissingTokenVersionIsRejected() throws Exception {
+        JWTClaimsSet claimsWithoutVersion = new JWTClaimsSet.Builder()
+                .subject(EMAIL)
+                .issuer(ISSUER)
+                .audience(AUDIENCE)
+                .issueTime(Date.from(Instant.now().minusSeconds(10)))
+                .notBeforeTime(Date.from(Instant.now().minusSeconds(10)))
+                .expirationTime(Date.from(Instant.now().plusSeconds(300)))
+                .jwtID(UUID.randomUUID().toString())
+                .claim("role", "ADMIN")
+                .claim("userId", DEFAULT_USER_ID)
+                .build();
+        SignedJWT signedJWT = new SignedJWT(
+                new JWSHeader.Builder(JWSAlgorithm.RS256).type(JOSEObjectType.JWT).keyID("test-key").build(),
+                claimsWithoutVersion
+        );
+        signedJWT.sign(new RSASSASigner((RSAPrivateKey) SIGNING_KEY.getPrivate()));
+
+        mockMvc.perform(get("/flags").header("Authorization", "Bearer " + signedJWT.serialize()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void tokenWithStaleTokenVersionIsRejectedWhenAccountCredentialVersionIncremented() throws Exception {
+        String staleToken = validTimingToken("ADMIN");
+
+        when(authAccountStatusClient.getAccountStatus(EMAIL, DEFAULT_USER_ID))
+                .thenReturn(java.util.Optional.of(new UserAccountStatus(DEFAULT_USER_ID, EMAIL, "ADMIN", true, 2L)));
+
+        mockMvc.perform(get("/flags").header("Authorization", "Bearer " + staleToken))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void validNewTokenForReplacementAccountWorksAccordingToCurrentRole() throws Exception {
+        Long replacementUserId = 202L;
+        String tokenWithNewUserId = rsaToken(SIGNING_KEY, ISSUER, AUDIENCE,
+                Instant.now().minusSeconds(10), Instant.now().plusSeconds(300), "ADMIN", replacementUserId);
+
+        when(authAccountStatusClient.getAccountStatus(EMAIL, replacementUserId))
+                .thenReturn(java.util.Optional.of(new UserAccountStatus(replacementUserId, EMAIL, "ADMIN", true)));
+
+        mockMvc.perform(get("/flags").header("Authorization", "Bearer " + tokenWithNewUserId))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void accountStatusWithMismatchedUserIdFailsClosed() throws Exception {
+        String token = validTimingToken("ADMIN");
+        // Status returns different userId (999L) than token's userId (1L)
+        when(authAccountStatusClient.getAccountStatus(EMAIL, DEFAULT_USER_ID))
+                .thenReturn(java.util.Optional.of(new UserAccountStatus(999L, EMAIL, "ADMIN", true)));
+
+        mockMvc.perform(get("/flags").header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void accountStatusWithUnknownRoleFailsClosed() throws Exception {
+        String token = validTimingToken("ADMIN");
+        when(authAccountStatusClient.getAccountStatus(EMAIL, DEFAULT_USER_ID))
+                .thenReturn(java.util.Optional.of(new UserAccountStatus(DEFAULT_USER_ID, EMAIL, "SUPERUSER", true)));
+
+        mockMvc.perform(get("/flags").header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void unauthenticatedMutationsReturnUnauthorizedHttp401() throws Exception {
+        mockMvc.perform(post("/flags")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Test\",\"flagKey\":\"TEST\",\"environment\":\"DEV\"}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(patch("/flags/1/toggle")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"enabled\":true,\"expectedVersion\":0}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(delete("/flags/1"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void sdkKeyCannotMutateFlagsAndReturnsUnauthorizedOrForbidden() throws Exception {
+        // SDK key in Authorization header or X-Feature-Flag-Key header cannot access /flags control plane
+        mockMvc.perform(post("/flags")
+                .header("X-Feature-Flag-Key", "ff_sdk_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Test\",\"flagKey\":\"TEST\",\"environment\":\"DEV\"}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(delete("/flags/1")
+                .header("X-Feature-Flag-Key", "ff_sdk_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void developerDeniedMutationOnProductionFlag() throws Exception {
+        when(authAccountStatusClient.getAccountStatus(EMAIL, DEFAULT_USER_ID))
+                .thenReturn(java.util.Optional.of(new UserAccountStatus(DEFAULT_USER_ID, EMAIL, "DEVELOPER", true)));
+        String token = validTimingToken("DEVELOPER");
+
+        // Simulate service throwing AccessDeniedException when mutating PROD flag
+        when(flagMutationAuditService.deleteFlag(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq(EMAIL)))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("DEVELOPER role is not permitted to mutate flags in environment: PROD"));
+
+        mockMvc.perform(delete("/flags/1").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void staleAdminTokenDemotedToDeveloperIsDeniedOnProduction() throws Exception {
+        // Token has role ADMIN, but authoritative auth-service status says DEVELOPER
+        String staleAdminToken = validTimingToken("ADMIN");
+        when(authAccountStatusClient.getAccountStatus(EMAIL, DEFAULT_USER_ID))
+                .thenReturn(java.util.Optional.of(new UserAccountStatus(DEFAULT_USER_ID, EMAIL, "DEVELOPER", true)));
+
+        when(flagMutationAuditService.toggleFlag(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(EMAIL)))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("DEVELOPER role is not permitted to mutate flags in environment: PROD"));
+
+        mockMvc.perform(patch("/flags/1/toggle")
+                .header("Authorization", "Bearer " + staleAdminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"enabled\":true,\"expectedVersion\":0}"))
+                .andExpect(status().isForbidden());
+    }
+
     private void expectUnauthorized(String token) throws Exception {
         mockMvc.perform(get("/flags").header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized());
     }
 
     private void expectAllowedRole(String role, boolean patchAllowed, boolean deleteAllowed) throws Exception {
+        when(authAccountStatusClient.getAccountStatus(EMAIL, DEFAULT_USER_ID))
+                .thenReturn(java.util.Optional.of(new UserAccountStatus(DEFAULT_USER_ID, EMAIL, role, true)));
         String token = validTimingToken(role);
 
         mockMvc.perform(get("/flags").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
-        mockMvc.perform(patch("/flags/1/toggle").header("Authorization", "Bearer " + token))
+        mockMvc.perform(patch("/flags/1/toggle")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"enabled\":true,\"expectedVersion\":0}"))
                 .andExpect(patchAllowed ? status().isOk() : status().isForbidden());
         mockMvc.perform(delete("/flags/1").header("Authorization", "Bearer " + token))
                 .andExpect(deleteAllowed ? status().isOk() : status().isForbidden());
@@ -249,7 +490,7 @@ class FlagJwtSecurityTest {
 
     private static String validTimingToken(String role) {
         return rsaToken(SIGNING_KEY, ISSUER, AUDIENCE,
-                Instant.now().minusSeconds(10), Instant.now().plusSeconds(300), role);
+                Instant.now().minusSeconds(10), Instant.now().plusSeconds(300), role, DEFAULT_USER_ID);
     }
 
     private static String rsaToken(
@@ -260,13 +501,25 @@ class FlagJwtSecurityTest {
             Instant expiresAt,
             String role
     ) {
+        return rsaToken(keyPair, issuer, audience, notBefore, expiresAt, role, DEFAULT_USER_ID);
+    }
+
+    private static String rsaToken(
+            KeyPair keyPair,
+            String issuer,
+            String audience,
+            Instant notBefore,
+            Instant expiresAt,
+            String role,
+            Long userId
+    ) {
         try {
             SignedJWT token = new SignedJWT(
                     new JWSHeader.Builder(JWSAlgorithm.RS256)
                             .type(JOSEObjectType.JWT)
                             .keyID("test-key")
                             .build(),
-                    claims(issuer, audience, notBefore, expiresAt, role)
+                    claims(issuer, audience, notBefore, expiresAt, role, userId)
             );
             token.sign(new RSASSASigner((RSAPrivateKey) keyPair.getPrivate()));
             return token.serialize();
@@ -282,6 +535,17 @@ class FlagJwtSecurityTest {
             Instant expiresAt,
             String role
     ) {
+        return claims(issuer, audience, notBefore, expiresAt, role, DEFAULT_USER_ID);
+    }
+
+    private static JWTClaimsSet claims(
+            String issuer,
+            String audience,
+            Instant notBefore,
+            Instant expiresAt,
+            String role,
+            Long userId
+    ) {
         JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
                 .subject(EMAIL)
                 .issuer(issuer)
@@ -293,6 +557,10 @@ class FlagJwtSecurityTest {
         if (role != null) {
             claims.claim("role", role);
         }
+        if (userId != null) {
+            claims.claim("userId", userId);
+        }
+        claims.claim("tokenVersion", 1L);
         return claims.build();
     }
 
@@ -330,8 +598,10 @@ class FlagJwtSecurityTest {
         }
 
         @Bean
-        Converter<Jwt, ? extends AbstractAuthenticationToken> jwtAuthenticationConverter() {
-            return new JwtSecurityConfig().jwtAuthenticationConverter();
+        Converter<Jwt, ? extends AbstractAuthenticationToken> jwtAuthenticationConverter(
+                AuthAccountStatusClient authAccountStatusClient
+        ) {
+            return new AuthoritativeJwtAuthenticationConverter(authAccountStatusClient);
         }
     }
 }

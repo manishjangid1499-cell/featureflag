@@ -1,8 +1,15 @@
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import type { FlagUpdateRequest, FeatureFlag } from "../../types/featureFlag";
 import { isAxiosError } from "axios";
 import { updateFlag } from "../../api/flagApi";
 import { getApiErrorMessage } from "../../api/errors";
+import { useAuth } from "../../hooks/useAuth";
+import {
+  getUserTimeZone,
+  utcIsoToLocalInputValue,
+  resolveSchedulePayloadValue,
+  validateScheduleInputs,
+} from "../../utils/scheduleTime";
 
 interface EditFlagModalProps {
   flag: FeatureFlag | null;
@@ -11,38 +18,33 @@ interface EditFlagModalProps {
   onSuccess: (updatedFlag: FeatureFlag) => void;
 }
 
-export function EditFlagModal({ flag, isOpen, onClose, onSuccess }: EditFlagModalProps) {
-  const [name, setName] = useState("");
-  const [flagKey, setFlagKey] = useState("");
-  const [description, setDescription] = useState("");
-  const [environment, setEnvironment] = useState("DEV");
-  const [rolloutPercentage, setRolloutPercentage] = useState<number>(0);
-  const [enabled, setEnabled] = useState(true);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [targetUsersInput, setTargetUsersInput] = useState("");
+interface EditFlagModalContentProps {
+  flag: FeatureFlag;
+  onClose: () => void;
+  onSuccess: (updatedFlag: FeatureFlag) => void;
+}
+
+function EditFlagModalContent({ flag, onClose, onSuccess }: EditFlagModalContentProps) {
+  const { isDeveloper } = useAuth();
+  const [name, setName] = useState(() => flag.name || "");
+  const [description, setDescription] = useState(() => flag.description || "");
+  const [rolloutPercentage, setRolloutPercentage] = useState<number>(() => flag.rolloutPercentage ?? 0);
+  const [enabled, setEnabled] = useState(() => flag.enabled ?? true);
+  const [startDate, setStartDate] = useState(() => utcIsoToLocalInputValue(flag.startDate));
+  const [endDate, setEndDate] = useState(() => utcIsoToLocalInputValue(flag.endDate));
+  const [targetUsersInput, setTargetUsersInput] = useState(() => flag.targetUsers ? flag.targetUsers.join(", ") : "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (flag) {
-      setName(flag.name || "");
-      setFlagKey(flag.flagKey || "");
-      setDescription(flag.description || "");
-      setEnvironment(flag.environment || "DEV");
-      setRolloutPercentage(flag.rolloutPercentage ?? 0);
-      setEnabled(flag.enabled ?? true);
-      setStartDate(flag.startDate ? flag.startDate.slice(0, 16) : "");
-      setEndDate(flag.endDate ? flag.endDate.slice(0, 16) : "");
-      setTargetUsersInput(flag.targetUsers ? flag.targetUsers.join(", ") : "");
-      setError("");
-    }
-  }, [flag]);
-
-  if (!isOpen || !flag) return null;
+  const isProdFlag = (flag.environment || "").toUpperCase() === "PROD";
+  const isBlockedByRole = isDeveloper && isProdFlag;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (isBlockedByRole) {
+      setError("Developers cannot modify production flags. Production changes require Owner or Admin.");
+      return;
+    }
     setError("");
 
     if (!name.trim()) {
@@ -55,8 +57,9 @@ export function EditFlagModal({ flag, isOpen, onClose, onSuccess }: EditFlagModa
       return;
     }
 
-    if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
-      setError("End date must be after start date.");
+    const scheduleError = validateScheduleInputs(startDate, endDate, flag.startDate, flag.endDate);
+    if (scheduleError) {
+      setError(scheduleError);
       return;
     }
 
@@ -68,13 +71,13 @@ export function EditFlagModal({ flag, isOpen, onClose, onSuccess }: EditFlagModa
     const payload: FlagUpdateRequest = {
       expectedVersion: flag.version,
       name: name.trim(),
-      flagKey: flagKey.trim(),
+      flagKey: flag.flagKey,
       description: description.trim(),
-      environment,
+      environment: flag.environment,
       rolloutPercentage,
       enabled,
-      startDate: startDate ? new Date(startDate).toISOString().slice(0, 19) : null,
-      endDate: endDate ? new Date(endDate).toISOString().slice(0, 19) : null,
+      startDate: resolveSchedulePayloadValue(startDate, flag.startDate),
+      endDate: resolveSchedulePayloadValue(endDate, flag.endDate),
       targetUsers,
     };
 
@@ -156,6 +159,34 @@ export function EditFlagModal({ flag, isOpen, onClose, onSuccess }: EditFlagModa
             </div>
           )}
 
+          {isBlockedByRole && (
+            <div style={{
+              background: "#fffbeb",
+              border: "1px solid #fde68a",
+              color: "#92400e",
+              padding: "10px 14px",
+              borderRadius: "8px",
+              fontSize: "12px",
+              marginBottom: "18px",
+              lineHeight: "1.45"
+            }}>
+              <strong>Production Restricted:</strong> Developers can view but cannot edit flags in PROD. Modifying production flags requires an Owner or Admin account.
+            </div>
+          )}
+
+          <div style={{
+            background: "#f8fafc",
+            border: "1px solid #e2e8f0",
+            color: "#334155",
+            padding: "10px 14px",
+            borderRadius: "8px",
+            fontSize: "12px",
+            marginBottom: "18px",
+            lineHeight: "1.45"
+          }}>
+            <strong>Flag Identity:</strong> Flag key and environment identify the flag evaluated by application SDKs and cannot be changed after creation. If you need a different name, update the display name below rather than deleting and recreating an in-use flag.
+          </div>
+
           <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
@@ -168,6 +199,9 @@ export function EditFlagModal({ flag, isOpen, onClose, onSuccess }: EditFlagModa
                 required
                 style={{ width: "100%", padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: "7px", fontSize: "13px" }}
               />
+              <span style={{ fontSize: "11px", color: "#6b7280" }}>
+                Change display name to relabel this flag.
+              </span>
             </div>
 
             <div>
@@ -176,28 +210,32 @@ export function EditFlagModal({ flag, isOpen, onClose, onSuccess }: EditFlagModa
               </label>
               <input
                 type="text"
-                value={flagKey}
+                value={flag.flagKey}
+                readOnly
                 disabled
                 style={{ width: "100%", padding: "9px 12px", border: "1px solid #e5e7eb", borderRadius: "7px", fontSize: "13px", background: "#f9fafb", color: "#6b7280", fontFamily: "monospace" }}
               />
+              <span style={{ fontSize: "11px", color: "#6b7280" }}>
+                Application identifier for evaluations.
+              </span>
             </div>
           </div>
 
           <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
-                Environment
+                Environment (Immutable)
               </label>
-              <select
-                value={environment}
-                onChange={(e) => setEnvironment(e.target.value)}
-                style={{ width: "100%", padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: "7px", fontSize: "13px", background: "white" }}
-              >
-                <option value="DEV">DEV</option>
-                <option value="QA">QA</option>
-                <option value="STAGING">STAGING</option>
-                <option value="PROD">PROD</option>
-              </select>
+              <input
+                type="text"
+                value={flag.environment}
+                readOnly
+                disabled
+                style={{ width: "100%", padding: "9px 12px", border: "1px solid #e5e7eb", borderRadius: "7px", fontSize: "13px", background: "#f9fafb", color: "#6b7280" }}
+              />
+              <span style={{ fontSize: "11px", color: "#6b7280" }}>
+                Target runtime environment.
+              </span>
             </div>
 
             <div>
@@ -250,7 +288,7 @@ export function EditFlagModal({ flag, isOpen, onClose, onSuccess }: EditFlagModa
           <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
-                Scheduled Start (Optional)
+                Scheduled Start (Optional) <span style={{ fontSize: "11px", color: "#6b7280", fontWeight: 400 }}>({getUserTimeZone()})</span>
               </label>
               <input
                 type="datetime-local"
@@ -262,7 +300,7 @@ export function EditFlagModal({ flag, isOpen, onClose, onSuccess }: EditFlagModa
 
             <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
-                Scheduled Expiration (Optional)
+                Scheduled Expiration (Optional) <span style={{ fontSize: "11px", color: "#6b7280", fontWeight: 400 }}>({getUserTimeZone()})</span>
               </label>
               <input
                 type="datetime-local"
@@ -281,7 +319,6 @@ export function EditFlagModal({ flag, isOpen, onClose, onSuccess }: EditFlagModa
               type="text"
               value={targetUsersInput}
               onChange={(e) => setTargetUsersInput(e.target.value)}
-              placeholder="e.g. usr_101, beta_tester_2"
               style={{ width: "100%", padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: "7px", fontSize: "13px" }}
             />
           </div>
@@ -304,24 +341,37 @@ export function EditFlagModal({ flag, isOpen, onClose, onSuccess }: EditFlagModa
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || isBlockedByRole}
               style={{
                 padding: "9px 20px",
                 border: "none",
-                background: "#4f46e5",
+                background: isBlockedByRole ? "#9ca3af" : "#4f46e5",
                 color: "white",
                 borderRadius: "7px",
                 fontSize: "13px",
                 fontWeight: 600,
-                cursor: loading ? "not-allowed" : "pointer"
+                cursor: loading || isBlockedByRole ? "not-allowed" : "pointer"
               }}
             >
-              {loading ? "Saving..." : "Save Changes"}
+              {loading ? "Saving..." : isBlockedByRole ? "Owner/Admin Only" : "Save Changes"}
             </button>
           </div>
         </form>
       </div>
     </div>
+  );
+}
+
+export function EditFlagModal({ flag, isOpen, onClose, onSuccess }: EditFlagModalProps) {
+  if (!isOpen || !flag) return null;
+
+  return (
+    <EditFlagModalContent
+      key={`${flag.id}-${flag.version}`}
+      flag={flag}
+      onClose={onClose}
+      onSuccess={onSuccess}
+    />
   );
 }
 

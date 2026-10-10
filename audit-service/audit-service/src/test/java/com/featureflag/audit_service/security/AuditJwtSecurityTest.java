@@ -40,6 +40,8 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.any;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -57,17 +59,21 @@ class AuditJwtSecurityTest {
     private static final String ISSUER = "feature-flag-auth";
     private static final String AUDIENCE = "feature-flag-api";
     private static final String EMAIL = "audit-user@company.com";
+    private static final Long DEFAULT_USER_ID = 1L;
     private static final KeyPair SIGNING_KEY = generateRsaKeyPair();
 
     @Autowired private MockMvc mockMvc;
     @Autowired private JwtDecoder jwtDecoder;
     @Autowired private Converter<Jwt, ? extends AbstractAuthenticationToken> jwtAuthenticationConverter;
     @MockitoBean private AuditService auditService;
+    @MockitoBean private AuthAccountStatusClient authAccountStatusClient;
 
     @BeforeEach
     void setUp() {
         when(auditService.getAllAuditLogs(any(Pageable.class)))
                 .thenReturn(Page.empty());
+        when(authAccountStatusClient.getAccountStatus(org.mockito.ArgumentMatchers.eq(EMAIL), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.Optional.of(new UserAccountStatus(DEFAULT_USER_ID, EMAIL, "ADMIN", true)));
     }
 
     @Test
@@ -112,34 +118,47 @@ class AuditJwtSecurityTest {
 
     @Test
     void hmacTokenReturnsUnauthorized() throws Exception {
+        JWTClaimsSet claims = claims(ISSUER, AUDIENCE, Instant.now().minusSeconds(10),
+                Instant.now().plusSeconds(300), "VIEWER");
         SignedJWT token = new SignedJWT(
                 new JWSHeader.Builder(JWSAlgorithm.HS256).type(JOSEObjectType.JWT).build(),
-                claims(ISSUER, AUDIENCE, Instant.now().minusSeconds(10),
-                        Instant.now().plusSeconds(300), "VIEWER")
+                claims
         );
         token.sign(new MACSigner("a-32-byte-minimum-test-secret-key!".getBytes()));
+
         expectUnauthorized(token.serialize());
     }
 
     @Test
-    void missingBlankLowercaseAndUnknownRolesAreDenied() throws Exception {
+    void missingBlankAndUnknownRolesAreDenied() throws Exception {
         expectUnauthorized(validToken(null));
         expectUnauthorized(validToken(""));
-        expectUnauthorized(validToken("admin"));
         expectUnauthorized(validToken("SUPERUSER"));
+        expectUnauthorized(validToken("admin"));
     }
 
     @Test
-    void allExistingRolePermissionsRemainUnchanged() throws Exception {
-        for (String role : List.of("OWNER", "ADMIN", "DEVELOPER", "VIEWER")) {
-            mockMvc.perform(get("/audit")
-                            .header("Authorization", "Bearer " + validToken(role)))
-                    .andExpect(status().isOk());
-        }
+    void ownerRetainsReadAccess() throws Exception {
+        expectAllowedRole("OWNER");
     }
 
     @Test
-    void subjectAndRoleMapExactlyToAuthentication() {
+    void adminRetainsReadAccess() throws Exception {
+        expectAllowedRole("ADMIN");
+    }
+
+    @Test
+    void developerRetainsReadAccess() throws Exception {
+        expectAllowedRole("DEVELOPER");
+    }
+
+    @Test
+    void viewerRetainsReadAccess() throws Exception {
+        expectAllowedRole("VIEWER");
+    }
+
+    @Test
+    void subjectAndRoleMapExactlyToAuthenticationNameAndAuthority() {
         Jwt jwt = jwtDecoder.decode(validToken("ADMIN"));
         AbstractAuthenticationToken authentication = jwtAuthenticationConverter.convert(jwt);
 
@@ -150,7 +169,7 @@ class AuditJwtSecurityTest {
     }
 
     @Test
-    void authenticationUsesLocalNimbusDecoder() {
+    void authenticationUsesTheLocalNimbusJwtDecoder() {
         assertTrue(jwtDecoder instanceof NimbusJwtDecoder);
     }
 
@@ -168,25 +187,205 @@ class AuditJwtSecurityTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void disabledAccountIsRejectedWithUnauthorized() throws Exception {
+        String token = validToken("ADMIN");
+        when(authAccountStatusClient.getAccountStatus(EMAIL, DEFAULT_USER_ID))
+                .thenReturn(java.util.Optional.of(new UserAccountStatus(DEFAULT_USER_ID, EMAIL, "ADMIN", false)));
+
+        mockMvc.perform(get("/audit").header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void deletedAccountIsRejectedWithUnauthorized() throws Exception {
+        String token = validToken("ADMIN");
+        when(authAccountStatusClient.getAccountStatus(EMAIL, DEFAULT_USER_ID))
+                .thenReturn(java.util.Optional.empty());
+
+        mockMvc.perform(get("/audit").header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void authServiceOutageRejectsAccessWithServiceUnavailable() throws Exception {
+        String token = validToken("ADMIN");
+        when(authAccountStatusClient.getAccountStatus(EMAIL, DEFAULT_USER_ID))
+                .thenThrow(new AuthServiceUnavailableException("Auth service connection timed out"));
+
+        mockMvc.perform(get("/audit").header("Authorization", "Bearer " + token))
+                .andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
+    void tokenWithOldUserIdIsRejectedWhenAccountIsRecreated() throws Exception {
+        String tokenWithUserId = rsaToken(SIGNING_KEY, ISSUER, AUDIENCE,
+                Instant.now().minusSeconds(10), Instant.now().plusSeconds(300), "ADMIN", 101L);
+        when(authAccountStatusClient.getAccountStatus(EMAIL, 101L))
+                .thenReturn(java.util.Optional.empty());
+
+        mockMvc.perform(get("/audit").header("Authorization", "Bearer " + tokenWithUserId))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void tokenMissingUserIdIsRejectedWithoutCallingAuthService() throws Exception {
+        String tokenWithoutUserId = rsaToken(SIGNING_KEY, ISSUER, AUDIENCE,
+                Instant.now().minusSeconds(10), Instant.now().plusSeconds(300), "ADMIN", null);
+
+        mockMvc.perform(get("/audit").header("Authorization", "Bearer " + tokenWithoutUserId))
+                .andExpect(status().isUnauthorized());
+
+        verify(authAccountStatusClient, never()).getAccountStatus(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void tokenWithMalformedUserIdIsRejectedWithoutCallingAuthService() throws Exception {
+        JWTClaimsSet.Builder builder = new JWTClaimsSet.Builder()
+                .subject(EMAIL)
+                .issuer(ISSUER)
+                .audience(AUDIENCE)
+                .issueTime(Date.from(Instant.now().minusSeconds(10)))
+                .notBeforeTime(Date.from(Instant.now().minusSeconds(10)))
+                .expirationTime(Date.from(Instant.now().plusSeconds(300)))
+                .jwtID(UUID.randomUUID().toString())
+                .claim("role", "ADMIN")
+                .claim("userId", "not-a-number");
+
+        SignedJWT signedJWT = new SignedJWT(
+                new JWSHeader.Builder(JWSAlgorithm.RS256).type(JOSEObjectType.JWT).keyID("test-key").build(),
+                builder.build()
+        );
+        signedJWT.sign(new RSASSASigner((RSAPrivateKey) SIGNING_KEY.getPrivate()));
+        String malformedToken = signedJWT.serialize();
+
+        mockMvc.perform(get("/audit").header("Authorization", "Bearer " + malformedToken))
+                .andExpect(status().isUnauthorized());
+
+        verify(authAccountStatusClient, never()).getAccountStatus(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void tokenMissingTokenVersionIsRejected() throws Exception {
+        JWTClaimsSet claimsWithoutVersion = new JWTClaimsSet.Builder()
+                .subject(EMAIL)
+                .issuer(ISSUER)
+                .audience(AUDIENCE)
+                .issueTime(Date.from(Instant.now().minusSeconds(10)))
+                .notBeforeTime(Date.from(Instant.now().minusSeconds(10)))
+                .expirationTime(Date.from(Instant.now().plusSeconds(300)))
+                .jwtID(UUID.randomUUID().toString())
+                .claim("role", "ADMIN")
+                .claim("userId", DEFAULT_USER_ID)
+                .build();
+        SignedJWT signedJWT = new SignedJWT(
+                new JWSHeader.Builder(JWSAlgorithm.RS256).type(JOSEObjectType.JWT).keyID("test-key").build(),
+                claimsWithoutVersion
+        );
+        signedJWT.sign(new RSASSASigner((RSAPrivateKey) SIGNING_KEY.getPrivate()));
+
+        mockMvc.perform(get("/audit").header("Authorization", "Bearer " + signedJWT.serialize()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void tokenWithStaleTokenVersionIsRejectedWhenAccountCredentialVersionIncremented() throws Exception {
+        String staleToken = validToken("ADMIN");
+
+        when(authAccountStatusClient.getAccountStatus(EMAIL, DEFAULT_USER_ID))
+                .thenReturn(java.util.Optional.of(new UserAccountStatus(DEFAULT_USER_ID, EMAIL, "ADMIN", true, 2L)));
+
+        mockMvc.perform(get("/audit").header("Authorization", "Bearer " + staleToken))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void validNewTokenForReplacementAccountWorksAccordingToCurrentRole() throws Exception {
+        Long replacementUserId = 202L;
+        String tokenWithNewUserId = rsaToken(SIGNING_KEY, ISSUER, AUDIENCE,
+                Instant.now().minusSeconds(10), Instant.now().plusSeconds(300), "ADMIN", replacementUserId);
+
+        when(authAccountStatusClient.getAccountStatus(EMAIL, replacementUserId))
+                .thenReturn(java.util.Optional.of(new UserAccountStatus(replacementUserId, EMAIL, "ADMIN", true)));
+
+        mockMvc.perform(get("/audit").header("Authorization", "Bearer " + tokenWithNewUserId))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void accountStatusWithMismatchedUserIdFailsClosed() throws Exception {
+        String token = validToken("ADMIN");
+        when(authAccountStatusClient.getAccountStatus(EMAIL, DEFAULT_USER_ID))
+                .thenReturn(java.util.Optional.of(new UserAccountStatus(999L, EMAIL, "ADMIN", true)));
+
+        mockMvc.perform(get("/audit").header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void accountStatusWithUnknownRoleFailsClosed() throws Exception {
+        String token = validToken("ADMIN");
+        when(authAccountStatusClient.getAccountStatus(EMAIL, DEFAULT_USER_ID))
+                .thenReturn(java.util.Optional.of(new UserAccountStatus(DEFAULT_USER_ID, EMAIL, "SUPERUSER", true)));
+
+        mockMvc.perform(get("/audit").header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
     private void expectUnauthorized(String token) throws Exception {
         mockMvc.perform(get("/audit").header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized());
     }
 
-    private static String validToken(String role) {
-        return rsaToken(SIGNING_KEY, ISSUER, AUDIENCE,
-                Instant.now().minusSeconds(10), Instant.now().plusSeconds(300), role);
+    private void expectAllowedRole(String role) throws Exception {
+        when(authAccountStatusClient.getAccountStatus(EMAIL, DEFAULT_USER_ID))
+                .thenReturn(java.util.Optional.of(new UserAccountStatus(DEFAULT_USER_ID, EMAIL, role, true)));
+        String token = validToken(role);
+
+        mockMvc.perform(get("/audit").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
     }
 
-    private static String rsaToken(KeyPair pair, String issuer, String audience,
-                                   Instant notBefore, Instant expiresAt, String role) {
+    private void expectForbiddenRole(String role) throws Exception {
+        when(authAccountStatusClient.getAccountStatus(EMAIL, DEFAULT_USER_ID))
+                .thenReturn(java.util.Optional.of(new UserAccountStatus(DEFAULT_USER_ID, EMAIL, role, true)));
+        String token = validToken(role);
+
+        mockMvc.perform(get("/audit").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    private static String validToken(String role) {
+        return rsaToken(SIGNING_KEY, ISSUER, AUDIENCE,
+                Instant.now().minusSeconds(10), Instant.now().plusSeconds(300), role, DEFAULT_USER_ID);
+    }
+
+    private static String rsaToken(
+            KeyPair keyPair,
+            String issuer,
+            String audience,
+            Instant notBefore,
+            Instant expiresAt,
+            String role
+    ) {
+        return rsaToken(keyPair, issuer, audience, notBefore, expiresAt, role, DEFAULT_USER_ID);
+    }
+
+    private static String rsaToken(
+            KeyPair keyPair,
+            String issuer,
+            String audience,
+            Instant notBefore,
+            Instant expiresAt,
+            String role,
+            Long userId
+    ) {
         try {
             SignedJWT token = new SignedJWT(
-                    new JWSHeader.Builder(JWSAlgorithm.RS256)
-                            .type(JOSEObjectType.JWT).keyID("test-key").build(),
-                    claims(issuer, audience, notBefore, expiresAt, role)
+                    new JWSHeader.Builder(JWSAlgorithm.RS256).type(JOSEObjectType.JWT).keyID("test-key").build(),
+                    claims(issuer, audience, notBefore, expiresAt, role, userId)
             );
-            token.sign(new RSASSASigner((RSAPrivateKey) pair.getPrivate()));
+            token.sign(new RSASSASigner((RSAPrivateKey) keyPair.getPrivate()));
             return token.serialize();
         } catch (Exception exception) {
             throw new IllegalStateException(exception);
@@ -195,12 +394,19 @@ class AuditJwtSecurityTest {
 
     private static JWTClaimsSet claims(String issuer, String audience,
                                        Instant notBefore, Instant expiresAt, String role) {
+        return claims(issuer, audience, notBefore, expiresAt, role, DEFAULT_USER_ID);
+    }
+
+    private static JWTClaimsSet claims(String issuer, String audience,
+                                       Instant notBefore, Instant expiresAt, String role, Long userId) {
         JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
                 .subject(EMAIL).issuer(issuer).audience(audience)
                 .issueTime(Date.from(Instant.now().minusSeconds(10)))
                 .notBeforeTime(Date.from(notBefore)).expirationTime(Date.from(expiresAt))
                 .jwtID(UUID.randomUUID().toString());
         if (role != null) claims.claim("role", role);
+        if (userId != null) claims.claim("userId", userId);
+        claims.claim("tokenVersion", 1L);
         return claims.build();
     }
 
@@ -236,8 +442,10 @@ class AuditJwtSecurityTest {
         }
 
         @Bean
-        Converter<Jwt, ? extends AbstractAuthenticationToken> jwtAuthenticationConverter() {
-            return new JwtSecurityConfig().jwtAuthenticationConverter();
+        Converter<Jwt, ? extends AbstractAuthenticationToken> jwtAuthenticationConverter(
+                AuthAccountStatusClient authAccountStatusClient
+        ) {
+            return new AuthoritativeJwtAuthenticationConverter(authAccountStatusClient);
         }
     }
 }

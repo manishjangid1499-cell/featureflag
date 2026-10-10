@@ -1,15 +1,26 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { getApiStatus } from "../api/errors";
+import { ForgotPasswordModal } from "./ForgotPasswordModal";
 
 export function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
+
+  const queryParams = new URLSearchParams(location.search);
+  const transferredParam = queryParams.get("transferred") === "true";
+
+  const successMessage = (location.state as { successMessage?: string; message?: string } | null)?.successMessage
+    || (location.state as { successMessage?: string; message?: string } | null)?.message
+    || (transferredParam ? "Ownership transferred successfully. Please sign in with your updated credentials." : "")
+    || "";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showForgotModal, setShowForgotModal] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -88,12 +99,27 @@ export function Login() {
             FeatureFlag Platform
           </h1>
           <p style={{ margin: "6px 0 0", fontSize: "13px", color: "#6b7280" }}>
-            Sign in to access your organization's console
+            Sign in to your company's feature flag console.
           </p>
         </div>
 
         {/* LOGIN FORM */}
         <form onSubmit={handleSubmit} style={{ padding: "32px" }}>
+          {successMessage && (
+            <div style={{
+              background: "#ecfdf5",
+              border: "1px solid #a7f3d0",
+              color: "#065f46",
+              padding: "11px 14px",
+              borderRadius: "8px",
+              fontSize: "13px",
+              marginBottom: "20px",
+              lineHeight: "1.4"
+            }}>
+              {successMessage}
+            </div>
+          )}
+
           {error && (
             <div style={{
               background: "#fef2f2",
@@ -111,14 +137,13 @@ export function Login() {
 
           <div style={{ marginBottom: "18px" }}>
             <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
-              Work Email
+              Email address
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              placeholder="name@company.com"
               style={{
                 width: "100%",
                 padding: "10px 14px",
@@ -156,7 +181,6 @@ export function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              placeholder="••••••••"
               style={{
                 width: "100%",
                 padding: "10px 14px",
@@ -166,6 +190,23 @@ export function Login() {
                 boxSizing: "border-box"
               }}
             />
+            <div style={{ marginTop: "6px", textAlign: "right" }}>
+              <button
+                type="button"
+                onClick={() => setShowForgotModal(true)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "12px",
+                  color: "#4f46e5",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  padding: 0
+                }}
+              >
+                {/* Forgot Password? */}Forgot password?
+              </button>
+            </div>
           </div>
 
           <button
@@ -184,10 +225,16 @@ export function Login() {
               boxShadow: "0 4px 12px rgba(79, 70, 229, 0.25)"
             }}
           >
-            {loading ? "Signing In..." : "Sign In to Platform"}
+            {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
       </div>
+
+      <ForgotPasswordModal
+        isOpen={showForgotModal}
+        onClose={() => setShowForgotModal(false)}
+        initialEmail={email}
+      />
     </div>
   );
 }

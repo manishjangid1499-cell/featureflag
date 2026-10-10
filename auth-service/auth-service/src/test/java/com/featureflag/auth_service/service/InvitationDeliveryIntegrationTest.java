@@ -17,6 +17,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import com.featureflag.auth_service.exception.ForbiddenException;
 import java.time.Clock;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -95,8 +96,155 @@ class InvitationDeliveryIntegrationTest {
         assertEquals(2, messages.size());
     }
 
+    @Test
+    void adminCannotReplaceOwnerIssuedAdminInvitation() {
+        var adminInvite = invitations.inviteMember(
+                new InviteMemberRequest("Admin Candidate", "admin-replace@example.test", Role.ADMIN),
+                owner()
+        );
+        assertEquals(Role.ADMIN, adminInvite.getInvitedRole());
+        assertEquals(InvitationStatus.PENDING, repository.findById(adminInvite.getId()).orElseThrow().getStatus());
+
+        // Admin attempts replacement with VIEWER
+        assertThrows(ForbiddenException.class, () ->
+                invitations.inviteMember(
+                        new InviteMemberRequest("Viewer Candidate", "admin-replace@example.test", Role.VIEWER),
+                        admin()
+                )
+        );
+
+        // Admin attempts replacement with DEVELOPER
+        assertThrows(ForbiddenException.class, () ->
+                invitations.inviteMember(
+                        new InviteMemberRequest("Dev Candidate", "admin-replace@example.test", Role.DEVELOPER),
+                        admin()
+                )
+        );
+
+        // Original invitation must remain unchanged and PENDING
+        var original = repository.findById(adminInvite.getId()).orElseThrow();
+        assertEquals(InvitationStatus.PENDING, original.getStatus());
+        assertEquals(Role.ADMIN, original.getInvitedRole());
+        assertEquals(1, repository.findAll().size());
+    }
+
+    @Test
+    void adminCanReplacePermittedDeveloperInvitation() {
+        var original = invitations.inviteMember(
+                new InviteMemberRequest("Dev User", "dev-replace@example.test", Role.DEVELOPER),
+                admin()
+        );
+        assertEquals(Role.DEVELOPER, original.getInvitedRole());
+
+        var replacement = invitations.inviteMember(
+                new InviteMemberRequest("Viewer User", "dev-replace@example.test", Role.VIEWER),
+                admin()
+        );
+        assertEquals(Role.VIEWER, replacement.getInvitedRole());
+
+        var originalInDb = repository.findById(original.getId()).orElseThrow();
+        assertEquals(InvitationStatus.REVOKED, originalInDb.getStatus());
+
+        var replacementInDb = repository.findById(replacement.getId()).orElseThrow();
+        assertEquals(InvitationStatus.PENDING, replacementInDb.getStatus());
+        assertEquals(Role.VIEWER, replacementInDb.getInvitedRole());
+    }
+
+    @Test
+    void ownerCanReplaceAdminInvitation() {
+        var original = invitations.inviteMember(
+                new InviteMemberRequest("Admin User", "owner-admin@example.test", Role.ADMIN),
+                owner()
+        );
+        assertEquals(Role.ADMIN, original.getInvitedRole());
+
+        var replacement = invitations.inviteMember(
+                new InviteMemberRequest("Admin User", "owner-admin@example.test", Role.ADMIN),
+                owner()
+        );
+        assertEquals(Role.ADMIN, replacement.getInvitedRole());
+
+        var originalInDb = repository.findById(original.getId()).orElseThrow();
+        assertEquals(InvitationStatus.REVOKED, originalInDb.getStatus());
+
+        var replacementInDb = repository.findById(replacement.getId()).orElseThrow();
+        assertEquals(InvitationStatus.PENDING, replacementInDb.getStatus());
+    }
+
+    @Test
+    void listAndValidateExpiredPendingInvitationDoesNotMutateDatabase() {
+        var messages = new java.util.ArrayList<InvitationNotificationDto>();
+        doAnswer(call -> { messages.add(call.getArgument(1)); return null; })
+                .when(client).sendInvitationEmail(anyString(), any());
+
+        var invite = invitations.inviteMember(
+                new InviteMemberRequest("Candidate", "expire-test@example.test", Role.DEVELOPER),
+                owner()
+        );
+        var inDb = repository.findById(invite.getId()).orElseThrow();
+        // Simulate expiry in past
+        inDb.setExpiresAt(java.time.Instant.now().minusSeconds(3600));
+        repository.save(inDb);
+
+        String rawToken = token(messages.get(0));
+
+        // validateInvitation must report expired without modifying DB
+        var validateRes = invitations.validateInvitation(rawToken);
+        assertFalse(validateRes.isValid());
+        assertTrue(validateRes.getErrorMessage().contains("expired"));
+
+        var dbAfterValidate = repository.findById(invite.getId()).orElseThrow();
+        assertEquals(InvitationStatus.PENDING, dbAfterValidate.getStatus());
+
+        // getAllInvitations must present EXPIRED without modifying DB
+        var listRes = invitations.getAllInvitations(org.springframework.data.domain.Pageable.unpaged());
+        var listed = listRes.getContent().stream()
+                .filter(i -> i.getId().equals(invite.getId()))
+                .findFirst().orElseThrow();
+        assertEquals(InvitationStatus.EXPIRED, listed.getStatus());
+
+        var dbAfterList = repository.findById(invite.getId()).orElseThrow();
+        assertEquals(InvitationStatus.PENDING, dbAfterList.getStatus());
+    }
+
+    @Test
+    void acceptedAndRevokedInvitationsRetainStateWhenPastExpiresAt() {
+        var messages = new java.util.ArrayList<InvitationNotificationDto>();
+        doAnswer(call -> { messages.add(call.getArgument(1)); return null; })
+                .when(client).sendInvitationEmail(anyString(), any());
+
+        var invite = invitations.inviteMember(
+                new InviteMemberRequest("Candidate", "accepted-retain@example.test", Role.DEVELOPER),
+                owner()
+        );
+        var inDb = repository.findById(invite.getId()).orElseThrow();
+        inDb.setStatus(InvitationStatus.ACCEPTED);
+        inDb.setAcceptedAt(java.time.Instant.now().minusSeconds(100));
+        inDb.setExpiresAt(java.time.Instant.now().minusSeconds(3600));
+        repository.save(inDb);
+
+        String rawToken = token(messages.get(0));
+
+        var validateRes = invitations.validateInvitation(rawToken);
+        assertFalse(validateRes.isValid());
+        assertTrue(validateRes.getErrorMessage().contains("already been accepted"));
+
+        var listRes = invitations.getAllInvitations(org.springframework.data.domain.Pageable.unpaged());
+        var listed = listRes.getContent().stream()
+                .filter(i -> i.getId().equals(invite.getId()))
+                .findFirst().orElseThrow();
+        assertEquals(InvitationStatus.ACCEPTED, listed.getStatus());
+
+        var dbAfter = repository.findById(invite.getId()).orElseThrow();
+        assertEquals(InvitationStatus.ACCEPTED, dbAfter.getStatus());
+    }
+
     private User owner() {
         return User.builder().id(1L).name("Owner").email("owner@example.test").role(Role.OWNER).build();
+    }
+
+    private User admin() {
+        return User.builder().id(2L).name("Admin").email("admin@example.test").role(Role.ADMIN).build();
     }
 
     private String token(InvitationNotificationDto request) {

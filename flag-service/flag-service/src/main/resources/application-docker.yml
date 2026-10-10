@@ -32,6 +32,10 @@ spring:
     hibernate:
       ddl-auto: validate
     show-sql: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
 
 eureka:
   instance:
@@ -62,6 +66,11 @@ clients:
   auth-recipients:
     connect-timeout-ms: ${AUTH_RECIPIENTS_CONNECT_TIMEOUT_MS:2000}
     read-timeout-ms: ${AUTH_RECIPIENTS_READ_TIMEOUT_MS:3000}
+  auth-service:
+    url: ${AUTH_SERVICE_URL:http://auth-service:8081}
+    service-key: ${AUTH_INTERNAL_SERVICE_KEY:${AUTH_RECIPIENTS_SERVICE_KEY:}}
+    connect-timeout-ms: ${AUTH_SERVICE_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${AUTH_SERVICE_READ_TIMEOUT_MS:3000}
 
 security:
   jwt:
@@ -69,12 +78,17 @@ security:
     issuer: ${JWT_ISSUER}
     audience: ${JWT_AUDIENCE}
 
+features:
+  evaluation:
+    config-cache-enabled: ${FLAG_EVALUATION_CONFIG_CACHE_ENABLED:false}
+
 outbox:
   retention:
     published-age: ${OUTBOX_PUBLISHED_RETENTION:PT168H}
     batch-size: ${OUTBOX_RETENTION_BATCH_SIZE:100}
     initial-delay-ms: ${OUTBOX_RETENTION_INITIAL_DELAY_MS:60000}
     cleanup-interval-ms: ${OUTBOX_RETENTION_INTERVAL_MS:3600000}
+
 
 springdoc:
   api-docs:

@@ -104,6 +104,10 @@ class MemberStatusSecurityTest {
                 .build();
         when(jwtService.extractEmail(token))
                 .thenReturn(user.getEmail());
+        when(jwtService.extractUserId(token))
+                .thenReturn(user.getId());
+        when(jwtService.extractTokenVersion(token))
+                .thenReturn(1L);
         when(customUserDetailsService.loadUserByUsername(user.getEmail()))
                 .thenReturn(user);
         when(jwtService.isTokenValid(token, user.getEmail()))

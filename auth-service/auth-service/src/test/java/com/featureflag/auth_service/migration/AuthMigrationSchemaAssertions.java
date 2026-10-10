@@ -32,14 +32,20 @@ final class AuthMigrationSchemaAssertions {
     static void assertMigratedSchema(JdbcTemplate jdbcTemplate) {
         assertTrue(tableExists(jdbcTemplate, "flyway_schema_history"));
         assertBaseSchema(jdbcTemplate, true);
+        assertPasswordResetsSchema(jdbcTemplate);
+        assertSystemInvariantsSchema(jdbcTemplate);
     }
 
     private static void assertBaseSchema(
             JdbcTemplate jdbcTemplate,
-            boolean enabledColumnExpected
+            boolean migratedExpected
     ) {
+        Set<String> expectedTables = migratedExpected
+                ? Set.of("users", "invitations", "password_resets", "system_invariants")
+                : Set.of("users", "invitations");
+
         assertEquals(
-                Set.of("users", "invitations"),
+                expectedTables,
                 Set.copyOf(jdbcTemplate.queryForList(
                         """
                         SELECT table_name
@@ -54,18 +60,18 @@ final class AuthMigrationSchemaAssertions {
 
         assertTable(jdbcTemplate, "users");
         assertTable(jdbcTemplate, "invitations");
-        assertUserColumns(jdbcTemplate, enabledColumnExpected);
+        assertUserColumns(jdbcTemplate, migratedExpected);
         assertInvitationColumns(jdbcTemplate);
-        assertIndexes(jdbcTemplate);
-        assertConstraints(jdbcTemplate);
+        assertIndexes(jdbcTemplate, migratedExpected);
+        assertConstraints(jdbcTemplate, migratedExpected);
     }
 
     private static void assertUserColumns(
             JdbcTemplate jdbcTemplate,
-            boolean enabledColumnExpected
+            boolean migratedExpected
     ) {
         assertEquals(
-                enabledColumnExpected
+                migratedExpected
                         ? List.of(
                                 "id",
                                 "email",
@@ -73,7 +79,8 @@ final class AuthMigrationSchemaAssertions {
                                 "password",
                                 "role",
                                 "enabled",
-                                "version"
+                                "version",
+                                "credential_version"
                         )
                         : List.of(
                                 "id",
@@ -97,7 +104,7 @@ final class AuthMigrationSchemaAssertions {
         assertColumn(jdbcTemplate, "users", "role",
                 ROLE_ENUM, "enum", false, 9L, null, "");
 
-        if (enabledColumnExpected) {
+        if (migratedExpected) {
             assertColumn(jdbcTemplate, "users", "version",
                     "bigint", "bigint", false, null, null, "");
             assertEquals("0", jdbcTemplate.queryForObject(
@@ -119,12 +126,16 @@ final class AuthMigrationSchemaAssertions {
                             String.class
                     )
             );
+            assertColumn(jdbcTemplate, "users", "credential_version",
+                    "bigint", "bigint", false, null, null, "");
+            assertEquals("1", jdbcTemplate.queryForObject(
+                    "SELECT column_default FROM information_schema.columns "
+                            + "WHERE table_schema = DATABASE() AND table_name = 'users' "
+                            + "AND column_name = 'credential_version'", String.class));
         }
     }
 
-    private static void assertInvitationColumns(
-            JdbcTemplate jdbcTemplate
-    ) {
+    private static void assertInvitationColumns(JdbcTemplate jdbcTemplate) {
         assertEquals(
                 List.of(
                         "accepted_at",
@@ -150,8 +161,7 @@ final class AuthMigrationSchemaAssertions {
         assertColumn(jdbcTemplate, "invitations", "expires_at",
                 "datetime(6)", "datetime", false, null, 6L, "");
         assertColumn(jdbcTemplate, "invitations", "id",
-                "bigint", "bigint", false, null, null,
-                "auto_increment");
+                "bigint", "bigint", false, null, null, "auto_increment");
         assertColumn(jdbcTemplate, "invitations", "invited_by_user_id",
                 "bigint", "bigint", true, null, null, "");
         assertColumn(jdbcTemplate, "invitations", "token_hash",
@@ -170,24 +180,104 @@ final class AuthMigrationSchemaAssertions {
                 INVITATION_STATUS_ENUM, "enum", false, 8L, null, "");
     }
 
-    private static void assertIndexes(JdbcTemplate jdbcTemplate) {
+    private static void assertPasswordResetsSchema(JdbcTemplate jdbcTemplate) {
+        assertTable(jdbcTemplate, "password_resets");
         assertEquals(
-                Set.of(
-                        "users:PRIMARY",
-                        "users:" + USER_EMAIL_UNIQUE,
-                        "invitations:PRIMARY",
-                        "invitations:" + INVITATION_TOKEN_UNIQUE
+                List.of(
+                        "id",
+                        "user_id",
+                        "email",
+                        "token_hash",
+                        "credential_version",
+                        "expires_at",
+                        "status",
+                        "created_at",
+                        "used_at"
                 ),
-                Set.copyOf(jdbcTemplate.queryForList(
-                        """
-                        SELECT DISTINCT CONCAT(table_name, ':', index_name)
-                        FROM information_schema.statistics
-                        WHERE table_schema = DATABASE()
-                          AND table_name IN ('users', 'invitations')
-                        """,
-                        String.class
-                ))
+                columnNames(jdbcTemplate, "password_resets")
         );
+        assertColumn(jdbcTemplate, "password_resets", "id",
+                "bigint", "bigint", false, null, null, "auto_increment");
+        assertColumn(jdbcTemplate, "password_resets", "user_id",
+                "bigint", "bigint", false, null, null, "");
+        assertColumn(jdbcTemplate, "password_resets", "email",
+                "varchar(255)", "varchar", false, 255L, null, "");
+        assertColumn(jdbcTemplate, "password_resets", "token_hash",
+                "varchar(64)", "varchar", false, 64L, null, "");
+        assertColumn(jdbcTemplate, "password_resets", "credential_version",
+                "bigint", "bigint", false, null, null, "");
+        assertColumn(jdbcTemplate, "password_resets", "expires_at",
+                "datetime(6)", "datetime", false, null, 6L, "");
+        assertColumn(jdbcTemplate, "password_resets", "status",
+                "enum('PENDING','USED','EXPIRED','REVOKED')", "enum", false, 7L, null, "");
+        assertEquals("PENDING", jdbcTemplate.queryForObject(
+                "SELECT column_default FROM information_schema.columns "
+                        + "WHERE table_schema = DATABASE() AND table_name = 'password_resets' "
+                        + "AND column_name = 'status'", String.class));
+        assertColumn(jdbcTemplate, "password_resets", "created_at",
+                "datetime(6)", "datetime", false, null, 6L, "");
+        assertColumn(jdbcTemplate, "password_resets", "used_at",
+                "datetime(6)", "datetime", true, null, 6L, "");
+    }
+
+    private static void assertSystemInvariantsSchema(JdbcTemplate jdbcTemplate) {
+        assertTable(jdbcTemplate, "system_invariants");
+        assertEquals(
+                List.of("name", "owner_user_id", "updated_at"),
+                columnNames(jdbcTemplate, "system_invariants")
+        );
+        assertColumn(jdbcTemplate, "system_invariants", "name",
+                "varchar(64)", "varchar", false, 64L, null, "");
+        assertColumn(jdbcTemplate, "system_invariants", "owner_user_id",
+                "bigint", "bigint", true, null, null, "");
+        assertColumn(jdbcTemplate, "system_invariants", "updated_at",
+                "datetime(6)", "datetime", false, null, 6L, "");
+    }
+
+    private static void assertIndexes(JdbcTemplate jdbcTemplate, boolean migratedExpected) {
+        if (!migratedExpected) {
+            assertEquals(
+                    Set.of(
+                            "users:PRIMARY",
+                            "users:" + USER_EMAIL_UNIQUE,
+                            "invitations:PRIMARY",
+                            "invitations:" + INVITATION_TOKEN_UNIQUE
+                    ),
+                    Set.copyOf(jdbcTemplate.queryForList(
+                            """
+                            SELECT DISTINCT CONCAT(table_name, ':', index_name)
+                            FROM information_schema.statistics
+                            WHERE table_schema = DATABASE()
+                              AND table_name IN ('users', 'invitations')
+                            """,
+                            String.class
+                    ))
+            );
+        } else {
+            assertEquals(
+                    Set.of(
+                            "users:PRIMARY",
+                            "users:" + USER_EMAIL_UNIQUE,
+                            "invitations:PRIMARY",
+                            "invitations:" + INVITATION_TOKEN_UNIQUE,
+                            "password_resets:PRIMARY",
+                            "password_resets:uk_password_resets_token_hash",
+                            "password_resets:idx_password_resets_user_id_status",
+                            "password_resets:idx_password_resets_email_status",
+                            "system_invariants:PRIMARY",
+                            "system_invariants:fk_system_invariants_owner"
+                    ),
+                    Set.copyOf(jdbcTemplate.queryForList(
+                            """
+                            SELECT DISTINCT CONCAT(table_name, ':', index_name)
+                            FROM information_schema.statistics
+                            WHERE table_schema = DATABASE()
+                              AND table_name IN ('users', 'invitations', 'password_resets', 'system_invariants')
+                            """,
+                            String.class
+                    ))
+            );
+        }
 
         assertIndex(
                 jdbcTemplate,
@@ -219,44 +309,86 @@ final class AuthMigrationSchemaAssertions {
         );
     }
 
-    private static void assertConstraints(JdbcTemplate jdbcTemplate) {
-        assertEquals(
-                Set.of(
-                        "users:PRIMARY:PRIMARY KEY",
-                        "users:" + USER_EMAIL_UNIQUE + ":UNIQUE",
-                        "invitations:PRIMARY:PRIMARY KEY",
-                        "invitations:" + INVITATION_TOKEN_UNIQUE
-                                + ":UNIQUE"
-                ),
-                Set.copyOf(jdbcTemplate.queryForList(
-                        """
-                        SELECT CONCAT(
-                            table_name,
-                            ':',
-                            constraint_name,
-                            ':',
-                            constraint_type
-                        )
-                        FROM information_schema.table_constraints
-                        WHERE constraint_schema = DATABASE()
-                          AND table_name IN ('users', 'invitations')
-                        """,
-                        String.class
-                ))
-        );
-
-        assertEquals(
-                0,
-                jdbcTemplate.queryForObject(
-                        """
-                        SELECT COUNT(*)
-                        FROM information_schema.key_column_usage
-                        WHERE constraint_schema = DATABASE()
-                          AND referenced_table_name IS NOT NULL
-                        """,
-                        Integer.class
-                )
-        );
+    private static void assertConstraints(JdbcTemplate jdbcTemplate, boolean migratedExpected) {
+        if (!migratedExpected) {
+            assertEquals(
+                    Set.of(
+                            "users:PRIMARY:PRIMARY KEY",
+                            "users:" + USER_EMAIL_UNIQUE + ":UNIQUE",
+                            "invitations:PRIMARY:PRIMARY KEY",
+                            "invitations:" + INVITATION_TOKEN_UNIQUE + ":UNIQUE"
+                    ),
+                    Set.copyOf(jdbcTemplate.queryForList(
+                            """
+                            SELECT CONCAT(
+                                table_name,
+                                ':',
+                                constraint_name,
+                                ':',
+                                constraint_type
+                            )
+                            FROM information_schema.table_constraints
+                            WHERE constraint_schema = DATABASE()
+                              AND table_name IN ('users', 'invitations')
+                            """,
+                            String.class
+                    ))
+            );
+            assertEquals(
+                    0,
+                    jdbcTemplate.queryForObject(
+                            """
+                            SELECT COUNT(*)
+                            FROM information_schema.key_column_usage
+                            WHERE constraint_schema = DATABASE()
+                              AND referenced_table_name IS NOT NULL
+                            """,
+                            Integer.class
+                    )
+            );
+        } else {
+            assertEquals(
+                    Set.of(
+                            "users:PRIMARY:PRIMARY KEY",
+                            "users:" + USER_EMAIL_UNIQUE + ":UNIQUE",
+                            "invitations:PRIMARY:PRIMARY KEY",
+                            "invitations:" + INVITATION_TOKEN_UNIQUE + ":UNIQUE",
+                            "password_resets:PRIMARY:PRIMARY KEY",
+                            "password_resets:uk_password_resets_token_hash:UNIQUE",
+                            "system_invariants:PRIMARY:PRIMARY KEY",
+                            "system_invariants:fk_system_invariants_owner:FOREIGN KEY"
+                    ),
+                    Set.copyOf(jdbcTemplate.queryForList(
+                            """
+                            SELECT CONCAT(
+                                table_name,
+                                ':',
+                                constraint_name,
+                                ':',
+                                constraint_type
+                            )
+                            FROM information_schema.table_constraints
+                            WHERE constraint_schema = DATABASE()
+                              AND table_name IN ('users', 'invitations', 'password_resets', 'system_invariants')
+                            """,
+                            String.class
+                    ))
+            );
+            assertEquals(
+                    1,
+                    jdbcTemplate.queryForObject(
+                            """
+                            SELECT COUNT(*)
+                            FROM information_schema.key_column_usage
+                            WHERE constraint_schema = DATABASE()
+                              AND constraint_name = 'fk_system_invariants_owner'
+                              AND referenced_table_name = 'users'
+                              AND referenced_column_name = 'id'
+                            """,
+                            Integer.class
+                    )
+            );
+        }
         assertEquals(
                 0,
                 jdbcTemplate.queryForObject(

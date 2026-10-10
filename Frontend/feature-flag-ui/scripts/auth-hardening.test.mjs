@@ -22,7 +22,8 @@ import { invitationDeliveryFeedback } from "../src/api/invitationDelivery.ts";
 test("invitation success requires an explicit delivery confirmation", () => {
   const feedback = invitationDeliveryFeedback({ email: "invitee@example.test", emailDeliveryConfirmed: true }, "created");
   assert.equal(feedback.warning, false);
-  assert.match(feedback.message, /sent successfully/);
+  assert.match(feedback.message, /dispatch accepted by mail service/);
+  assert.match(feedback.message, /not final recipient inbox delivery/);
 });
 
 test("committed invitation with unconfirmed delivery prompts safe resend", () => {

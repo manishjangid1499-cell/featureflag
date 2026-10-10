@@ -30,7 +30,7 @@ public class AuthRecipientsServiceKeyFilter extends OncePerRequestFilter {
     private final ApiProblemDetails problems;
 
     public AuthRecipientsServiceKeyFilter(
-            @Value("${AUTH_RECIPIENTS_SERVICE_KEY:}") String configuredServiceKey,
+            @Value("${security.recipients-service-key:${AUTH_RECIPIENTS_SERVICE_KEY:}}") String configuredServiceKey,
             ApiProblemDetails problems
     ) {
         this.configuredServiceKey = configuredServiceKey;

@@ -14,6 +14,10 @@ export interface FeatureFlag {
 
 export type FlagRequest = Omit<FeatureFlag, "id" | "version">;
 export type FlagUpdateRequest = FlagRequest & { expectedVersion: number };
+export interface FlagToggleRequest {
+  enabled: boolean;
+  expectedVersion: number;
+}
 
 export interface FlagEvaluationResponse {
   flagKey: string

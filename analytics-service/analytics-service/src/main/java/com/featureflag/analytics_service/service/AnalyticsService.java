@@ -73,11 +73,8 @@ public class AnalyticsService {
     }
 
     public void deleteAnalytics(Long id) {
-
-        AnalyticsEvent event = analyticsEventRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Analytics record not found with id: " + id
-                ));
-        analyticsEventRepository.delete(event);
+        throw new UnsupportedOperationException(
+                "Manual deletion of analytics aggregates is unsupported. Deleting aggregates while processed event markers remain prevents replay rebuilding."
+        );
     }
 }

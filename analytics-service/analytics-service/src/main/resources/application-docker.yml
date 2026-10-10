@@ -61,6 +61,14 @@ security:
     issuer: ${JWT_ISSUER}
     audience: ${JWT_AUDIENCE}
 
+clients:
+  auth-service:
+    url: ${AUTH_SERVICE_URL:http://auth-service:8081}
+    service-key: ${AUTH_INTERNAL_SERVICE_KEY:${AUTH_RECIPIENTS_SERVICE_KEY:}}
+    connect-timeout-ms: ${AUTH_SERVICE_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${AUTH_SERVICE_READ_TIMEOUT_MS:3000}
+
+
 springdoc:
   api-docs:
     enabled: false

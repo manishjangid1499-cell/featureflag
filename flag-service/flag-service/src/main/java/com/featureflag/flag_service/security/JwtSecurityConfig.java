@@ -45,13 +45,24 @@ public class JwtSecurityConfig {
     }
 
     @Bean
-    public Converter<Jwt, ? extends AbstractAuthenticationToken> jwtAuthenticationConverter() {
-        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setPrincipalClaimName("sub");
-        converter.setJwtGrantedAuthoritiesConverter(jwt -> List.of(
-                new SimpleGrantedAuthority("ROLE_" + jwt.getClaimAsString("role"))
-        ));
-        return converter;
+    public AuthAccountStatusClient authAccountStatusClient(
+            @org.springframework.beans.factory.annotation.Value("${clients.auth-service.url:${AUTH_SERVICE_URL:http://localhost:8081}}")
+            String authServiceUrl,
+            @org.springframework.beans.factory.annotation.Value("${clients.auth-service.service-key:${AUTH_INTERNAL_SERVICE_KEY:${AUTH_RECIPIENTS_SERVICE_KEY:}}}")
+            String serviceKey,
+            @org.springframework.beans.factory.annotation.Value("${clients.auth-service.connect-timeout-ms:2000}")
+            long connectTimeoutMs,
+            @org.springframework.beans.factory.annotation.Value("${clients.auth-service.read-timeout-ms:3000}")
+            long readTimeoutMs
+    ) {
+        return new HttpAuthAccountStatusClient(authServiceUrl, serviceKey, connectTimeoutMs, readTimeoutMs);
+    }
+
+    @Bean
+    public Converter<Jwt, ? extends AbstractAuthenticationToken> jwtAuthenticationConverter(
+            AuthAccountStatusClient authAccountStatusClient
+    ) {
+        return new AuthoritativeJwtAuthenticationConverter(authAccountStatusClient);
     }
 
     static JwtDecoder createDecoder(RSAPublicKey publicKey, String issuer, String audience) {

@@ -48,6 +48,7 @@ const { Dashboard } = loadComponent("../src/pages/Dashboard.tsx", {
 });
 const { default: Layout } = loadComponent("../src/components/Layout.tsx", {
   "../hooks/useAuth": auth,
+  "./ChangePasswordModal": { ChangePasswordModal: () => null },
 });
 const render = (component) => renderToStaticMarkup(
   React.createElement(MemoryRouter, null, React.createElement(component)),
@@ -156,6 +157,16 @@ test("browser refresh retains the saved name and fetches the current profile", a
   await Promise.resolve();
   assert.equal(provider.flush().user.name, "Updated Name");
   assert.equal(storage.readAuthSession().name, "Updated Name");
+});
+
+test("browser refresh updates role when demoted or changed on backend", async (t) => {
+  storage.writeAuthSession(session({ name: "Abhay Thakur", role: "ADMIN" }));
+  const provider = mountAuth(t);
+  assert.equal(provider.flush().user.role, "ADMIN");
+  provider.requests[0].resolve({ name: "Abhay Thakur", role: "VIEWER" });
+  await Promise.resolve();
+  assert.equal(provider.flush().user.role, "VIEWER");
+  assert.equal(storage.readAuthSession().role, "VIEWER");
 });
 
 test("an old session without a name is enriched on refresh", async (t) => {

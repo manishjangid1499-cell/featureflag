@@ -1,9 +1,10 @@
 import type { FeatureFlag } from "../../types/featureFlag";
 import { useAuth } from "../../hooks/useAuth";
+import { getUserTimeZone, formatScheduleDisplay } from "../../utils/scheduleTime";
 
 interface FlagTableProps {
   flags: FeatureFlag[];
-  onToggle?: (id: number) => void;
+  onToggle?: (flag: FeatureFlag) => void;
   onEdit?: (flag: FeatureFlag) => void;
   onDelete?: (flag: FeatureFlag) => void;
   onEvaluate?: (flag: FeatureFlag) => void;
@@ -18,7 +19,7 @@ export function FlagTable({
   onEvaluate,
   togglingId = null,
 }: FlagTableProps) {
-  const { isViewer, canManageFlags, canDeleteFlags } = useAuth();
+  const { isViewer, isDeveloper, canManageFlags, canDeleteFlags } = useAuth();
 
   const getEnvBadgeStyle = (env?: string | null) => {
     switch (env?.toUpperCase()) {
@@ -219,7 +220,17 @@ export function FlagTable({
 
                         {flag.startDate && (
                           <span style={{ fontSize: "10px" }}>
-                            ⏱ From: {new Date(flag.startDate).toLocaleDateString()}
+                            ⏱ Start: {formatScheduleDisplay(flag.startDate)}
+                          </span>
+                        )}
+                        {flag.endDate && (
+                          <span style={{ fontSize: "10px" }}>
+                            ⌛ End: {formatScheduleDisplay(flag.endDate)}
+                          </span>
+                        )}
+                        {(flag.startDate || flag.endDate) && (
+                          <span style={{ fontSize: "9px", color: "#9ca3af" }}>
+                            ({getUserTimeZone()})
                           </span>
                         )}
                       </div>
@@ -231,7 +242,7 @@ export function FlagTable({
                           <button
                             type="button"
                             onClick={() => onEvaluate?.(flag)}
-                            title="Evaluate flag resolution"
+                            title="Preview flag resolution without increasing application evaluation counts"
                             style={{
                               padding: "6px 11px",
                               border: "1px solid #d1d5db",
@@ -243,66 +254,84 @@ export function FlagTable({
                               cursor: "pointer"
                             }}
                           >
-                            Evaluate
+                            Preview
                           </button>
                         )}
 
-                        {canManageFlags && flag.id && (
-                          <>
-                            <button
-                              type="button"
-                              disabled={isToggling}
-                              onClick={() => onToggle?.(flag.id)}
-                              style={{
-                                padding: "6px 11px",
-                                border: isEnabled ? "1px solid #fecaca" : "1px solid #a7f3d0",
-                                background: isEnabled ? "#fff1f2" : "#f0fdf4",
-                                color: isEnabled ? "#dc2626" : "#16a34a",
-                                borderRadius: "6px",
-                                fontSize: "11px",
-                                fontWeight: 700,
-                                cursor: isToggling ? "not-allowed" : "pointer"
-                              }}
-                            >
-                              {isToggling ? "..." : isEnabled ? "Disable" : "Enable"}
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => onEdit?.(flag)}
-                              style={{
-                                padding: "6px 11px",
-                                border: "1px solid #d1d5db",
-                                background: "white",
-                                color: "#374151",
-                                borderRadius: "6px",
-                                fontSize: "11px",
-                                fontWeight: 600,
-                                cursor: "pointer"
-                              }}
-                            >
-                              Edit
-                            </button>
-                          </>
-                        )}
-
-                        {canDeleteFlags && flag.id && (
-                          <button
-                            type="button"
-                            onClick={() => onDelete?.(flag)}
+                        {isDeveloper && env.toUpperCase() === "PROD" ? (
+                          <span
+                            title="Developers cannot mutate production flags. Production changes require OWNER or ADMIN."
                             style={{
-                              padding: "6px 11px",
-                              border: "1px solid #fee2e2",
-                              background: "#fff5f5",
-                              color: "#dc2626",
-                              borderRadius: "6px",
                               fontSize: "11px",
-                              fontWeight: 600,
-                              cursor: "pointer"
+                              color: "#9ca3af",
+                              background: "#f3f4f6",
+                              padding: "4px 8px",
+                              borderRadius: "6px",
+                              fontWeight: 600
                             }}
                           >
-                            Delete
-                          </button>
+                            Prod: Owner/Admin only
+                          </span>
+                        ) : (
+                          <>
+                            {canManageFlags && flag.id && (
+                              <>
+                                <button
+                                  type="button"
+                                  disabled={isToggling}
+                                  onClick={() => onToggle?.(flag)}
+                                  style={{
+                                    padding: "6px 11px",
+                                    border: isEnabled ? "1px solid #fecaca" : "1px solid #a7f3d0",
+                                    background: isEnabled ? "#fff1f2" : "#f0fdf4",
+                                    color: isEnabled ? "#dc2626" : "#16a34a",
+                                    borderRadius: "6px",
+                                    fontSize: "11px",
+                                    fontWeight: 700,
+                                    cursor: isToggling ? "not-allowed" : "pointer"
+                                  }}
+                                >
+                                  {isToggling ? "..." : isEnabled ? "Disable" : "Enable"}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => onEdit?.(flag)}
+                                  style={{
+                                    padding: "6px 11px",
+                                    border: "1px solid #d1d5db",
+                                    background: "white",
+                                    color: "#374151",
+                                    borderRadius: "6px",
+                                    fontSize: "11px",
+                                    fontWeight: 600,
+                                    cursor: "pointer"
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                              </>
+                            )}
+
+                            {canDeleteFlags && flag.id && (
+                              <button
+                                type="button"
+                                onClick={() => onDelete?.(flag)}
+                                style={{
+                                  padding: "6px 11px",
+                                  border: "1px solid #fee2e2",
+                                  background: "#fff5f5",
+                                  color: "#dc2626",
+                                  borderRadius: "6px",
+                                  fontSize: "11px",
+                                  fontWeight: 600,
+                                  cursor: "pointer"
+                                }}
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     </td>

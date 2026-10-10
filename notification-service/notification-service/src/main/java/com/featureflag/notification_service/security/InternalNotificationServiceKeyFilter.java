@@ -32,6 +32,9 @@ public class InternalNotificationServiceKeyFilter
     public static final String INVITATION_PATH =
             "/internal/notifications/invitations";
 
+    public static final String PASSWORD_RESET_PATH =
+            "/internal/notifications/password-resets";
+
     private final String configuredServiceKey;
     private final ApiProblemDetails problems;
 
@@ -46,8 +49,13 @@ public class InternalNotificationServiceKeyFilter
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !INVITATION_PATH.equals(request.getServletPath())
-                && !INVITATION_PATH.equals(request.getRequestURI());
+        String path = request.getServletPath();
+        String uri = request.getRequestURI();
+        boolean isInternalNotification = INVITATION_PATH.equals(path)
+                || INVITATION_PATH.equals(uri)
+                || PASSWORD_RESET_PATH.equals(path)
+                || PASSWORD_RESET_PATH.equals(uri);
+        return !isInternalNotification;
     }
 
     @Override

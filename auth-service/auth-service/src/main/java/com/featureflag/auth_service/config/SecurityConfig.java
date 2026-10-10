@@ -12,6 +12,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import com.featureflag.auth_service.security.AuthInternalServiceKeyFilter;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
@@ -20,6 +21,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final AuthRecipientsServiceKeyFilter authRecipientsServiceKeyFilter;
+    private final AuthInternalServiceKeyFilter authInternalServiceKeyFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(
@@ -56,6 +58,8 @@ public class SecurityConfig {
 
                         .requestMatchers(
                                 "/auth/login",
+                                "/auth/forgot-password",
+                                "/auth/reset-password",
                                 "/auth/invitations/**",
                                 "/swagger-ui/**",
                                 "/v3/api-docs",
@@ -69,6 +73,12 @@ public class SecurityConfig {
                                 "/auth/recipients"
                         ).hasAuthority(
                                 AuthRecipientsServiceKeyFilter.AUTHORITY
+                        )
+
+                        .requestMatchers(
+                                "/internal/users/**"
+                        ).hasAuthority(
+                                AuthInternalServiceKeyFilter.AUTHORITY
                         )
 
                         .requestMatchers(
@@ -88,6 +98,10 @@ public class SecurityConfig {
 
                 .addFilterBefore(
                         authRecipientsServiceKeyFilter,
+                        UsernamePasswordAuthenticationFilter.class
+                )
+                .addFilterBefore(
+                        authInternalServiceKeyFilter,
                         UsernamePasswordAuthenticationFilter.class
                 )
                 .addFilterBefore(

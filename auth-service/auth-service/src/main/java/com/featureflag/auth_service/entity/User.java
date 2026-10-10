@@ -43,6 +43,10 @@ public class User implements UserDetails {
     @Builder.Default
     private boolean enabled = true;
 
+    @Column(name = "credential_version", nullable = false)
+    @Builder.Default
+    private Long credentialVersion = 1L;
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
 

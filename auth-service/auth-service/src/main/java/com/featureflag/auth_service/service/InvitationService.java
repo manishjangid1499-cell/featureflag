@@ -68,6 +68,10 @@ public class InvitationService {
                         InvitationStatus.PENDING
                 );
 
+        for (Invitation previous : pendingInvitations) {
+            validateInvitePermission(currentUser.getRole(), previous.getInvitedRole());
+        }
+
         if (userRepository.findByEmail(email).isPresent()) {
             throw new InvitationConflictException(
                     "A user already exists for this invitation"
@@ -135,7 +139,7 @@ public class InvitationService {
         return response;
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public Page<InvitationResponse> getAllInvitations(
             Pageable pageable
     ) {
@@ -144,13 +148,7 @@ public class InvitationService {
                         pageable
                 );
         Instant now = clock.instant();
-        invitations.getContent().forEach(invitation -> {
-            if (invitation.getStatus() == InvitationStatus.PENDING
-                    && now.isAfter(invitation.getExpiresAt())) {
-                invitation.setStatus(InvitationStatus.EXPIRED);
-            }
-        });
-        return invitations.map(this::toResponse);
+        return invitations.map(invitation -> toResponse(invitation, now));
     }
 
     @Transactional
@@ -198,6 +196,7 @@ public class InvitationService {
         return "Invitation revoked successfully.";
     }
 
+    @Transactional(readOnly = true)
     public ValidateInvitationResponse validateInvitation(String rawToken) {
         if (rawToken == null || rawToken.isBlank()) {
             return ValidateInvitationResponse.builder()
@@ -231,10 +230,7 @@ public class InvitationService {
                     .build();
         }
 
-        if (clock.instant().isAfter(invitation.getExpiresAt())
-                || invitation.getStatus() == InvitationStatus.EXPIRED) {
-            invitation.setStatus(InvitationStatus.EXPIRED);
-            invitationRepository.save(invitation);
+        if (isExpired(invitation, clock.instant())) {
             return ValidateInvitationResponse.builder()
                     .valid(false)
                     .errorMessage("This invitation link has expired. Please request a new invitation.")
@@ -279,8 +275,7 @@ public class InvitationService {
             throw new InvalidOperationException("This invitation has been revoked.");
         }
 
-        if (clock.instant().isAfter(invitation.getExpiresAt())
-                || invitation.getStatus() == InvitationStatus.EXPIRED) {
+        if (isExpired(invitation, clock.instant())) {
             throw new InvalidOperationException(
                     "This invitation has expired. Please request a new invitation."
             );
@@ -333,6 +328,18 @@ public class InvitationService {
         );
     }
 
+    private boolean isExpired(Invitation invitation, Instant now) {
+        return invitation.getStatus() == InvitationStatus.EXPIRED
+                || (invitation.getStatus() == InvitationStatus.PENDING && now.isAfter(invitation.getExpiresAt()));
+    }
+
+    private InvitationStatus getEffectiveStatus(Invitation invitation, Instant now) {
+        if (invitation.getStatus() == InvitationStatus.PENDING && now.isAfter(invitation.getExpiresAt())) {
+            return InvitationStatus.EXPIRED;
+        }
+        return invitation.getStatus();
+    }
+
     private String generateSecureToken() {
         byte[] tokenBytes = new byte[32];
         SECURE_RANDOM.nextBytes(tokenBytes);
@@ -363,6 +370,10 @@ public class InvitationService {
     }
 
     private InvitationResponse toResponse(Invitation invitation) {
+        return toResponse(invitation, clock.instant());
+    }
+
+    private InvitationResponse toResponse(Invitation invitation, Instant now) {
         return InvitationResponse.builder()
                 .id(invitation.getId())
                 .email(invitation.getEmail())
@@ -371,7 +382,7 @@ public class InvitationService {
                 .invitedByUserId(invitation.getInvitedByUserId())
                 .invitedByEmail(invitation.getInvitedByEmail())
                 .invitedByName(invitation.getInvitedByName())
-                .status(invitation.getStatus())
+                .status(getEffectiveStatus(invitation, now))
                 .expiresAt(invitation.getExpiresAt())
                 .createdAt(invitation.getCreatedAt())
                 .acceptedAt(invitation.getAcceptedAt())
