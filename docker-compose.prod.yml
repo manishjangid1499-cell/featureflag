@@ -277,7 +277,7 @@ services:
       - no-new-privileges:true
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      JAVA_TOOL_OPTIONS: "-Xms200m -Xmx200m -XX:MaxMetaspaceSize=112m"
+      JAVA_TOOL_OPTIONS: "-Xms200m -Xmx200m -XX:MaxMetaspaceSize=192m"
       ANALYTICS_DB_USERNAME: "${ANALYTICS_DB_USERNAME:?ANALYTICS_DB_USERNAME is required}"
       ANALYTICS_DB_PASSWORD: "${ANALYTICS_DB_PASSWORD:?ANALYTICS_DB_PASSWORD is required}"
       JWT_PUBLIC_KEY_LOCATION: "file:/run/secrets/jwt-public.pem"
@@ -309,8 +309,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 450M
-    mem_limit: 450m
+          memory: 600M
+    mem_limit: 600m
     logging: *default-logging
 
   notification-service:
