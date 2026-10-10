@@ -119,6 +119,7 @@ services:
       JWT_ACCESS_TOKEN_TTL: "${JWT_ACCESS_TOKEN_TTL:-15m}"
       JWT_KEY_ID: "${JWT_KEY_ID:?JWT_KEY_ID is required}"
       AUTH_RECIPIENTS_SERVICE_KEY: "${AUTH_RECIPIENTS_SERVICE_KEY:?AUTH_RECIPIENTS_SERVICE_KEY is required}"
+      AUTH_INTERNAL_SERVICE_KEY: "${AUTH_INTERNAL_SERVICE_KEY:-${AUTH_RECIPIENTS_SERVICE_KEY:?AUTH_RECIPIENTS_SERVICE_KEY is required}}"
       NOTIFICATION_INTERNAL_SERVICE_KEY: "${NOTIFICATION_INTERNAL_SERVICE_KEY:?NOTIFICATION_INTERNAL_SERVICE_KEY is required}"
       BOOTSTRAP_OWNER_ENABLED: "${BOOTSTRAP_OWNER_ENABLED:-false}"
       BOOTSTRAP_OWNER_NAME: "${BOOTSTRAP_OWNER_NAME:-}"
@@ -166,7 +167,9 @@ services:
       JWT_PUBLIC_KEY_LOCATION: "file:/run/secrets/jwt-public.pem"
       JWT_ISSUER: "${JWT_ISSUER:?JWT_ISSUER is required}"
       JWT_AUDIENCE: "${JWT_AUDIENCE:?JWT_AUDIENCE is required}"
+      AUTH_SERVICE_URL: "http://auth-service:8081"
       AUTH_RECIPIENTS_SERVICE_KEY: "${AUTH_RECIPIENTS_SERVICE_KEY:?AUTH_RECIPIENTS_SERVICE_KEY is required}"
+      AUTH_INTERNAL_SERVICE_KEY: "${AUTH_INTERNAL_SERVICE_KEY:-${AUTH_RECIPIENTS_SERVICE_KEY:?AUTH_RECIPIENTS_SERVICE_KEY is required}}"
     volumes:
       - type: bind
         source: "${JWT_PUBLIC_KEY_FILE:?JWT_PUBLIC_KEY_FILE is required}"
@@ -189,8 +192,6 @@ services:
         condition: service_completed_successfully
       eureka-server:
         condition: service_healthy
-      auth-service:
-        condition: service_healthy
 
   audit-service:
     image: audit-service:latest
@@ -208,6 +209,9 @@ services:
       JWT_PUBLIC_KEY_LOCATION: "file:/run/secrets/jwt-public.pem"
       JWT_ISSUER: "${JWT_ISSUER:?JWT_ISSUER is required}"
       JWT_AUDIENCE: "${JWT_AUDIENCE:?JWT_AUDIENCE is required}"
+      AUTH_SERVICE_URL: "http://auth-service:8081"
+      AUTH_RECIPIENTS_SERVICE_KEY: "${AUTH_RECIPIENTS_SERVICE_KEY:?AUTH_RECIPIENTS_SERVICE_KEY is required}"
+      AUTH_INTERNAL_SERVICE_KEY: "${AUTH_INTERNAL_SERVICE_KEY:-${AUTH_RECIPIENTS_SERVICE_KEY:?AUTH_RECIPIENTS_SERVICE_KEY is required}}"
     volumes:
       - type: bind
         source: "${JWT_PUBLIC_KEY_FILE:?JWT_PUBLIC_KEY_FILE is required}"
@@ -244,6 +248,9 @@ services:
       JWT_PUBLIC_KEY_LOCATION: "file:/run/secrets/jwt-public.pem"
       JWT_ISSUER: "${JWT_ISSUER:?JWT_ISSUER is required}"
       JWT_AUDIENCE: "${JWT_AUDIENCE:?JWT_AUDIENCE is required}"
+      AUTH_SERVICE_URL: "http://auth-service:8081"
+      AUTH_RECIPIENTS_SERVICE_KEY: "${AUTH_RECIPIENTS_SERVICE_KEY:?AUTH_RECIPIENTS_SERVICE_KEY is required}"
+      AUTH_INTERNAL_SERVICE_KEY: "${AUTH_INTERNAL_SERVICE_KEY:-${AUTH_RECIPIENTS_SERVICE_KEY:?AUTH_RECIPIENTS_SERVICE_KEY is required}}"
     volumes:
       - type: bind
         source: "${JWT_PUBLIC_KEY_FILE:?JWT_PUBLIC_KEY_FILE is required}"
@@ -316,6 +323,9 @@ services:
       JWT_PUBLIC_KEY_LOCATION: "file:/run/secrets/jwt-public.pem"
       JWT_ISSUER: "${JWT_ISSUER:?JWT_ISSUER is required}"
       JWT_AUDIENCE: "${JWT_AUDIENCE:?JWT_AUDIENCE is required}"
+      AUTH_SERVICE_URL: "http://auth-service:8081"
+      AUTH_RECIPIENTS_SERVICE_KEY: "${AUTH_RECIPIENTS_SERVICE_KEY:?AUTH_RECIPIENTS_SERVICE_KEY is required}"
+      AUTH_INTERNAL_SERVICE_KEY: "${AUTH_INTERNAL_SERVICE_KEY:-${AUTH_RECIPIENTS_SERVICE_KEY:?AUTH_RECIPIENTS_SERVICE_KEY is required}}"
     volumes:
       - type: bind
         source: "${JWT_PUBLIC_KEY_FILE:?JWT_PUBLIC_KEY_FILE is required}"

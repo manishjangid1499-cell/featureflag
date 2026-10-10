@@ -74,6 +74,15 @@ class ApiErrorContractTest {
     }
 
     @Test
+    void unsupportedOperationIsBadRequestWithSafeDetail() throws Exception {
+        mvc.perform(get("/contract/error/unsupported"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("invalid-operation"))
+                .andExpect(jsonPath("$.type").value("urn:feature-flag-platform:problem:invalid-operation"))
+                .andExpect(jsonPath("$.detail").value("Manual deletion is unsupported"));
+    }
+
+    @Test
     void unexpectedFailureIsSanitizedAndCorrelatedWithoutQuerySecrets() throws Exception {
         mvc.perform(get("/contract/error/500").param("token", "PRIVATE_VALUE")
                         .header("X-Correlation-ID", "contract-test-123"))
@@ -113,6 +122,11 @@ class ApiErrorContractTest {
                 case 404 -> throw new ResourceNotFoundException("PRIVATE_VALUE");
                 default -> throw new IllegalStateException("SQL password=PRIVATE_VALUE");
             }
+        }
+
+        @GetMapping("/contract/error/unsupported")
+        void unsupported() {
+            throw new UnsupportedOperationException("Manual deletion is unsupported");
         }
     }
 

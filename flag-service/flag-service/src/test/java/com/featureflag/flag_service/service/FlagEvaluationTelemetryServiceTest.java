@@ -15,7 +15,8 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import io.micrometer.core.instrument.Timer;
 
-import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -180,7 +181,9 @@ class FlagEvaluationTelemetryServiceTest {
                 repository,
                 redisTemplate,
                 objectMapper,
-                outboxService
+                outboxService,
+                Clock.systemUTC(),
+                true
         );
         FlagEvaluationTelemetryService cachedEvaluationService =
                 new FlagEvaluationTelemetryService(
@@ -212,8 +215,8 @@ class FlagEvaluationTelemetryServiceTest {
                 enabled,
                 false,
                 enabled ? 100 : 0,
-                LocalDateTime.parse("2026-08-27T10:00:00"),
-                LocalDateTime.parse("2026-08-28T10:00:00"),
+                Instant.parse("2026-08-27T10:00:00Z"),
+                Instant.parse("2026-08-28T10:00:00Z"),
                 true
         );
     }

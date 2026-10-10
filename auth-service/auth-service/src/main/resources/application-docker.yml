@@ -57,6 +57,9 @@ app:
       name: ${BOOTSTRAP_OWNER_NAME:}
       email: ${BOOTSTRAP_OWNER_EMAIL:}
       password: ${BOOTSTRAP_OWNER_PASSWORD:}
+  password-reset:
+    expiration-minutes: ${PASSWORD_RESET_EXPIRATION_MINUTES:15}
+    frontend-base-url: ${FRONTEND_BASE_URL}
   invitation:
     frontend-base-url: ${FRONTEND_BASE_URL}
 

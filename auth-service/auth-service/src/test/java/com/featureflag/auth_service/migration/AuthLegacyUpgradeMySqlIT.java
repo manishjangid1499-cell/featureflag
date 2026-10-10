@@ -64,10 +64,11 @@ class AuthLegacyUpgradeMySqlIT {
 
         MigrateResult firstMigration = flyway.migrate();
 
-        assertEquals(2, firstMigration.migrationsExecuted);
+        assertEquals(5, firstMigration.migrationsExecuted);
         assertBaselineHistory(jdbcTemplate);
         AuthMigrationSchemaAssertions.assertMigratedSchema(jdbcTemplate);
         assertLegacyRowsAfterBaseline(jdbcTemplate);
+        assertSystemInvariantRowAfterBaseline(jdbcTemplate);
         assertSecretValuePreserved(passwordBefore, passwordHash(jdbcTemplate));
         assertSecretValuePreserved(tokenBefore, tokenHash(jdbcTemplate));
         assertTrue(flyway.validateWithResult().validationSuccessful);
@@ -131,12 +132,12 @@ class AuthLegacyUpgradeMySqlIT {
                 )
         );
         assertEquals(
-                2,
+                5,
                 jdbcTemplate.queryForObject(
                         """
                         SELECT COUNT(*)
                         FROM flyway_schema_history
-                        WHERE version IN ('2', '3')
+                        WHERE version IN ('2', '3', '4', '5', '6')
                           AND type = 'SQL'
                           AND success = 1
                         """,
@@ -160,6 +161,7 @@ class AuthLegacyUpgradeMySqlIT {
                           AND role = 'OWNER'
                           AND enabled = b'1'
                           AND version = 0
+                          AND credential_version = 1
                         """,
                         Integer.class
                 )
@@ -213,6 +215,21 @@ class AuthLegacyUpgradeMySqlIT {
         ));
     }
 
+    private void assertSystemInvariantRowAfterBaseline(JdbcTemplate jdbcTemplate) {
+        assertEquals(
+                1,
+                jdbcTemplate.queryForObject(
+                        """
+                        SELECT COUNT(*)
+                        FROM system_invariants
+                        WHERE name = 'OWNER_INSTALLATION'
+                          AND owner_user_id = 101
+                        """,
+                        Integer.class
+                )
+        );
+    }
+
     private void assertHibernateValidate() {
         try (ConfigurableApplicationContext context =
                      new SpringApplicationBuilder(
@@ -244,7 +261,12 @@ class AuthLegacyUpgradeMySqlIT {
 
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration
-    @EntityScan(basePackageClasses = {User.class, Invitation.class})
+    @EntityScan(basePackageClasses = {
+            User.class,
+            Invitation.class,
+            com.featureflag.auth_service.entity.PasswordResetToken.class,
+            com.featureflag.auth_service.entity.SystemInvariant.class
+    })
     static class LegacyValidationApplication {
     }
 }

@@ -1,9 +1,15 @@
 import api from "./axios";
 import type {
   AcceptInvitationRequest,
+  ChangePasswordRequest,
+  ChangePasswordResponse,
+  ForgotPasswordRequest,
+  ForgotPasswordResponse,
   LoginRequest,
   LoginResponse,
   ProfileResponse,
+  ResetPasswordRequest,
+  ResetPasswordResponse,
   ValidateInvitationResponse
 } from "../types/auth";
 
@@ -24,5 +30,20 @@ export const validateInvitation = async (token: string): Promise<ValidateInvitat
 
 export const acceptInvitation = async (request: AcceptInvitationRequest): Promise<string> => {
   const response = await api.post<string>("/auth/invitations/accept", request);
+  return response.data;
+};
+
+export const changePassword = async (request: ChangePasswordRequest): Promise<ChangePasswordResponse> => {
+  const response = await api.post<ChangePasswordResponse>("/auth/change-password", request);
+  return response.data;
+};
+
+export const forgotPassword = async (request: ForgotPasswordRequest): Promise<ForgotPasswordResponse> => {
+  const response = await api.post<ForgotPasswordResponse>("/auth/forgot-password", request);
+  return response.data;
+};
+
+export const resetPassword = async (request: ResetPasswordRequest): Promise<ResetPasswordResponse> => {
+  const response = await api.post<ResetPasswordResponse>("/auth/reset-password", request);
   return response.data;
 };

@@ -56,7 +56,7 @@ class JwtServiceTest {
     @Test
     void generatedTokenHasRequiredRs256HeaderAndClaims() {
         Instant before = Instant.now();
-        String token = jwtService.generateToken("  User@Company.COM ", "admin");
+        String token = jwtService.generateToken(1L, "  User@Company.COM ", "admin");
         Instant after = Instant.now();
 
         Jwt jwt = jwtService.decode(token);
@@ -65,6 +65,8 @@ class JwtServiceTest {
         assertEquals("JWT", jwt.getHeaders().get("typ"));
         assertEquals(KEY_ID, jwt.getHeaders().get("kid"));
         assertEquals("user@company.com", jwt.getSubject());
+        assertEquals(1L, ((Number) jwt.getClaim("userId")).longValue());
+        assertEquals(1L, jwtService.extractUserId(token));
         assertEquals("ADMIN", jwt.getClaimAsString("role"));
         assertEquals(ISSUER, jwt.getClaimAsString("iss"));
         assertEquals(List.of(AUDIENCE), jwt.getAudience());
@@ -83,17 +85,18 @@ class JwtServiceTest {
 
     @Test
     void matchingPublicKeyValidatesToken() {
-        String token = jwtService.generateToken("user@company.com", "VIEWER");
+        String token = jwtService.generateToken(1L, "user@company.com", "VIEWER");
 
         assertTrue(jwtService.isTokenValid(token));
         assertEquals("user@company.com", jwtService.extractEmail(token));
+        assertEquals(1L, jwtService.extractUserId(token));
         assertEquals("VIEWER", jwtService.extractRole(token));
     }
 
     @Test
     void anotherRsaKeyCannotValidateToken() throws Exception {
         JwtService otherService = serviceFor(generateRsaKeyPair(), ISSUER, AUDIENCE, Duration.ofMinutes(15));
-        String token = jwtService.generateToken("user@company.com", "VIEWER");
+        String token = jwtService.generateToken(1L, "user@company.com", "VIEWER");
 
         assertFalse(otherService.isTokenValid(token));
         assertThrows(JwtException.class, () -> otherService.decode(token));
@@ -155,7 +158,36 @@ class JwtServiceTest {
         assertFalse(jwtService.isTokenValid(missingRole));
         assertFalse(jwtService.isTokenValid(unknownRole));
         assertThrows(IllegalArgumentException.class,
-                () -> jwtService.generateToken("user@company.com", "SUPERUSER"));
+                () -> jwtService.generateToken(1L, "user@company.com", "SUPERUSER"));
+    }
+
+    @Test
+    void missingUserIdClaimIsRejected() {
+        String token = signedToken(keyPair, ISSUER, AUDIENCE, Instant.now().plusSeconds(60), "VIEWER", null);
+
+        assertFalse(jwtService.isTokenValid(token));
+        assertThrows(JwtException.class, () -> jwtService.decode(token));
+    }
+
+    @Test
+    void nonPositiveUserIdClaimIsRejected() {
+        String tokenZero = signedToken(keyPair, ISSUER, AUDIENCE, Instant.now().plusSeconds(60), "VIEWER", 0L);
+        assertFalse(jwtService.isTokenValid(tokenZero));
+        assertThrows(JwtException.class, () -> jwtService.decode(tokenZero));
+
+        String tokenNegative = signedToken(keyPair, ISSUER, AUDIENCE, Instant.now().plusSeconds(60), "VIEWER", -5L);
+        assertFalse(jwtService.isTokenValid(tokenNegative));
+        assertThrows(JwtException.class, () -> jwtService.decode(tokenNegative));
+    }
+
+    @Test
+    void generateTokenRequiresPositiveUserId() {
+        assertThrows(IllegalArgumentException.class,
+                () -> jwtService.generateToken(null, "user@company.com", "VIEWER"));
+        assertThrows(IllegalArgumentException.class,
+                () -> jwtService.generateToken(0L, "user@company.com", "VIEWER"));
+        assertThrows(IllegalArgumentException.class,
+                () -> jwtService.generateToken(-1L, "user@company.com", "VIEWER"));
     }
 
     @Test
@@ -172,6 +204,7 @@ class JwtServiceTest {
                 authMetrics
         );
         User loginUser = User.builder()
+                .id(42L)
                 .email("User@Company.COM")
                 .password("encoded")
                 .role(Role.ADMIN)
@@ -189,6 +222,7 @@ class JwtServiceTest {
         assertEquals("user@company.com", response.getEmail());
         assertEquals("ADMIN", response.getRole());
         assertEquals("RS256", jwtService.decode(response.getToken()).getHeaders().get("alg"));
+        assertEquals(42L, jwtService.extractUserId(response.getToken()));
     }
 
     private static JwtService serviceFor(KeyPair pair, String issuer, String audience, Duration ttl) {
@@ -215,6 +249,17 @@ class JwtServiceTest {
             Instant expiresAt,
             String role
     ) {
+        return signedToken(pair, issuer, audience, expiresAt, role, 1L);
+    }
+
+    private static String signedToken(
+            KeyPair pair,
+            String issuer,
+            String audience,
+            Instant expiresAt,
+            String role,
+            Long userId
+    ) {
         try {
             var rsaKey = new com.nimbusds.jose.jwk.RSAKey.Builder((RSAPublicKey) pair.getPublic())
                     .privateKey((RSAPrivateKey) pair.getPrivate())
@@ -222,7 +267,7 @@ class JwtServiceTest {
                     .build();
             SignedJWT jwt = new SignedJWT(
                     new JWSHeader.Builder(JWSAlgorithm.RS256).type(JOSEObjectType.JWT).keyID(KEY_ID).build(),
-                    baseClaims(issuer, audience, expiresAt, role)
+                    baseClaims(issuer, audience, expiresAt, role, userId)
             );
             jwt.sign(new com.nimbusds.jose.crypto.RSASSASigner(rsaKey));
             return jwt.serialize();
@@ -237,6 +282,16 @@ class JwtServiceTest {
             Instant expiresAt,
             String role
     ) {
+        return baseClaims(issuer, audience, expiresAt, role, 1L);
+    }
+
+    private static JWTClaimsSet baseClaims(
+            String issuer,
+            String audience,
+            Instant expiresAt,
+            String role,
+            Long userId
+    ) {
         Instant issuedAt = Instant.now().minusSeconds(30);
         JWTClaimsSet.Builder builder = new JWTClaimsSet.Builder()
                 .subject("user@company.com")
@@ -248,6 +303,9 @@ class JwtServiceTest {
                 .jwtID(UUID.randomUUID().toString());
         if (role != null) {
             builder.claim("role", role);
+        }
+        if (userId != null) {
+            builder.claim("userId", userId);
         }
         return builder.build();
     }

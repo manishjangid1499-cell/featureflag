@@ -4,6 +4,8 @@ const PUBLIC_AUTH_PATHS = new Set([
   "/auth/login",
   "/auth/invitations/validate",
   "/auth/invitations/accept",
+  "/auth/forgot-password",
+  "/auth/reset-password",
 ]);
 
 type RouteDecision = "pending" | "login" | "allow" | "forbidden";

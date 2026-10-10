@@ -48,6 +48,9 @@ class AuthRecipientsSecurityTest {
     private AuthService authService;
 
     @MockitoBean
+    private com.featureflag.auth_service.service.PasswordResetService passwordResetService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     @MockitoBean
@@ -192,12 +195,15 @@ class AuthRecipientsSecurityTest {
 
     private User authenticateToken(String token, Role role, boolean valid) {
         User currentUser = User.builder()
+                .id(1L)
                 .name("Abhay Thakur")
                 .email("user@company.com")
                 .password("encoded")
                 .role(role)
                 .build();
         when(jwtService.extractEmail(token)).thenReturn("user@company.com");
+        when(jwtService.extractUserId(token)).thenReturn(1L);
+        when(jwtService.extractTokenVersion(token)).thenReturn(1L);
         when(customUserDetailsService.loadUserByUsername("user@company.com"))
                 .thenReturn(currentUser);
         when(jwtService.isTokenValid(token, "user@company.com"))

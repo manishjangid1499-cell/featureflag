@@ -104,12 +104,19 @@ public class JwtService {
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
                 JwtValidators.createDefaultWithIssuer(issuer),
                 audienceValidator(audience),
-                roleValidator()
+                roleValidator(),
+                userIdValidator()
         ));
         this.jwtDecoder = decoder;
     }
 
-    public String generateToken(String email, String role) {
+    public String generateToken(Long userId, String email, String role, Long tokenVersion) {
+        if (userId == null || userId <= 0) {
+            throw new IllegalArgumentException("JWT userId must be a positive number");
+        }
+        if (tokenVersion == null || tokenVersion <= 0) {
+            throw new IllegalArgumentException("JWT tokenVersion must be a positive number");
+        }
         String normalizedEmail = normalizeEmail(email);
         String normalizedRole = normalizeRole(role);
         Instant issuedAt = Instant.now();
@@ -121,7 +128,9 @@ public class JwtService {
                 .build();
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .subject(normalizedEmail)
+                .claim("userId", userId)
                 .claim("role", normalizedRole)
+                .claim("tokenVersion", tokenVersion)
                 .issuer(issuer)
                 .audience(java.util.List.of(audience))
                 .issuedAt(issuedAt)
@@ -134,8 +143,49 @@ public class JwtService {
                 .getTokenValue();
     }
 
+    public String generateToken(Long userId, String email, String role) {
+        return generateToken(userId, email, role, 1L);
+    }
+
     public String extractEmail(String token) {
         return decode(token).getSubject();
+    }
+
+    public Long extractUserId(String token) {
+        Object rawUserId = decode(token).getClaims().get("userId");
+        if (rawUserId instanceof Number number && number.longValue() > 0) {
+            return number.longValue();
+        }
+        if (rawUserId instanceof String str && !str.isBlank()) {
+            try {
+                long val = Long.parseLong(str.trim());
+                if (val > 0) {
+                    return val;
+                }
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        throw new IllegalArgumentException("JWT is missing valid numeric userId claim");
+    }
+
+    public Long extractTokenVersion(String token) {
+        Object rawVersion = decode(token).getClaims().get("tokenVersion");
+        if (rawVersion == null) {
+            rawVersion = decode(token).getClaims().get("credentialVersion");
+        }
+        if (rawVersion instanceof Number number && number.longValue() > 0) {
+            return number.longValue();
+        }
+        if (rawVersion instanceof String str && !str.isBlank()) {
+            try {
+                long val = Long.parseLong(str.trim());
+                if (val > 0) {
+                    return val;
+                }
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return null;
     }
 
     public String extractRole(String token) {
@@ -179,6 +229,27 @@ public class JwtService {
                     : OAuth2TokenValidatorResult.failure(new OAuth2Error(
                             "invalid_token", "The role claim is missing or unsupported", null
                     ));
+        };
+    }
+
+    private static OAuth2TokenValidator<Jwt> userIdValidator() {
+        return jwt -> {
+            Object rawUserId = jwt.getClaims().get("userId");
+            if (rawUserId instanceof Number number && number.longValue() > 0) {
+                return OAuth2TokenValidatorResult.success();
+            }
+            if (rawUserId instanceof String str && !str.isBlank()) {
+                try {
+                    long val = Long.parseLong(str.trim());
+                    if (val > 0) {
+                        return OAuth2TokenValidatorResult.success();
+                    }
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            return OAuth2TokenValidatorResult.failure(new OAuth2Error(
+                    "invalid_token", "The userId claim is missing, invalid or malformed", null
+            ));
         };
     }
 

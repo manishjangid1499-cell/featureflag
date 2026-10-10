@@ -13,12 +13,18 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.featureflag.auth_service.entity.SystemInvariant;
+import com.featureflag.auth_service.repository.SystemInvariantRepository;
+import java.time.Instant;
+import java.util.Optional;
+
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class OwnerBootstrapService implements ApplicationRunner {
 
     private final UserRepository userRepository;
+    private final SystemInvariantRepository systemInvariantRepository;
     private final PasswordEncoder passwordEncoder;
     private final OwnerBootstrapProperties properties;
 
@@ -31,16 +37,47 @@ public class OwnerBootstrapService implements ApplicationRunner {
             return;
         }
 
-        if (userRepository.existsByRole(Role.OWNER)) {
+        // Acquire cluster-wide pessimistic lock on the installation owner singleton row
+        Optional<SystemInvariant> lockOpt = systemInvariantRepository.findByNameForUpdate(SystemInvariant.OWNER_INSTALLATION);
+        SystemInvariant invariant = lockOpt.orElseGet(() -> {
+            SystemInvariant newInv = SystemInvariant.builder()
+                    .name(SystemInvariant.OWNER_INSTALLATION)
+                    .updatedAt(Instant.now())
+                    .build();
+            return systemInvariantRepository.save(newInv);
+        });
+
+        long ownerCount = userRepository.countByRole(Role.OWNER);
+        if (ownerCount > 1) {
+            log.error("Multiple OWNER accounts ({}) detected in database. Inconsistent state; bootstrap aborted without mutating.", ownerCount);
+            throw new IllegalStateException("Multiple OWNER accounts detected in database. Inconsistent state; bootstrap aborted without mutating.");
+        }
+
+        if (ownerCount == 1) {
             log.info("OWNER already exists. Bootstrap skipped.");
+            if (invariant.getOwnerUserId() == null) {
+                userRepository.findAllByRole(Role.OWNER).stream().findFirst().ifPresent(owner -> {
+                    invariant.setOwnerUserId(owner.getId());
+                    invariant.setUpdatedAt(Instant.now());
+                    systemInvariantRepository.save(invariant);
+                });
+            }
             return;
         }
 
         validateConfiguration();
 
+        String normalizedEmail = EmailNormalizer.normalize(properties.getEmail());
+        Optional<User> existingUser = userRepository.findByEmail(normalizedEmail);
+        if (existingUser.isPresent()) {
+            log.warn("Account with bootstrap email {} already exists with role {}. Bootstrap aborted to prevent hijacking.",
+                    normalizedEmail, existingUser.get().getRole());
+            return;
+        }
+
         User owner = User.builder()
                 .name(properties.getName().trim())
-                .email(EmailNormalizer.normalize(properties.getEmail()))
+                .email(normalizedEmail)
                 .password(
                         passwordEncoder.encode(
                                 properties.getPassword()
@@ -49,7 +86,10 @@ public class OwnerBootstrapService implements ApplicationRunner {
                 .role(Role.OWNER)
                 .build();
 
-        userRepository.save(owner);
+        User savedOwner = userRepository.save(owner);
+        invariant.setOwnerUserId(savedOwner.getId());
+        invariant.setUpdatedAt(Instant.now());
+        systemInvariantRepository.save(invariant);
 
         log.info(
                 "Initial OWNER account created successfully."

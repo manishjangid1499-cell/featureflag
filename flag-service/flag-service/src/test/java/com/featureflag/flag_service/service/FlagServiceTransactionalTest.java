@@ -38,7 +38,15 @@ class FlagServiceTransactionalTest {
                 Long.class
         );
         assertTransactional(
+                "setEnabledState",
+                Long.class,
+                Boolean.class,
+                Long.class
+        );
+        assertTransactional(
                 "toggleFlag",
+                Long.class,
+                Boolean.class,
                 Long.class
         );
     }

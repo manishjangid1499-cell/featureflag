@@ -25,6 +25,10 @@ import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import com.featureflag.auth_service.exception.InvalidOperationException;
 import java.util.Collections;
 import java.util.HexFormat;
 import java.util.List;
@@ -322,6 +326,264 @@ class InvitationServiceTest {
     }
 
     @Test
+    @DisplayName("Invite Member - ADMIN cannot replace OWNER-issued ADMIN invitation with VIEWER")
+    void testInviteMember_AdminCannotReplaceAdminInvitationWithViewer() {
+        Invitation pendingAdminInvitation = Invitation.builder()
+                .id(10L)
+                .email("admin-candidate@company.com")
+                .fullName("Admin Candidate")
+                .invitedRole(Role.ADMIN)
+                .invitedByUserId(ownerUser.getId())
+                .invitedByEmail(ownerUser.getEmail())
+                .status(InvitationStatus.PENDING)
+                .expiresAt(NOW.plusSeconds(24 * 60 * 60))
+                .tokenHash("admin-hash")
+                .build();
+
+        InviteMemberRequest request = new InviteMemberRequest(
+                "Candidate",
+                "admin-candidate@company.com",
+                Role.VIEWER
+        );
+
+        when(invitationRepository.findByEmailAndStatusForUpdate(
+                "admin-candidate@company.com",
+                InvitationStatus.PENDING
+        )).thenReturn(List.of(pendingAdminInvitation));
+
+        ForbiddenException exception = assertThrows(
+                ForbiddenException.class,
+                () -> invitationService.inviteMember(request, adminUser)
+        );
+
+        assertEquals("You do not have permission to invite this role.", exception.getMessage());
+        assertEquals(InvitationStatus.PENDING, pendingAdminInvitation.getStatus());
+        verify(invitationRepository, never()).save(any(Invitation.class));
+        verifyNoInteractions(invitationNotificationDispatcher);
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    @DisplayName("Invite Member - ADMIN cannot replace OWNER-issued ADMIN invitation with DEVELOPER")
+    void testInviteMember_AdminCannotReplaceAdminInvitationWithDeveloper() {
+        Invitation pendingAdminInvitation = Invitation.builder()
+                .id(10L)
+                .email("admin-candidate@company.com")
+                .fullName("Admin Candidate")
+                .invitedRole(Role.ADMIN)
+                .invitedByUserId(ownerUser.getId())
+                .invitedByEmail(ownerUser.getEmail())
+                .status(InvitationStatus.PENDING)
+                .expiresAt(NOW.plusSeconds(24 * 60 * 60))
+                .tokenHash("admin-hash")
+                .build();
+
+        InviteMemberRequest request = new InviteMemberRequest(
+                "Candidate",
+                "admin-candidate@company.com",
+                Role.DEVELOPER
+        );
+
+        when(invitationRepository.findByEmailAndStatusForUpdate(
+                "admin-candidate@company.com",
+                InvitationStatus.PENDING
+        )).thenReturn(List.of(pendingAdminInvitation));
+
+        ForbiddenException exception = assertThrows(
+                ForbiddenException.class,
+                () -> invitationService.inviteMember(request, adminUser)
+        );
+
+        assertEquals("You do not have permission to invite this role.", exception.getMessage());
+        assertEquals(InvitationStatus.PENDING, pendingAdminInvitation.getStatus());
+        verify(invitationRepository, never()).save(any(Invitation.class));
+        verifyNoInteractions(invitationNotificationDispatcher);
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    @DisplayName("Invite Member - ADMIN replaces a permitted DEVELOPER/VIEWER invitation succeeds")
+    void testInviteMember_AdminReplacesPermittedDeveloperInvitationSucceeds() {
+        Invitation previousInvitation = Invitation.builder()
+                .id(20L)
+                .email("member@company.com")
+                .fullName("Dev Member")
+                .invitedRole(Role.DEVELOPER)
+                .status(InvitationStatus.PENDING)
+                .expiresAt(NOW.plusSeconds(24 * 60 * 60))
+                .tokenHash("prev-hash")
+                .build();
+
+        InviteMemberRequest request = new InviteMemberRequest(
+                "Viewer Member",
+                "member@company.com",
+                Role.VIEWER
+        );
+
+        when(userRepository.findByEmail("member@company.com"))
+                .thenReturn(Optional.empty());
+        when(invitationRepository.findByEmailAndStatusForUpdate(
+                "member@company.com",
+                InvitationStatus.PENDING
+        )).thenReturn(List.of(previousInvitation));
+        when(invitationRepository.save(any(Invitation.class)))
+                .thenAnswer(invocation -> {
+                    Invitation inv = invocation.getArgument(0);
+                    if (inv.getId() == null) {
+                        inv.setId(21L);
+                    }
+                    return inv;
+                });
+
+        InvitationResponse response = invitationService.inviteMember(request, adminUser);
+
+        assertNotNull(response);
+        assertEquals(Role.VIEWER, response.getInvitedRole());
+        assertEquals(InvitationStatus.REVOKED, previousInvitation.getStatus());
+        verify(invitationRepository).save(previousInvitation);
+        verify(invitationNotificationDispatcher)
+                .dispatchAfterCommit(any(InvitationNotificationDto.class), any());
+    }
+
+    @Test
+    @DisplayName("Invite Member - OWNER replaces a permitted ADMIN invitation succeeds")
+    void testInviteMember_OwnerReplacesPermittedAdminInvitationSucceeds() {
+        Invitation previousInvitation = Invitation.builder()
+                .id(30L)
+                .email("admin@company.com")
+                .fullName("Admin Candidate")
+                .invitedRole(Role.ADMIN)
+                .status(InvitationStatus.PENDING)
+                .expiresAt(NOW.plusSeconds(24 * 60 * 60))
+                .tokenHash("prev-hash")
+                .build();
+
+        InviteMemberRequest request = new InviteMemberRequest(
+                "Admin Candidate",
+                "admin@company.com",
+                Role.ADMIN
+        );
+
+        when(userRepository.findByEmail("admin@company.com"))
+                .thenReturn(Optional.empty());
+        when(invitationRepository.findByEmailAndStatusForUpdate(
+                "admin@company.com",
+                InvitationStatus.PENDING
+        )).thenReturn(List.of(previousInvitation));
+        when(invitationRepository.save(any(Invitation.class)))
+                .thenAnswer(invocation -> {
+                    Invitation inv = invocation.getArgument(0);
+                    if (inv.getId() == null) {
+                        inv.setId(31L);
+                    }
+                    return inv;
+                });
+
+        InvitationResponse response = invitationService.inviteMember(request, ownerUser);
+
+        assertNotNull(response);
+        assertEquals(Role.ADMIN, response.getInvitedRole());
+        assertEquals(InvitationStatus.REVOKED, previousInvitation.getStatus());
+        verify(invitationRepository).save(previousInvitation);
+        verify(invitationNotificationDispatcher)
+                .dispatchAfterCommit(any(InvitationNotificationDto.class), any());
+    }
+
+    @Test
+    @DisplayName("Invite Member - multiple pending records with one protected rejects without partial changes")
+    void testInviteMember_MultiplePendingRecordsWithOneProtectedRejectsWithoutPartialChanges() {
+        Invitation permittedInvitation = Invitation.builder()
+                .id(41L)
+                .email("multi@company.com")
+                .fullName("Multi Member")
+                .invitedRole(Role.DEVELOPER)
+                .status(InvitationStatus.PENDING)
+                .expiresAt(NOW.plusSeconds(24 * 60 * 60))
+                .tokenHash("hash-dev")
+                .build();
+
+        Invitation protectedInvitation = Invitation.builder()
+                .id(42L)
+                .email("multi@company.com")
+                .fullName("Multi Member")
+                .invitedRole(Role.ADMIN)
+                .status(InvitationStatus.PENDING)
+                .expiresAt(NOW.plusSeconds(24 * 60 * 60))
+                .tokenHash("hash-admin")
+                .build();
+
+        InviteMemberRequest request = new InviteMemberRequest(
+                "Multi Member",
+                "multi@company.com",
+                Role.VIEWER
+        );
+
+        when(invitationRepository.findByEmailAndStatusForUpdate(
+                "multi@company.com",
+                InvitationStatus.PENDING
+        )).thenReturn(List.of(permittedInvitation, protectedInvitation));
+
+        ForbiddenException exception = assertThrows(
+                ForbiddenException.class,
+                () -> invitationService.inviteMember(request, adminUser)
+        );
+
+        assertEquals("You do not have permission to invite this role.", exception.getMessage());
+        assertEquals(InvitationStatus.PENDING, permittedInvitation.getStatus());
+        assertEquals(InvitationStatus.PENDING, protectedInvitation.getStatus());
+        verify(invitationRepository, never()).save(any(Invitation.class));
+        verifyNoInteractions(invitationNotificationDispatcher);
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    @DisplayName("Revoke Invitation - ADMIN cannot revoke ADMIN invitation")
+    void testRevokeInvitation_AdminCannotRevokeAdminInvitation() {
+        Invitation adminInvitation = Invitation.builder()
+                .id(50L)
+                .email("admin@company.com")
+                .invitedRole(Role.ADMIN)
+                .status(InvitationStatus.PENDING)
+                .build();
+
+        when(invitationRepository.findByIdForUpdate(50L))
+                .thenReturn(Optional.of(adminInvitation));
+
+        ForbiddenException exception = assertThrows(
+                ForbiddenException.class,
+                () -> invitationService.revokeInvitation(50L, adminUser)
+        );
+
+        assertEquals("You do not have permission to invite this role.", exception.getMessage());
+        assertEquals(InvitationStatus.PENDING, adminInvitation.getStatus());
+        verify(invitationRepository, never()).save(any(Invitation.class));
+    }
+
+    @Test
+    @DisplayName("Resend Invitation - ADMIN cannot resend ADMIN invitation")
+    void testResendInvitation_AdminCannotResendAdminInvitation() {
+        Invitation adminInvitation = Invitation.builder()
+                .id(51L)
+                .email("admin@company.com")
+                .invitedRole(Role.ADMIN)
+                .status(InvitationStatus.PENDING)
+                .build();
+
+        when(invitationRepository.findByIdForUpdate(51L))
+                .thenReturn(Optional.of(adminInvitation));
+
+        ForbiddenException exception = assertThrows(
+                ForbiddenException.class,
+                () -> invitationService.resendInvitation(51L, adminUser)
+        );
+
+        assertEquals("You do not have permission to invite this role.", exception.getMessage());
+        assertEquals(InvitationStatus.PENDING, adminInvitation.getStatus());
+        verify(invitationRepository, never()).save(any(Invitation.class));
+        verifyNoInteractions(invitationNotificationDispatcher);
+    }
+
+    @Test
     @DisplayName("Validate Invitation - Expired Token Returns Invalid Status")
     void testValidateInvitation_ExpiredToken() {
         Invitation expiredInvitation = Invitation.builder()
@@ -342,6 +604,185 @@ class InvitationServiceTest {
         assertNotNull(response);
         assertFalse(response.isValid());
         assertTrue(response.getErrorMessage().contains("expired"));
+        assertEquals(InvitationStatus.PENDING, expiredInvitation.getStatus());
+        verify(invitationRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("List Invitations - Presents expired PENDING invitation as EXPIRED without mutating database")
+    void testGetAllInvitations_PresentsExpiredPendingAsExpiredWithoutMutation() {
+        Invitation expiredInvitation = Invitation.builder()
+                .id(1L)
+                .email("expired@company.com")
+                .fullName("Expired User")
+                .invitedRole(Role.DEVELOPER)
+                .status(InvitationStatus.PENDING)
+                .expiresAt(NOW.minusSeconds(3600))
+                .tokenHash("hash")
+                .createdAt(NOW.minusSeconds(7200))
+                .build();
+
+        when(invitationRepository.findAllByOrderByCreatedAtDescIdDesc(any()))
+                .thenReturn(new PageImpl<>(List.of(expiredInvitation)));
+
+        Page<InvitationResponse> page = invitationService.getAllInvitations(PageRequest.of(0, 10));
+
+        assertNotNull(page);
+        assertEquals(1, page.getContent().size());
+        assertEquals(InvitationStatus.EXPIRED, page.getContent().get(0).getStatus());
+        // Verify underlying entity in persistence context was not mutated to EXPIRED
+        assertEquals(InvitationStatus.PENDING, expiredInvitation.getStatus());
+        verify(invitationRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("List Invitations - ACCEPTED and REVOKED invitations retain their state even when past expiresAt")
+    void testGetAllInvitations_AcceptedAndRevokedRetainStateWhenPastExpiresAt() {
+        Invitation acceptedInvitation = Invitation.builder()
+                .id(1L)
+                .email("accepted@company.com")
+                .fullName("Accepted User")
+                .invitedRole(Role.DEVELOPER)
+                .status(InvitationStatus.ACCEPTED)
+                .expiresAt(NOW.minusSeconds(3600))
+                .tokenHash("hash1")
+                .createdAt(NOW.minusSeconds(7200))
+                .acceptedAt(NOW.minusSeconds(4000))
+                .build();
+
+        Invitation revokedInvitation = Invitation.builder()
+                .id(2L)
+                .email("revoked@company.com")
+                .fullName("Revoked User")
+                .invitedRole(Role.DEVELOPER)
+                .status(InvitationStatus.REVOKED)
+                .expiresAt(NOW.minusSeconds(3600))
+                .tokenHash("hash2")
+                .createdAt(NOW.minusSeconds(7200))
+                .build();
+
+        when(invitationRepository.findAllByOrderByCreatedAtDescIdDesc(any()))
+                .thenReturn(new PageImpl<>(List.of(acceptedInvitation, revokedInvitation)));
+
+        Page<InvitationResponse> page = invitationService.getAllInvitations(PageRequest.of(0, 10));
+
+        assertNotNull(page);
+        assertEquals(2, page.getContent().size());
+        assertEquals(InvitationStatus.ACCEPTED, page.getContent().get(0).getStatus());
+        assertEquals(InvitationStatus.REVOKED, page.getContent().get(1).getStatus());
+        assertEquals(InvitationStatus.ACCEPTED, acceptedInvitation.getStatus());
+        assertEquals(InvitationStatus.REVOKED, revokedInvitation.getStatus());
+        verify(invitationRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Validate Invitation - ACCEPTED and REVOKED invitations retain state and specific message even when past expiresAt")
+    void testValidateInvitation_AcceptedAndRevokedRetainStateWhenPastExpiresAt() {
+        Invitation acceptedInvitation = Invitation.builder()
+                .id(1L)
+                .email("accepted@company.com")
+                .fullName("Accepted User")
+                .invitedRole(Role.DEVELOPER)
+                .status(InvitationStatus.ACCEPTED)
+                .expiresAt(NOW.minusSeconds(3600))
+                .tokenHash("hash1")
+                .build();
+
+        Invitation revokedInvitation = Invitation.builder()
+                .id(2L)
+                .email("revoked@company.com")
+                .fullName("Revoked User")
+                .invitedRole(Role.DEVELOPER)
+                .status(InvitationStatus.REVOKED)
+                .expiresAt(NOW.minusSeconds(3600))
+                .tokenHash("hash2")
+                .build();
+
+        when(invitationRepository.findByTokenHash(anyString()))
+                .thenReturn(Optional.of(acceptedInvitation))
+                .thenReturn(Optional.of(revokedInvitation));
+
+        ValidateInvitationResponse acceptedResponse = invitationService.validateInvitation("token1");
+        assertFalse(acceptedResponse.isValid());
+        assertTrue(acceptedResponse.getErrorMessage().contains("already been accepted"));
+        assertFalse(acceptedResponse.getErrorMessage().contains("expired"));
+
+        ValidateInvitationResponse revokedResponse = invitationService.validateInvitation("token2");
+        assertFalse(revokedResponse.isValid());
+        assertTrue(revokedResponse.getErrorMessage().contains("revoked"));
+        assertFalse(revokedResponse.getErrorMessage().contains("expired"));
+
+        verify(invitationRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Accept Invitation - Exact expiry boundary (now == expiresAt) follows documented rule and succeeds")
+    void testAcceptInvitation_ExactExpiryBoundarySucceeds() {
+        Invitation invitation = Invitation.builder()
+                .id(1L)
+                .email("boundary@company.com")
+                .fullName("Boundary User")
+                .invitedRole(Role.DEVELOPER)
+                .status(InvitationStatus.PENDING)
+                .expiresAt(NOW) // Exact boundary: clock instant NOW equals expiresAt
+                .tokenHash("hash")
+                .build();
+
+        AcceptInvitationRequest request = new AcceptInvitationRequest(
+                "boundary_token",
+                "securePassword123",
+                "securePassword123"
+        );
+
+        when(invitationRepository.findByTokenHashForUpdate(anyString()))
+                .thenReturn(Optional.of(invitation));
+        when(userRepository.findByEmail("boundary@company.com"))
+                .thenReturn(Optional.empty());
+        when(passwordEncoder.encode("securePassword123"))
+                .thenReturn("hashed_pass");
+
+        String result = invitationService.acceptInvitation(request);
+
+        assertNotNull(result);
+        assertTrue(result.contains("successfully"));
+        assertEquals(InvitationStatus.ACCEPTED, invitation.getStatus());
+        assertEquals(NOW, invitation.getAcceptedAt());
+        verify(invitationRepository).save(invitation);
+    }
+
+    @Test
+    @DisplayName("Accept Invitation - Past expiry boundary (now > expiresAt) is rejected without mutation")
+    void testAcceptInvitation_PastExpiryBoundaryRejectedWithoutMutation() {
+        Invitation invitation = Invitation.builder()
+                .id(1L)
+                .email("past@company.com")
+                .fullName("Past User")
+                .invitedRole(Role.DEVELOPER)
+                .status(InvitationStatus.PENDING)
+                .expiresAt(NOW.minusMillis(1)) // 1ms in past: clock instant NOW is strictly after expiresAt
+                .tokenHash("hash")
+                .build();
+
+        AcceptInvitationRequest request = new AcceptInvitationRequest(
+                "past_token",
+                "securePassword123",
+                "securePassword123"
+        );
+
+        when(invitationRepository.findByTokenHashForUpdate(anyString()))
+                .thenReturn(Optional.of(invitation));
+
+        InvalidOperationException exception = assertThrows(
+                InvalidOperationException.class,
+                () -> invitationService.acceptInvitation(request)
+        );
+
+        assertTrue(exception.getMessage().contains("expired"));
+        assertEquals(InvitationStatus.PENDING, invitation.getStatus());
+        assertNull(invitation.getAcceptedAt());
+        verifyNoInteractions(userRepository);
+        verifyNoInteractions(passwordEncoder);
+        verify(invitationRepository, never()).save(any());
     }
 
     @Test

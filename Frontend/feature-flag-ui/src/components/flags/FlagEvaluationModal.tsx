@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import type { FeatureFlag, FlagEvaluationResponse } from "../../types/featureFlag";
 import { evaluateFlag } from "../../api/flagApi";
 import { getApiErrorMessage } from "../../api/errors";
+import { getUserTimeZone, formatScheduleDisplay } from "../../utils/scheduleTime";
 
 interface FlagEvaluationModalProps {
   flag: FeatureFlag | null;
@@ -9,14 +10,17 @@ interface FlagEvaluationModalProps {
   onClose: () => void;
 }
 
-export function FlagEvaluationModal({ flag, isOpen, onClose }: FlagEvaluationModalProps) {
+interface FlagEvaluationModalContentProps {
+  flag: FeatureFlag;
+  onClose: () => void;
+}
+
+function FlagEvaluationModalContent({ flag, onClose }: FlagEvaluationModalContentProps) {
   const [userId, setUserId] = useState("user_test_101");
-  const [environment, setEnvironment] = useState(flag?.environment || "DEV");
+  const environment = flag.environment || "DEV";
   const [evaluationResult, setEvaluationResult] = useState<FlagEvaluationResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  if (!isOpen || !flag) return null;
 
   const handleEvaluate = async (e: FormEvent) => {
     e.preventDefault();
@@ -24,7 +28,7 @@ export function FlagEvaluationModal({ flag, isOpen, onClose }: FlagEvaluationMod
     setEvaluationResult(null);
 
     if (!userId.trim()) {
-      setError("User ID is required for evaluation.");
+      setError("User ID is required for preview.");
       return;
     }
 
@@ -35,7 +39,7 @@ export function FlagEvaluationModal({ flag, isOpen, onClose }: FlagEvaluationMod
     } catch (error: unknown) {
       setError(getApiErrorMessage(
         error,
-        "Evaluation failed. Ensure flag exists in this environment.",
+        "Preview failed. Ensure flag exists in this environment.",
       ));
     } finally {
       setLoading(false);
@@ -76,10 +80,10 @@ export function FlagEvaluationModal({ flag, isOpen, onClose }: FlagEvaluationMod
         }}>
           <div>
             <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: "#111827" }}>
-              Evaluate Feature Flag: {flag.flagKey}
+              Preview Feature Flag: {flag.flagKey}
             </h2>
             <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#6b7280" }}>
-              Test runtime flag resolution for specific user context
+              Test flag resolution rules without increasing application evaluation counts
             </p>
           </div>
           <button
@@ -92,22 +96,43 @@ export function FlagEvaluationModal({ flag, isOpen, onClose }: FlagEvaluationMod
         </div>
 
         <div className="modal-body" style={{ padding: "24px" }}>
+          <div style={{
+            marginBottom: "16px",
+            padding: "10px 14px",
+            background: "#eff6ff",
+            border: "1px solid #bfdbfe",
+            borderRadius: "8px",
+            fontSize: "12px",
+            color: "#1e40af",
+            lineHeight: "1.4"
+          }}>
+            <strong>Dashboard Preview:</strong> This tool previews schedule, targeting, and rollout rules using current flag configuration. Previews do not emit telemetry events or increase application evaluation counts.
+          </div>
+
           <form onSubmit={handleEvaluate}>
             <div className="form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "16px" }}>
               <div>
                 <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
-                  Environment
+                  Environment (Read-only)
                 </label>
-                <select
+                <input
+                  type="text"
                   value={environment}
-                  onChange={(e) => setEnvironment(e.target.value)}
-                  style={{ width: "100%", padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: "7px", fontSize: "13px", background: "white" }}
-                >
-                  <option value="DEV">DEV</option>
-                  <option value="QA">QA</option>
-                  <option value="STAGING">STAGING</option>
-                  <option value="PROD">PROD</option>
-                </select>
+                  readOnly
+                  disabled
+                  aria-readonly="true"
+                  title="Preview environment is fixed to the selected flag"
+                  style={{
+                    width: "100%",
+                    padding: "9px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "7px",
+                    fontSize: "13px",
+                    background: "#f9fafb",
+                    color: "#374151",
+                    cursor: "not-allowed"
+                  }}
+                />
               </div>
 
               <div>
@@ -118,7 +143,6 @@ export function FlagEvaluationModal({ flag, isOpen, onClose }: FlagEvaluationMod
                   type="text"
                   value={userId}
                   onChange={(e) => setUserId(e.target.value)}
-                  placeholder="e.g. user_123"
                   required
                   style={{ width: "100%", padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: "7px", fontSize: "13px" }}
                 />
@@ -140,7 +164,7 @@ export function FlagEvaluationModal({ flag, isOpen, onClose }: FlagEvaluationMod
                 cursor: loading ? "not-allowed" : "pointer"
               }}
             >
-              {loading ? "Evaluating..." : "Run Evaluation Query"}
+              {loading ? "Evaluating Preview..." : "Run Preview"}
             </button>
           </form>
 
@@ -168,7 +192,7 @@ export function FlagEvaluationModal({ flag, isOpen, onClose }: FlagEvaluationMod
             }}>
               <div className="responsive-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
                 <span style={{ fontSize: "13px", fontWeight: 600, color: "#4b5563" }}>
-                  Evaluation Verdict:
+                  Preview Verdict:
                 </span>
                 <span style={{
                   padding: "6px 14px",
@@ -202,12 +226,34 @@ export function FlagEvaluationModal({ flag, isOpen, onClose }: FlagEvaluationMod
                   <span style={{ color: "#6b7280" }}>Environment:</span>{" "}
                   <strong>{evaluationResult.environment}</strong>
                 </div>
+
+                {(flag.startDate || flag.endDate) && (
+                  <div style={{ padding: "8px 12px", background: "white", borderRadius: "6px", border: "1px solid #f3f4f6", gridColumn: "1 / -1" }}>
+                    <span style={{ color: "#6b7280" }}>Schedule Window:</span>{" "}
+                    <strong>
+                      {flag.startDate ? formatScheduleDisplay(flag.startDate) : "Any"} → {flag.endDate ? formatScheduleDisplay(flag.endDate) : "Any"}{" "}
+                      <span style={{ fontSize: "11px", color: "#6b7280", fontWeight: 400 }}>({getUserTimeZone()})</span>
+                    </strong>
+                  </div>
+                )}
               </div>
             </div>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+export function FlagEvaluationModal({ flag, isOpen, onClose }: FlagEvaluationModalProps) {
+  if (!isOpen || !flag) return null;
+
+  return (
+    <FlagEvaluationModalContent
+      key={`${flag.id}-${flag.version}`}
+      flag={flag}
+      onClose={onClose}
+    />
   );
 }
 

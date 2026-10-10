@@ -92,6 +92,9 @@ class SdkRuntimeSecurityTest {
     @MockitoBean
     private FlagMetrics flagMetrics;
 
+    @MockitoBean
+    private AuthAccountStatusClient authAccountStatusClient;
+
     @BeforeEach
     void setUp() {
         when(authenticationService.authenticate(RAW_KEY))
@@ -131,6 +134,39 @@ class SdkRuntimeSecurityTest {
                 "user 123",
                 "DEV"
         );
+    }
+
+    @Test
+    void runtimeEvaluationWithValidSdkKeyDoesNotCallAuthServiceEvenWhenAuthServiceDown() throws Exception {
+        when(evaluationService.evaluateFlag(
+                "checkout",
+                "user 123",
+                "DEV"
+        )).thenReturn(evaluation("checkout", "DEV", true));
+
+        // When AuthAccountStatusClient throws AuthServiceUnavailableException or fails,
+        // runtime evaluation should proceed normally and NEVER interact with authAccountStatusClient
+        when(authAccountStatusClient.getAccountStatus(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new AuthServiceUnavailableException("Auth service is completely unavailable"));
+
+        mockMvc.perform(
+                get("/runtime/v1/flags/checkout/evaluate")
+                        .header(
+                                SdkKeyAuthenticationFilter.HEADER_NAME,
+                                RAW_KEY
+                        )
+                        .queryParam("subject", "user 123")
+        )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.flagKey").value("checkout"))
+                .andExpect(jsonPath("$.enabled").value(true));
+
+        verify(evaluationService).evaluateFlag(
+                "checkout",
+                "user 123",
+                "DEV"
+        );
+        verify(authAccountStatusClient, never()).getAccountStatus(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
     }
 
     @Test

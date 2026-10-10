@@ -10,3 +10,7 @@ telemetry:
   evaluation:
     queue-capacity: ${EVALUATION_TELEMETRY_QUEUE_CAPACITY:256}
     topic: ${EVALUATION_TELEMETRY_TOPIC:feature-flag-evaluations}
+
+features:
+  evaluation:
+    config-cache-enabled: ${FLAG_EVALUATION_CONFIG_CACHE_ENABLED:false}

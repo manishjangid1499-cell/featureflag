@@ -1,12 +1,14 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Login from "./pages/Login";
 import AcceptInvitation from "./pages/AcceptInvitation";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Flags from "./pages/Flags";
 import Analytics from "./pages/Analytics";
 import AuditLogs from "./pages/AuditLogs";
 import Notifications from "./pages/Notifications";
 import Members from "./pages/Members";
+import SdkKeys from "./pages/SdkKeys";
 
 import ProtectedRoute from "./routes/ProtectedRoute";
 import RoleProtectedRoute from "./routes/RoleProtectedRoute";
@@ -18,6 +20,7 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/accept-invitation" element={<AcceptInvitation />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
             <Route path="/dashboard" element={<Dashboard />} />
@@ -30,6 +33,14 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
                   <Members />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="/sdk-keys"
+              element={
+                <RoleProtectedRoute allowedRoles={["OWNER", "ADMIN"]}>
+                  <SdkKeys />
                 </RoleProtectedRoute>
               }
             />

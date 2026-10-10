@@ -1,12 +1,12 @@
 interface Props {
-  total: number;
-  enabled: number;
-  disabled: number;
-  prodCount?: number;
-  avgRollout?: number;
+  total?: number | null;
+  enabled?: number | null;
+  disabled?: number | null;
+  prodCount?: number | null;
+  avgRollout?: number | null;
 }
 
-export function FlagStats({ total, enabled, disabled, prodCount = 0, avgRollout = 0 }: Props) {
+export function FlagStats({ total, enabled, disabled, prodCount, avgRollout }: Props) {
   return (
     <div style={{
       display: "grid",
@@ -25,7 +25,7 @@ export function FlagStats({ total, enabled, disabled, prodCount = 0, avgRollout 
           Flags on this page
         </span>
         <div style={{ fontSize: "28px", fontWeight: 800, color: "#111827", marginTop: "6px" }}>
-          {total}
+          {total != null ? total : "—"}
         </div>
         <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "4px" }}>
           Summary of the current page
@@ -43,7 +43,7 @@ export function FlagStats({ total, enabled, disabled, prodCount = 0, avgRollout 
           Enabled Flags
         </span>
         <div style={{ fontSize: "28px", fontWeight: 800, color: "#059669", marginTop: "6px" }}>
-          {enabled}
+          {enabled != null ? enabled : "—"}
         </div>
         <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "4px" }}>
           Enabled on the current page
@@ -61,7 +61,7 @@ export function FlagStats({ total, enabled, disabled, prodCount = 0, avgRollout 
           Disabled Flags
         </span>
         <div style={{ fontSize: "28px", fontWeight: 800, color: "#dc2626", marginTop: "6px" }}>
-          {disabled}
+          {disabled != null ? disabled : "—"}
         </div>
         <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "4px" }}>
           Turned off globally
@@ -79,10 +79,10 @@ export function FlagStats({ total, enabled, disabled, prodCount = 0, avgRollout 
           PROD Environment
         </span>
         <div style={{ fontSize: "28px", fontWeight: 800, color: "#4f46e5", marginTop: "6px" }}>
-          {prodCount}
+          {prodCount != null ? prodCount : "—"}
         </div>
         <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "4px" }}>
-          Avg Rollout: {avgRollout}%
+          {avgRollout != null ? `Avg Rollout: ${avgRollout}%` : "Avg Rollout: —"}
         </div>
       </div>
     </div>

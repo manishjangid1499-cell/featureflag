@@ -213,21 +213,15 @@ class AnalyticsServiceTest {
     }
 
     @Test
-    @DisplayName("Delete Analytics - Success")
-    void testDeleteAnalytics_Success() {
-        when(repository.findById(1L)).thenReturn(Optional.of(testEvent));
+    @DisplayName("Delete Analytics - Manual Deletion Is Unsupported and Modifies No Data")
+    void testDeleteAnalytics_Unsupported() {
+        UnsupportedOperationException exception = assertThrows(
+                UnsupportedOperationException.class,
+                () -> service.deleteAnalytics(1L)
+        );
 
-        service.deleteAnalytics(1L);
-
-        verify(repository, times(1)).delete(testEvent);
-    }
-
-    @Test
-    @DisplayName("Delete Analytics - Not Found Throws Domain Exception")
-    void testDeleteAnalytics_NotFound() {
-        when(repository.findById(999L)).thenReturn(Optional.empty());
-
-        assertThrows(ResourceNotFoundException.class, () -> service.deleteAnalytics(999L));
+        assertTrue(exception.getMessage().contains("Manual deletion of analytics aggregates is unsupported"));
         verify(repository, never()).delete(any(AnalyticsEvent.class));
+        verify(repository, never()).deleteById(anyLong());
     }
 }

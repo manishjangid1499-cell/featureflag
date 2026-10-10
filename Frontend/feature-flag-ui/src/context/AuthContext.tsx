@@ -61,12 +61,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     getProfile().then((profile) => {
       const current = readAuthSession();
       if (!cancelled && current?.token === sessionToken) {
-        if (current.name !== profile.name) {
-          writeAuthSession({ ...current, name: profile.name });
+        const nextRole = profile.role || current.role;
+        if (current.name !== profile.name || current.role !== nextRole) {
+          writeAuthSession({ ...current, name: profile.name, role: nextRole });
         }
       }
     }).catch(() => {
-      // Keep the saved name/email on a profile outage; the API handles 401 logout.
+      // Keep the saved session on a profile outage; the API handles 401 logout.
     });
 
     return () => { cancelled = true; };

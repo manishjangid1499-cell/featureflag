@@ -22,8 +22,20 @@ export const updateFlag = async (id: number, flag: FlagUpdateRequest): Promise<F
   return response.data;
 };
 
-export const toggleFlag = async (id: number): Promise<FeatureFlag> => {
-  const response = await api.patch<FeatureFlag>(`/flags/${id}/toggle`);
+export const getFlagById = async (id: number): Promise<FeatureFlag> => {
+  const response = await api.get<FeatureFlag>(`/flags/id/${id}`);
+  return response.data;
+};
+
+export const toggleFlag = async (
+  id: number,
+  enabled: boolean,
+  expectedVersion: number,
+): Promise<FeatureFlag> => {
+  const response = await api.patch<FeatureFlag>(`/flags/${id}/toggle`, {
+    enabled,
+    expectedVersion,
+  });
   return response.data;
 };
 

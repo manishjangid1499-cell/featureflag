@@ -18,4 +18,10 @@ public interface NotificationClient {
             @RequestHeader("X-Notification-Service-Key") String serviceKey,
             @RequestBody InvitationNotificationDto request
     );
+
+    @PostMapping("/internal/notifications/password-resets")
+    void sendPasswordResetEmail(
+            @RequestHeader("X-Notification-Service-Key") String serviceKey,
+            @RequestBody com.featureflag.auth_service.dto.PasswordResetNotificationDto request
+    );
 }

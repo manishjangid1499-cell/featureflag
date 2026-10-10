@@ -126,6 +126,16 @@ public class MemberController {
         );
     }
 
+    @Operation(summary = "Transfer platform ownership to an active ADMIN")
+    @PostMapping("/transfer-ownership")
+    public MemberResponse transferOwnership(
+            @Valid @RequestBody com.featureflag.auth_service.dto.TransferOwnershipRequest request,
+            Authentication authentication
+    ) {
+        User currentUser = (User) authentication.getPrincipal();
+        return memberService.transferOwnership(request, currentUser);
+    }
+
     @Operation(summary = "Delete platform member")
     @DeleteMapping("/{id}")
     public String deleteMember(

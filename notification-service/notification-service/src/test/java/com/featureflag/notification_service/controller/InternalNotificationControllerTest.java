@@ -2,10 +2,13 @@ package com.featureflag.notification_service.controller;
 
 import com.featureflag.notification_service.dto.InvitationEmailRequest;
 import com.featureflag.notification_service.exception.InvitationDeliveryException;
+import com.featureflag.notification_service.security.AuthAccountStatusClient;
+import com.featureflag.notification_service.security.AuthoritativeJwtAuthenticationConverter;
 import com.featureflag.notification_service.security.InternalNotificationServiceKeyFilter;
 import com.featureflag.notification_service.security.JwtSecurityConfig;
 import com.featureflag.notification_service.security.SecurityConfig;
 import com.featureflag.notification_service.service.InvitationEmailService;
+import org.mockito.Mockito;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -56,6 +59,9 @@ class InternalNotificationControllerTest {
 
     @MockitoBean
     private InvitationEmailService invitationEmailService;
+
+    @MockitoBean
+    private com.featureflag.notification_service.service.PasswordResetEmailService passwordResetEmailService;
 
     @MockitoBean
     private JwtDecoder jwtDecoder;
@@ -130,14 +136,38 @@ class InternalNotificationControllerTest {
                 """.formatted(ACCEPTANCE_URL);
     }
 
+    @Test
+    void successfulPasswordResetDeliveryReturnsNoContent() throws Exception {
+        mockMvc.perform(post(InternalNotificationServiceKeyFilter.PASSWORD_RESET_PATH)
+                        .header(InternalNotificationServiceKeyFilter.HEADER_NAME, INTERNAL_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "recipient": "user@company.com",
+                                  "userName": "Alice",
+                                  "expirationMinutes": 15,
+                                  "resetUrl": "https://frontend.example.test/reset-password?token=XYZ"
+                                }
+                                """))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
+
+        verify(passwordResetEmailService, times(1))
+                .sendPasswordResetEmail(any(com.featureflag.notification_service.dto.PasswordResetEmailRequest.class));
+    }
+
     @TestConfiguration
     static class TestJwtConfiguration {
 
         @Bean
+        AuthAccountStatusClient authAccountStatusClient() {
+            return Mockito.mock(AuthAccountStatusClient.class);
+        }
+
+        @Bean
         Converter<Jwt, ? extends AbstractAuthenticationToken>
-        jwtAuthenticationConverter() {
-            return new JwtSecurityConfig()
-                    .jwtAuthenticationConverter();
+        jwtAuthenticationConverter(AuthAccountStatusClient authAccountStatusClient) {
+            return new AuthoritativeJwtAuthenticationConverter(authAccountStatusClient);
         }
     }
 }

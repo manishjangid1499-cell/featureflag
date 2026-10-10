@@ -29,10 +29,11 @@ class AuthServiceApplicationTests {
 
 	@Test
 	void contextSignsAndVerifiesRsaJwt() throws ParseException {
-		String token = jwtService.generateToken("context@example.test", "VIEWER");
+		String token = jwtService.generateToken(1L, "context@example.test", "VIEWER");
 
 		assertTrue(jwtService.isTokenValid(token));
 		assertEquals("context@example.test", jwtService.extractEmail(token));
+		assertEquals(1L, jwtService.extractUserId(token));
 		assertEquals("VIEWER", jwtService.extractRole(token));
 
 		SignedJWT signedJwt = SignedJWT.parse(token);

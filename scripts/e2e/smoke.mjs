@@ -79,13 +79,13 @@ try {
   record('Deterministic evaluation and case aliases');
   const redisId = await ownedContainer('redis');
   const keys = (await processRun('docker', ['exec', redisId, 'redis-cli', '--scan', '--pattern', `flag:config:v2:*${key.toLowerCase()}*`])).trim().split(/\r?\n/).filter(Boolean);
-  insist(keys.length === 1, 'Expected one canonical Redis configuration');
-  record('Redis-backed repeat evaluation', { effectiveCacheEntries: keys.length });
-  flag = (await api(`/flags/${flag.id}/toggle`, { method: 'PATCH', token: owner, expected: 200 })).data;
+  insist(keys.length === 0, 'Uncached evaluation must not populate Redis configuration cache');
+  record('Authoritative repeat evaluation without Redis config cache', { effectiveCacheEntries: keys.length });
+  flag = (await api(`/flags/${flag.id}/toggle`, { method: 'PATCH', token: owner, body: { enabled: false, expectedVersion: flag.version }, expected: 200 })).data;
   insist(!flag.enabled, 'Toggle did not disable');
-  for (const alias of [key.toUpperCase(), key, key.toLowerCase()]) insist(!(await api(route(alias), { token: owner, expected: 200 })).data.enabled, 'Stale cache alias after toggle');
-  record('Toggle invalidates all case aliases');
-  flag = (await api(`/flags/${flag.id}/toggle`, { method: 'PATCH', token: owner, expected: 200 })).data;
+  for (const alias of [key.toUpperCase(), key, key.toLowerCase()]) insist(!(await api(route(alias), { token: owner, expected: 200 })).data.enabled, 'Stale evaluation state after toggle');
+  record('Toggle immediately visible across case aliases');
+  flag = (await api(`/flags/${flag.id}/toggle`, { method: 'PATCH', token: owner, body: { enabled: true, expectedVersion: flag.version }, expected: 200 })).data;
 
   await waitUntil(async () => {
     const rows = (await api(`/audit/${flag.flagKey}`, { token: owner, expected: 200 })).data.content;
@@ -93,8 +93,7 @@ try {
   }, 'lifecycle audit'); record('Lifecycle events reach Audit');
   await waitUntil(async () => {
     const rows = (await api(`/analytics/${flag.flagKey}`, { token: owner, expected: 200 })).data.content;
-    return ['FLAG_CREATED', 'FLAG_UPDATED', 'FLAG_TOGGLED'].every(type => rows.some(row => row.eventType === type && row.count > 0))
-      && rows.some(row => row.eventType.startsWith('EVALUATION_') && row.count > 0);
+    return ['FLAG_CREATED', 'FLAG_UPDATED', 'FLAG_TOGGLED'].every(type => rows.some(row => row.eventType === type && row.count > 0));
   }, 'lifecycle analytics'); record('Lifecycle events reach Analytics');
   await waitUntil(async () => {
     const rows = (await api('/api/notifications?size=100', { token: owner, expected: 200 })).data.content;
@@ -118,6 +117,10 @@ try {
     insist(output.trim() === `SDK_RESULT=${expected}`, 'Java SDK execution');
   }
   await javaSdk(true); record('Actual Java SDK evaluation with case alias');
+  await waitUntil(async () => {
+    const rows = (await api(`/analytics/${flag.flagKey}`, { token: owner, expected: 200 })).data.content;
+    return rows.some(row => row.eventType.startsWith('EVALUATION_') && row.count > 0);
+  }, 'runtime evaluation analytics'); record('Runtime evaluation events reach Analytics');
   await api(`/sdk-keys/${sdk.id}/revoke`, { method: 'POST', token: owner, expected: 200 });
   await api(`/runtime/v1/flags/${key}/evaluate?subject=sdk-subject`, { headers: { 'X-Feature-Flag-Key': sdk.rawKey }, expected: 401 });
   await javaSdk(false); record('Revoked SDK key rejected; Java SDK uses default');
@@ -170,6 +173,7 @@ try {
 
   // Clear producer metadata by restarting only our Flag container while our Kafka is stopped.
   // This exercises the real unavailable-metadata path rather than relying on producer buffer fill.
+  const outageSdk = (await api('/sdk-keys', { method: 'POST', token: owner, body: { name: 'Outage SDK', environment: 'DEV' }, expected: 201 })).data;
   await serviceAction('kafka', 'stop');
   try {
     await serviceAction('flag-service', 'restart');
@@ -177,7 +181,7 @@ try {
     const outageTimes = [];
     const jobs = Array.from({ length: 10 }, async () => {
       for (let i = 0; i < 40; i++) {
-        const result = await api(route(key), { token: owner, expected: 200 });
+        const result = await api(`/runtime/v1/flags/${key}/evaluate?subject=rollout-subject`, { headers: { 'X-Feature-Flag-Key': outageSdk.rawKey }, expected: 200 });
         insist(result.data.enabled === before[0].enabled, 'Telemetry outage changed decision');
         outageTimes.push(result.elapsedMs);
       }
@@ -192,7 +196,7 @@ try {
     insist(outageTimes[Math.floor(outageTimes.length * .95)] < 3000, 'Outage evaluation latency budget exceeded');
     record('Kafka unavailable: bounded admission, drops and unchanged decisions', { evaluations: outageTimes.length,
       observedP95Ms: outageTimes[Math.floor(outageTimes.length * .95)], observedMaxMs: outageTimes.at(-1), telemetryDropped: dropped });
-    await api(`/flags/${flag.id}/toggle`, { method: 'PATCH', token: owner, expected: 200 });
+    flag = (await api(`/flags/${flag.id}/toggle`, { method: 'PATCH', token: owner, body: { enabled: false, expectedVersion: flag.version }, expected: 200 })).data;
     record('Lifecycle mutation commits during Kafka outage');
   } finally { await serviceAction('kafka', 'start'); }
   await waitUntil(async () => {
@@ -200,6 +204,7 @@ try {
     return rows.length >= 5;
   }, 'outbox drains after Kafka recovery', 180000);
   record('Outbox delivers outage mutation after Kafka recovery');
+  await waitUntil(async () => (await api(`/flags/id/${flag.id}`, { token: owner })).status === 200, 'Gateway flag-service routing');
 
   await api('/flags/' + maxFlag.id, { method: 'DELETE', token: owner, expected: 200 });
   await api('/flags/' + flag.id, { method: 'DELETE', token: owner, expected: 200 });

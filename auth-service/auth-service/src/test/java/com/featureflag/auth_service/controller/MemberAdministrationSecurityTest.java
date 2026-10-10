@@ -30,6 +30,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.featureflag.auth_service.repository.SystemInvariantRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
 @WebMvcTest(MemberController.class)
 @Import({SecurityConfig.class, AuthRecipientsServiceKeyFilter.class,
         JwtAuthenticationFilter.class, MemberService.class})
@@ -37,6 +40,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class MemberAdministrationSecurityTest {
     @Autowired private MockMvc mvc;
     @MockitoBean private UserRepository users;
+    @MockitoBean private SystemInvariantRepository invariants;
+    @MockitoBean private PasswordEncoder passwordEncoder;
     @MockitoBean private InvitationService invitations;
     @MockitoBean private JwtService jwt;
     @MockitoBean private CustomUserDetailsService userDetails;
@@ -108,6 +113,7 @@ class MemberAdministrationSecurityTest {
 
     private User target(Role role) {
         User target = User.builder().id(2L).email("target@example.test").role(role).build();
+        when(users.findByIdForUpdate(2L)).thenReturn(Optional.of(target));
         when(users.findById(2L)).thenReturn(Optional.of(target));
         return target;
     }
@@ -115,6 +121,8 @@ class MemberAdministrationSecurityTest {
     private void authenticate(Role role) {
         User actor = User.builder().id(1L).email("actor@example.test").role(role).build();
         when(jwt.extractEmail("test-token")).thenReturn(actor.getEmail());
+        when(jwt.extractUserId("test-token")).thenReturn(actor.getId());
+        when(jwt.extractTokenVersion("test-token")).thenReturn(1L);
         when(userDetails.loadUserByUsername(actor.getEmail())).thenReturn(actor);
         when(jwt.isTokenValid("test-token", actor.getEmail())).thenReturn(true);
     }

@@ -17,10 +17,12 @@ import org.springframework.data.redis.core.ValueOperations;
 import java.util.List;
 import java.util.Optional;
 
+import com.featureflag.flag_service.dto.FlagEvaluationResponse;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -116,6 +118,46 @@ class RuntimeEvaluationControllerTest {
 
         assertThat(response).isNotNull();
         assertThat(response.enabled()).isTrue();
+    }
+
+    @Test
+    void committedMutationReflectsImmediatelyInRuntimeDecisionAndPublishesTelemetry() {
+        FeatureFlag flagV0 = flag("DEV", true);
+        FeatureFlag flagV1 = flag("DEV", false);
+        when(repository.findByFlagKeyAndEnvironment("checkout", "DEV"))
+                .thenReturn(Optional.of(flagV0), Optional.of(flagV1));
+
+        var response1 = controller.evaluate("checkout", "target-user", principal("DEV")).getBody();
+        assertThat(response1).isNotNull();
+        assertThat(response1.enabled()).isTrue();
+
+        var response2 = controller.evaluate("checkout", "target-user", principal("DEV")).getBody();
+        assertThat(response2).isNotNull();
+        assertThat(response2.enabled()).isFalse();
+
+        verify(telemetryPublisher, times(2)).publish(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void runtimeEvaluationAndDirectEvaluationProduceIdenticalDecisions() {
+        FeatureFlag currentFlag = flag("DEV", true);
+        when(repository.findByFlagKeyAndEnvironment("checkout", "DEV"))
+                .thenReturn(Optional.of(currentFlag));
+
+        var runtimeResponse = controller.evaluate("checkout", "target-user", principal("DEV")).getBody();
+        assertThat(runtimeResponse).isNotNull();
+
+        FlagService previewService = new FlagService(
+                repository,
+                mock(RedisTemplate.class),
+                new ObjectMapper().findAndRegisterModules(),
+                mock(OutboxService.class)
+        );
+        FlagEvaluationResponse previewResponse = previewService.evaluateFlag("checkout", "target-user", "DEV");
+
+        assertThat(runtimeResponse.enabled()).isEqualTo(previewResponse.isEnabled());
+        assertThat(runtimeResponse.flagKey()).isEqualTo(previewResponse.getFlagKey());
+        assertThat(runtimeResponse.environment()).isEqualTo(previewResponse.getEnvironment());
     }
 
     private FeatureFlag flag(

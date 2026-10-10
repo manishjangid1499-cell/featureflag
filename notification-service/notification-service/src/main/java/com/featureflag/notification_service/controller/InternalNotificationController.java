@@ -16,12 +16,21 @@ import org.springframework.web.bind.annotation.RestController;
 public class InternalNotificationController {
 
     private final InvitationEmailService invitationEmailService;
+    private final com.featureflag.notification_service.service.PasswordResetEmailService passwordResetEmailService;
 
     @PostMapping("/invitations")
     public ResponseEntity<Void> sendInvitationEmail(
             @Valid @RequestBody InvitationEmailRequest request
     ) {
         invitationEmailService.sendInvitationEmail(request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/password-resets")
+    public ResponseEntity<Void> sendPasswordResetEmail(
+            @Valid @RequestBody com.featureflag.notification_service.dto.PasswordResetEmailRequest request
+    ) {
+        passwordResetEmailService.sendPasswordResetEmail(request);
         return ResponseEntity.noContent().build();
     }
 }

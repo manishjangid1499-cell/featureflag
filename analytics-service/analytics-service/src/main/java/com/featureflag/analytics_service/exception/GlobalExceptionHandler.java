@@ -24,6 +24,14 @@ public class GlobalExceptionHandler extends ApiExceptionHandler {
                 "The requested resource was not found", request);
     }
 
+    @ExceptionHandler(UnsupportedOperationException.class)
+    public ResponseEntity<ProblemDetail> handleUnsupportedOperation(
+            UnsupportedOperationException exception, HttpServletRequest request
+    ) {
+        return problems.response(HttpStatus.BAD_REQUEST, "invalid-operation", "Invalid Operation",
+                exception.getMessage(), request);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ProblemDetail> handleGeneralException(
             Exception exception, HttpServletRequest request

@@ -359,11 +359,11 @@ class OutboxServiceTest {
                 .environment("DEV")
                 .enabled(enabled)
                 .rolloutPercentage(50)
-                .startDate(LocalDateTime.parse(
-                        "2026-08-27T10:00:00"
+                .startDate(Instant.parse(
+                        "2026-08-27T10:00:00Z"
                 ))
-                .endDate(LocalDateTime.parse(
-                        "2026-08-28T10:00:00"
+                .endDate(Instant.parse(
+                        "2026-08-28T10:00:00Z"
                 ))
                 .targetUsers(List.of("user-1", "user-2"))
                 .build();

@@ -61,3 +61,10 @@ export const updateMemberStatus = async (
 export const deleteMember = async (id: number): Promise<void> => {
   await api.delete(`/members/${id}`);
 };
+
+export const transferOwnership = async (
+  request: import("../types/auth").TransferOwnershipRequest,
+): Promise<MemberResponse> => {
+  const response = await api.post<MemberResponse>("/members/transfer-ownership", request);
+  return response.data;
+};

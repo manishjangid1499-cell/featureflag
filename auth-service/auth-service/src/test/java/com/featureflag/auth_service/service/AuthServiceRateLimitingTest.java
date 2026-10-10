@@ -89,6 +89,7 @@ class AuthServiceRateLimitingTest {
     @Test
     void correctPasswordAfterOrdinaryFailureSucceedsAndResetsState() {
         User user = User.builder()
+                .id(1L)
                 .email("user@example.com")
                 .password("encoded")
                 .role(Role.DEVELOPER)
@@ -97,7 +98,7 @@ class AuthServiceRateLimitingTest {
                 .thenReturn(Optional.of(user));
         when(passwordEncoder.matches("wrong", "encoded")).thenReturn(false);
         when(passwordEncoder.matches("correct", "encoded")).thenReturn(true);
-        when(jwtService.generateToken("user@example.com", "DEVELOPER"))
+        when(jwtService.generateToken(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("user@example.com"), org.mockito.ArgumentMatchers.eq("DEVELOPER"), org.mockito.ArgumentMatchers.any()))
                 .thenReturn("jwt");
 
         assertThatThrownBy(() -> service.login(request(

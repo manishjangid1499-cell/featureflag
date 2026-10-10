@@ -5,10 +5,14 @@ export function invitationDeliveryFeedback(
   action: "created" | "renewed",
 ) {
   if (invitation.emailDeliveryConfirmed === true) {
-    return { warning: false, message: `Invitation sent successfully to ${invitation.email}.` };
+    const actionText = action === "renewed" ? "Invitation renewed" : "Invitation created";
+    return {
+      warning: false,
+      message: `${actionText}. Outbound email dispatch accepted by mail service for ${invitation.email}. Note: Acceptance by mail provider confirms dispatch attempt, not final recipient inbox delivery.`,
+    };
   }
   return {
     warning: true,
-    message: `Invitation ${action}, but email delivery could not be confirmed. Check mail configuration and use Resend.`,
+    message: `Invitation ${action}, but email delivery could not be confirmed. Check mail configuration and use Resend (resending issues a new link and invalidates any previous invitation).`,
   };
 }

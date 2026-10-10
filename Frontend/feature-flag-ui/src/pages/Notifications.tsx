@@ -18,10 +18,14 @@ export function Notifications() {
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [deliveryWarning, setDeliveryWarning] = useState("");
 
   const handleSend = async (e: FormEvent) => {
     e.preventDefault();
     if (!recipient.trim() || !subject.trim() || !message.trim()) return;
+    setSuccessMessage("");
+    setDeliveryWarning("");
 
     try {
       setSending(true);
@@ -31,12 +35,28 @@ export function Notifications() {
         message: message.trim(),
         type: "EMAIL",
       };
-      await createNotification(payload);
+      const created = await createNotification(payload);
       await loadNotifications(0);
       setIsModalOpen(false);
       setRecipient("");
       setSubject("");
       setMessage("");
+
+      if (created.status === "SENT") {
+        setSuccessMessage(
+          `Notification dispatched. Outbound email accepted by mail service for ${created.recipient}. (Acceptance confirms dispatch attempt, not inbox receipt.)`
+        );
+        setTimeout(() => setSuccessMessage(""), 6000);
+      } else if (created.status === "FAILED") {
+        setDeliveryWarning(
+          `Notification record created, but mail delivery failed for ${created.recipient}. Check mail server configuration.`
+        );
+      } else {
+        setSuccessMessage(
+          `Notification queued (status: ${created.status}) for ${created.recipient}.`
+        );
+        setTimeout(() => setSuccessMessage(""), 6000);
+      }
     } catch (error: unknown) {
       alert(getApiErrorMessage(error, "Failed to dispatch notification."));
     } finally {
@@ -67,23 +87,6 @@ export function Notifications() {
         </div>
 
         <div className="responsive-actions" style={{ display: "flex", gap: "10px" }}>
-          <button
-            type="button"
-            onClick={() => void loadNotifications(page)}
-            style={{
-              padding: "9px 15px",
-              border: "1px solid #d1d5db",
-              background: "white",
-              color: "#374151",
-              borderRadius: "8px",
-              fontSize: "13px",
-              fontWeight: 600,
-              cursor: "pointer"
-            }}
-          >
-            ↻ Refresh
-          </button>
-
           {canManageMembers && (
             <button
               type="button"
@@ -105,13 +108,94 @@ export function Notifications() {
         </div>
       </div>
 
-      {error && (
-        <div style={{ background: "#fff1f2", border: "1px solid #fecdd3", borderRadius: "10px", padding: "14px 18px", color: "#9f1239", marginBottom: "20px" }}>
-          <strong>Service Error:</strong> {error}
+      {/* STATUS NOTICE */}
+      <div style={{
+        background: "#f8fafc",
+        border: "1px solid #e2e8f0",
+        borderRadius: "8px",
+        padding: "10px 14px",
+        marginBottom: "18px",
+        fontSize: "12px",
+        color: "#475569",
+        lineHeight: "1.4"
+      }}>
+        <strong style={{ color: "#1e293b" }}>Delivery Status:</strong>
+        <span style={{ margin: "0 4px", fontWeight: 700, color: "#15803d" }}>SENT (PROVIDER ACCEPTED)</span> confirms outbound acceptance by the upstream SMTP/mail provider, but does not guarantee receipt in the recipient&apos;s personal inbox.
+        <span style={{ margin: "0 4px", fontWeight: 700, color: "#b91c1c" }}>FAILED</span> indicates mail dispatch was rejected.
+        <span style={{ margin: "0 4px", fontWeight: 700, color: "#92400e" }}>PENDING</span> indicates the dispatch request is queued.
+      </div>
+
+      {deliveryWarning && (
+        <div role="alert" style={{ background: "#fffbeb", border: "1px solid #fcd34d",
+          borderRadius: "10px", padding: "12px 18px", color: "#92400e", marginBottom: "20px" }}>
+          {deliveryWarning}
         </div>
       )}
 
-      {loading ? (
+      {successMessage && (
+        <div
+          style={{
+            background: "#f0fdf4",
+            border: "1px solid #bbf7d0",
+            borderRadius: "10px",
+            padding: "12px 18px",
+            color: "#166534",
+            fontSize: "13px",
+            fontWeight: 600,
+            marginBottom: "20px",
+          }}
+        >
+          ✓ {successMessage}
+        </div>
+      )}
+
+      {error ? (
+        <div style={{
+          background: "white",
+          borderRadius: "14px",
+          border: "1px solid #fee2e2",
+          padding: "48px 20px",
+          textAlign: "center",
+          marginBottom: "20px"
+        }}>
+          <div style={{
+            width: "48px",
+            height: "48px",
+            borderRadius: "50%",
+            background: "#fee2e2",
+            color: "#dc2626",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "20px",
+            margin: "0 auto 14px auto"
+          }}>
+            !
+          </div>
+          <h3 style={{ margin: "0 0 8px 0", fontSize: "16px", fontWeight: 700, color: "#991b1b" }}>
+            Failed to Load Notifications
+          </h3>
+          <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "#6b7280" }}>
+            {error}
+          </p>
+          <button
+            type="button"
+            onClick={() => void loadNotifications(page)}
+            style={{
+              padding: "8px 16px",
+              background: "#be123c",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: "pointer"
+            }}
+          >
+            ↻ Retry
+          </button>
+        </div>
+      ) : loading ? (
         <div style={{ background: "white", padding: "60px 20px", borderRadius: "14px", border: "1px solid #e5e7eb", textAlign: "center", color: "#6b7280" }}>
           <p style={{ margin: 0, fontSize: "14px", fontWeight: 600 }}>Loading notifications...</p>
         </div>
@@ -127,7 +211,7 @@ export function Notifications() {
               <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
                 <th style={{ padding: "12px 20px", fontSize: "11px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>Recipient</th>
                 <th style={{ padding: "12px 20px", fontSize: "11px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>Subject</th>
-                <th style={{ padding: "12px 20px", fontSize: "11px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>Status</th>
+                <th style={{ padding: "12px 20px", fontSize: "11px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>Dispatch Status</th>
                 <th style={{ padding: "12px 20px", fontSize: "11px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>Created At</th>
                 {canManageMembers && <th style={{ padding: "12px 20px", fontSize: "11px", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", textAlign: "right" }}>Action</th>}
               </tr>
@@ -143,15 +227,18 @@ export function Notifications() {
                     <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "2px" }}>{n.message}</div>
                   </td>
                   <td style={{ padding: "14px 20px" }}>
-                    <span style={{
-                      padding: "3px 9px",
-                      borderRadius: "12px",
-                      fontSize: "11px",
-                      fontWeight: 700,
-                      background: n.status === "SENT" ? "#dcfce7" : n.status === "FAILED" ? "#fee2e2" : "#fef3c7",
-                      color: n.status === "SENT" ? "#15803d" : n.status === "FAILED" ? "#b91c1c" : "#92400e"
-                    }}>
-                      {n.status}
+                    <span
+                      title={n.status === "SENT" ? "Outbound dispatch accepted by mail service" : n.status === "FAILED" ? "Dispatch failed" : "Queued for dispatch"}
+                      style={{
+                        padding: "3px 9px",
+                        borderRadius: "12px",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        background: n.status === "SENT" ? "#dcfce7" : n.status === "FAILED" ? "#fee2e2" : "#fef3c7",
+                        color: n.status === "SENT" ? "#15803d" : n.status === "FAILED" ? "#b91c1c" : "#92400e"
+                      }}
+                    >
+                      {n.status === "SENT" ? "SENT (PROVIDER ACCEPTED)" : n.status}
                     </span>
                   </td>
                   <td style={{ padding: "14px 20px", fontSize: "12px", color: "#6b7280" }}>
@@ -218,7 +305,6 @@ export function Notifications() {
                   value={recipient}
                   onChange={(e) => setRecipient(e.target.value)}
                   required
-                  placeholder="e.g. dev-team@corp.io"
                   style={{ width: "100%", padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: "7px", fontSize: "13px" }}
                 />
               </div>
@@ -230,7 +316,6 @@ export function Notifications() {
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
                   required
-                  placeholder="e.g. Production Release Alert"
                   style={{ width: "100%", padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: "7px", fontSize: "13px" }}
                 />
               </div>
@@ -242,7 +327,6 @@ export function Notifications() {
                   onChange={(e) => setMessage(e.target.value)}
                   required
                   rows={3}
-                  placeholder="Enter notification message..."
                   style={{ width: "100%", padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: "7px", fontSize: "13px", resize: "vertical" }}
                 />
               </div>

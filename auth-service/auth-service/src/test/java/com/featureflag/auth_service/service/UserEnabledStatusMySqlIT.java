@@ -28,14 +28,25 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
 @DataJpaTest
 @ActiveProfiles("mysql-it")
 @AutoConfigureTestDatabase(
         replace = AutoConfigureTestDatabase.Replace.NONE
 )
 @Testcontainers
-@Import(MemberService.class)
+@Import({MemberService.class, UserEnabledStatusMySqlIT.TestConfig.class})
 class UserEnabledStatusMySqlIT {
+    @TestConfiguration
+    static class TestConfig {
+        @Bean
+        public PasswordEncoder passwordEncoder() {
+            return new BCryptPasswordEncoder(4);
+        }
+    }
 
     @Container
     @ServiceConnection
@@ -80,8 +91,10 @@ class UserEnabledStatusMySqlIT {
 
         JwtService jwtService = mock(JwtService.class);
         when(jwtService.generateToken(
+                user.getId(),
                 "managed@example.test",
-                "DEVELOPER"
+                "DEVELOPER",
+                1L
         )).thenReturn("issued-token");
         AuthService authService = new AuthService(
                 userRepository,

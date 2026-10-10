@@ -4,11 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.featureflag.flag_service.dto.FlagEvaluationResponse;
 import com.featureflag.flag_service.dto.FlagRequest;
 import com.featureflag.flag_service.entity.FeatureFlag;
+import com.featureflag.flag_service.exception.InvalidOperationException;
 import com.featureflag.flag_service.exception.ResourceNotFoundException;
 import com.featureflag.flag_service.repository.FeatureFlagRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -17,13 +19,14 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Clock;
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class FlagService {
 
@@ -31,6 +34,42 @@ public class FlagService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
     private final OutboxService outboxService;
+    private final Clock clock;
+    private final boolean evaluationConfigCacheEnabled;
+
+    @Autowired
+    public FlagService(
+            FeatureFlagRepository repository,
+            RedisTemplate<String, Object> redisTemplate,
+            ObjectMapper objectMapper,
+            OutboxService outboxService,
+            Clock clock,
+            @org.springframework.beans.factory.annotation.Value("${features.evaluation.config-cache-enabled:false}")
+            boolean evaluationConfigCacheEnabled) {
+        this.repository = repository;
+        this.redisTemplate = redisTemplate;
+        this.objectMapper = objectMapper;
+        this.outboxService = outboxService;
+        this.clock = clock;
+        this.evaluationConfigCacheEnabled = evaluationConfigCacheEnabled;
+    }
+
+    public FlagService(
+            FeatureFlagRepository repository,
+            RedisTemplate<String, Object> redisTemplate,
+            ObjectMapper objectMapper,
+            OutboxService outboxService,
+            Clock clock) {
+        this(repository, redisTemplate, objectMapper, outboxService, clock, false);
+    }
+
+    public FlagService(
+            FeatureFlagRepository repository,
+            RedisTemplate<String, Object> redisTemplate,
+            ObjectMapper objectMapper,
+            OutboxService outboxService) {
+        this(repository, redisTemplate, objectMapper, outboxService, Clock.systemUTC(), false);
+    }
 
     private static final String FLAG_CONFIG_CACHE_PREFIX = "flag:config:";
     private static final Duration FLAG_CONFIG_CACHE_TTL = Duration.ofMinutes(5);
@@ -120,8 +159,9 @@ public class FlagService {
             Long id,
             FlagRequest request
     ) {
-        String environment =
-                normalizeEnvironment(request.getEnvironment());
+        if (request.getEnvironment() != null) {
+            normalizeEnvironment(request.getEnvironment());
+        }
         validateSchedule(
                 request.getStartDate(),
                 request.getEndDate()
@@ -135,17 +175,14 @@ public class FlagService {
                                  )
                         );
 
-        String oldFlagKey =
-                flag.getFlagKey();
-        String oldEnvironment =
-                flag.getEnvironment();
+        validateIdentityImmutability(flag, request);
+
         flag.setName(request.getName());
-        flag.setFlagKey(request.getFlagKey());
+        // Identity fields (flagKey and environment) are immutable; preserve existing stored identity
         if (request.getEnabled() != null) {
             flag.setEnabled(request.getEnabled());
         }
         flag.setDescription(request.getDescription());
-        flag.setEnvironment(environment);
         if (request.getRolloutPercentage() != null) {
             flag.setRolloutPercentage(request.getRolloutPercentage());
         }
@@ -158,18 +195,9 @@ public class FlagService {
         FeatureFlag updatedFlag = repository.save(flag);
 
         invalidateFlagConfigCacheAfterCommit(
-                oldEnvironment,
-                oldFlagKey
+                updatedFlag.getEnvironment(),
+                updatedFlag.getFlagKey()
         );
-
-        if (!oldEnvironment.equals(updatedFlag.getEnvironment())
-                || !oldFlagKey.equals(updatedFlag.getFlagKey())) {
-
-            invalidateFlagConfigCacheAfterCommit(
-                    updatedFlag.getEnvironment(),
-                    updatedFlag.getFlagKey()
-            );
-        }
 
         publishFlagEvent(
                 "FLAG_UPDATED",
@@ -225,7 +253,16 @@ public class FlagService {
 
 
     @Transactional
-    public FeatureFlag toggleFlag(Long id) {
+    public FeatureFlag setEnabledState(Long id, Boolean desiredEnabled, Long expectedVersion) {
+        if (desiredEnabled == null) {
+            throw new InvalidOperationException("enabled is required");
+        }
+        if (expectedVersion == null) {
+            throw new InvalidOperationException("expectedVersion is required");
+        }
+        if (expectedVersion < 0) {
+            throw new InvalidOperationException("expectedVersion cannot be negative");
+        }
 
         FeatureFlag flag =
                 repository.findById(id)
@@ -235,7 +272,17 @@ public class FlagService {
                                 )
                         );
 
-        flag.setEnabled(!Boolean.TRUE.equals(flag.getEnabled()));
+        if (!Objects.equals(flag.getVersion(), expectedVersion)) {
+            throw new ObjectOptimisticLockingFailureException(FeatureFlag.class, id);
+        }
+
+        // Setting an already-matching state with the CURRENT version is a no-op:
+        // no misleading change event or unnecessary version increment.
+        if (Objects.equals(flag.getEnabled(), desiredEnabled)) {
+            return flag;
+        }
+
+        flag.setEnabled(desiredEnabled);
 
         FeatureFlag updatedFlag = repository.save(flag);
 
@@ -262,6 +309,11 @@ public class FlagService {
         return updatedFlag;
     }
 
+    @Transactional
+    public FeatureFlag toggleFlag(Long id, Boolean desiredEnabled, Long expectedVersion) {
+        return setEnabledState(id, desiredEnabled, expectedVersion);
+    }
+
 
     public FlagEvaluationResponse evaluateFlag(
             String flagKey,
@@ -282,7 +334,7 @@ public class FlagService {
                         normalizedEnvironment
                 );
 
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = clock.instant();
 
         boolean withinSchedule = true;
 
@@ -336,6 +388,22 @@ public class FlagService {
             String flagKey,
             String environment
     ) {
+        if (!evaluationConfigCacheEnabled) {
+            return repository
+                    .findByFlagKeyAndEnvironment(
+                            flagKey,
+                            environment
+                    )
+                    .orElseThrow(() ->
+                            new ResourceNotFoundException(
+                                    "Flag not found: "
+                                            + flagKey
+                                            + " in environment "
+                                            + environment
+                            )
+                    );
+        }
+
         String cacheKey =
                 buildFlagConfigCacheKey(
                         environment,
@@ -381,12 +449,12 @@ public class FlagService {
                         )
                         .orElseThrow(() ->
                                 new ResourceNotFoundException(
-                                        "Flag not found: "
-                                                + flagKey
-                                                + " in environment "
-                                                + environment
-                                )
-                        );
+                                    "Flag not found: "
+                                            + flagKey
+                                            + " in environment "
+                                            + environment
+                            )
+                    );
         try {
             String jsonToCache =
                     objectMapper.writeValueAsString(
@@ -489,7 +557,7 @@ public class FlagService {
     }
 
 
-    private String normalizeEnvironment(String environment) {
+    public static String normalizeEnvironment(String environment) {
         if (environment == null || environment.isBlank()) {
             throw new IllegalArgumentException(
                     "environment must not be blank"
@@ -507,9 +575,22 @@ public class FlagService {
         }
         return normalized;
     }
+
+    public static void validateIdentityImmutability(FeatureFlag existing, FlagRequest request) {
+        if (request.getFlagKey() != null && !existing.getFlagKey().equalsIgnoreCase(request.getFlagKey().trim())) {
+            throw new InvalidOperationException("Flag key cannot be changed after creation");
+        }
+        if (request.getEnvironment() != null) {
+            String normalizedRequested = normalizeEnvironment(request.getEnvironment());
+            String normalizedExisting = normalizeEnvironment(existing.getEnvironment());
+            if (!normalizedExisting.equalsIgnoreCase(normalizedRequested)) {
+                throw new InvalidOperationException("Flag environment cannot be changed after creation");
+            }
+        }
+    }
     private void validateSchedule(
-            LocalDateTime startDate,
-            LocalDateTime endDate
+            Instant startDate,
+            Instant endDate
     ) {
         if (startDate != null
                 && endDate != null

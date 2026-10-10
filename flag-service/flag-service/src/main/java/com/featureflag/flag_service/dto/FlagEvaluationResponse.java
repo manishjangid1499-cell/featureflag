@@ -1,9 +1,10 @@
 package com.featureflag.flag_service.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Data
 @AllArgsConstructor
@@ -22,12 +23,14 @@ public class FlagEvaluationResponse {
     /**
      * Scheduled activation time.
      */
-    private LocalDateTime startDate;
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
+    private Instant startDate;
 
     /**
      * Scheduled expiration time.
      */
-    private LocalDateTime endDate;
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
+    private Instant endDate;
 
     /**
      * Indicates whether the current time

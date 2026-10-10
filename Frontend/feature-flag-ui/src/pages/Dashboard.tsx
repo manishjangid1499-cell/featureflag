@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { getAllFlags } from "../api/flagApi";
@@ -7,45 +7,89 @@ import type { FeatureFlag } from "../types/featureFlag";
 import type { AuditLog } from "../types/audit";
 import { collectAllPages } from "../types/page";
 
-export function Dashboard() {
-  const { user, isViewer, canManageMembers } = useAuth();
+function formatEventType(type: string): string {
+  switch (type) {
+    case "FLAG_CREATED":
+      return "Flag created";
+    case "FLAG_UPDATED":
+      return "Flag updated";
+    case "FLAG_TOGGLED":
+      return "Flag toggled";
+    case "FLAG_DELETED":
+      return "Flag deleted";
+    case "EVALUATION":
+      return "Flag evaluated";
+    default:
+      return type
+        ? type.replace(/_/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase())
+        : "Unknown event";
+  }
+}
+
+import type { AuthUser } from "../types/auth";
+
+interface DashboardSessionProps {
+  user: AuthUser | null;
+  canManageMembers: boolean;
+}
+
+function DashboardSession({ user, canManageMembers }: DashboardSessionProps) {
   const displayName = user?.name?.trim() || user?.email;
   const navigate = useNavigate();
 
   const [flags, setFlags] = useState<FeatureFlag[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [flagsError, setFlagsError] = useState("");
+  const [auditError, setAuditError] = useState("");
+  const [reloadIndex, setReloadIndex] = useState(0);
+  const requestVersion = useRef(0);
 
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
-      setError("");
-      const [flagsRes, auditRes] = await Promise.allSettled([
-        collectAllPages(getAllFlags),
-        getAllAuditLogs(0, 5),
-      ]);
+  useEffect(() => {
+    let cancelled = false;
+    const version = ++requestVersion.current;
+
+    Promise.allSettled([
+      collectAllPages(getAllFlags),
+      getAllAuditLogs(0, 5),
+    ]).then(([flagsRes, auditRes]) => {
+      if (cancelled || requestVersion.current !== version) return;
 
       if (flagsRes.status === "fulfilled") {
         setFlags(flagsRes.value);
-      } else if (flagsRes.status === "rejected") {
-        setError("Could not load flags from backend.");
+      } else {
+        setFlagsError("Could not load flags from backend.");
       }
 
       if (auditRes.status === "fulfilled") {
         setAuditLogs(auditRes.value.content);
-      } else if (auditRes.status === "rejected") {
+      } else {
+        setAuditError("Could not load recent audit activity from backend.");
       }
-    } catch {
-      setError("Failed to communicate with API Gateway.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    }).catch(() => {
+      if (cancelled || requestVersion.current !== version) return;
+      setFlagsError("Failed to communicate with API Gateway.");
+      setAuditError("Failed to communicate with API Gateway.");
+    }).finally(() => {
+      if (!cancelled && requestVersion.current === version) {
+        setLoading(false);
+      }
+    });
 
-  useEffect(() => {
-    fetchDashboardData();
+    return () => {
+      cancelled = true;
+      requestVersion.current += 1;
+    };
+  }, [reloadIndex]);
+
+  const handleRetry = useCallback(() => {
+    setLoading(true);
+    setFlagsError("");
+    setAuditError("");
+    setReloadIndex((c) => c + 1);
   }, []);
+
+  const error = flagsError || auditError;
 
   const totalFlags = flags.length;
   const enabledFlags = flags.filter((f) => f.enabled).length;
@@ -80,44 +124,19 @@ export function Dashboard() {
         gap: "20px"
       }}>
         <div>
-          <span style={{
-            background: "rgba(255, 255, 255, 0.15)",
-            padding: "4px 12px",
-            borderRadius: "20px",
-            fontSize: "11px",
-            fontWeight: 700,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase"
-          }}>
-            {user?.role} CONSOLE
-          </span>
-          <h1 style={{ margin: "10px 0 6px 0", fontSize: "26px", fontWeight: 800 }}>
+          <span className="sr-only">{user?.role} CONSOLE</span>
+          <div style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.08em", color: "#a5b4fc", fontWeight: 700, marginBottom: "4px" }}>
+            Dashboard
+          </div>
+          <h1 style={{ margin: "0 0 6px 0", fontSize: "26px", fontWeight: 800 }}>
             Welcome back, {displayName}
           </h1>
           <p style={{ margin: 0, fontSize: "14px", color: "#c7d2fe", maxWidth: "600px" }}>
-            {isViewer
-              ? "You have read-only access to inspect feature flag rollouts, audit events, and metrics."
-              : "Control platform feature releases, target environments, and inspect runtime evaluation metrics."}
+            Manage feature flags and review recent activity.
           </p>
         </div>
 
         <div className="responsive-actions" style={{ display: "flex", gap: "10px" }}>
-          <button
-            type="button"
-            onClick={fetchDashboardData}
-            style={{
-              padding: "10px 16px",
-              background: "rgba(255, 255, 255, 0.1)",
-              color: "white",
-              border: "1px solid rgba(255, 255, 255, 0.2)",
-              borderRadius: "8px",
-              fontSize: "13px",
-              fontWeight: 600,
-              cursor: "pointer"
-            }}
-          >
-            ↻ Refresh
-          </button>
           <button
             type="button"
             onClick={() => navigate("/flags")}
@@ -132,7 +151,7 @@ export function Dashboard() {
               cursor: "pointer"
             }}
           >
-            Manage Flags →
+            Manage flags →
           </button>
         </div>
       </div>
@@ -154,7 +173,7 @@ export function Dashboard() {
           </div>
           <button
             type="button"
-            onClick={fetchDashboardData}
+            onClick={handleRetry}
             style={{
               padding: "6px 12px",
               background: "#be123c",
@@ -180,17 +199,17 @@ export function Dashboard() {
         <div style={{ background: "white", borderRadius: "12px", padding: "20px", border: "1px solid #e5e7eb" }}>
           <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: 600 }}>TOTAL FLAGS</span>
           <div style={{ fontSize: "28px", fontWeight: 800, color: "#111827", marginTop: "4px" }}>
-            {loading ? "..." : totalFlags}
+            {flagsError ? "—" : loading ? "..." : totalFlags}
           </div>
-          <div style={{ fontSize: "12px", color: "#10b981", marginTop: "4px", fontWeight: 600 }}>
-            {enabledFlags} Active ({totalFlags > 0 ? Math.round((enabledFlags / totalFlags) * 100) : 0}%)
+          <div style={{ fontSize: "12px", color: flagsError ? "#9ca3af" : "#10b981", marginTop: "4px", fontWeight: 600 }}>
+            {flagsError ? "Metrics unavailable" : `${enabledFlags} Enabled (${totalFlags > 0 ? Math.round((enabledFlags / totalFlags) * 100) : 0}%)`}
           </div>
         </div>
 
         <div style={{ background: "white", borderRadius: "12px", padding: "20px", border: "1px solid #e5e7eb" }}>
           <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: 600 }}>DEV ENVIRONMENT</span>
           <div style={{ fontSize: "28px", fontWeight: 800, color: "#4b5563", marginTop: "4px" }}>
-            {loading ? "..." : devCount}
+            {flagsError ? "—" : loading ? "..." : devCount}
           </div>
           <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "4px" }}>Development flags</div>
         </div>
@@ -198,17 +217,17 @@ export function Dashboard() {
         <div style={{ background: "white", borderRadius: "12px", padding: "20px", border: "1px solid #e5e7eb" }}>
           <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: 600 }}>QA & STAGING</span>
           <div style={{ fontSize: "28px", fontWeight: 800, color: "#3730a3", marginTop: "4px" }}>
-            {loading ? "..." : qaCount + stagingCount}
+            {flagsError ? "—" : loading ? "..." : qaCount + stagingCount}
           </div>
           <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "4px" }}>QA: {qaCount} | Staging: {stagingCount}</div>
         </div>
 
         <div style={{ background: "white", borderRadius: "12px", padding: "20px", border: "1px solid #e5e7eb" }}>
-          <span style={{ fontSize: "12px", color: "#dc2626", fontWeight: 600 }}>PRODUCTION FLAGS</span>
-          <div style={{ fontSize: "28px", fontWeight: 800, color: "#dc2626", marginTop: "4px" }}>
-            {loading ? "..." : prodCount}
+          <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: 600 }}>PRODUCTION FLAGS</span>
+          <div style={{ fontSize: "28px", fontWeight: 800, color: "#111827", marginTop: "4px" }}>
+            {flagsError ? "—" : loading ? "..." : prodCount}
           </div>
-          <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "4px" }}>Live in production</div>
+          <div style={{ fontSize: "11px", color: "#9ca3af", marginTop: "4px" }}>Flags configured in PROD</div>
         </div>
       </div>
 
@@ -218,19 +237,39 @@ export function Dashboard() {
         <div style={{ background: "white", borderRadius: "14px", border: "1px solid #e5e7eb", padding: "24px" }}>
           <div className="responsive-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" }}>
             <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 700, color: "#111827" }}>
-              Recent Flag Activity
+              Recent activity
             </h3>
             <button
               type="button"
               onClick={() => navigate("/audit")}
               style={{ background: "none", border: "none", color: "#4f46e5", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
             >
-              View All Logs →
+              View audit logs →
             </button>
           </div>
 
           {loading ? (
             <p style={{ color: "#6b7280", fontSize: "13px" }}>Loading activity stream...</p>
+          ) : auditError ? (
+            <div style={{ padding: "16px", background: "#fef2f2", border: "1px solid #fee2e2", borderRadius: "8px", textAlign: "center" }}>
+              <p style={{ color: "#991b1b", fontSize: "13px", margin: "0 0 10px 0", fontWeight: 600 }}>{auditError}</p>
+              <button
+                type="button"
+                onClick={handleRetry}
+                style={{
+                  padding: "5px 12px",
+                  background: "#fee2e2",
+                  border: "1px solid #f87171",
+                  color: "#991b1b",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                ↻ Retry
+              </button>
+            </div>
           ) : auditLogs.length === 0 ? (
             <p style={{ color: "#9ca3af", fontSize: "13px", margin: 0 }}>No recent audit activity recorded.</p>
           ) : (
@@ -259,14 +298,14 @@ export function Dashboard() {
                       color: log.eventType?.includes("DELETE") ? "#b91c1c" : "#3730a3",
                       marginRight: "8px"
                     }}>
-                      {log.eventType}
+                      {formatEventType(log.eventType)}
                     </span>
                     <strong style={{ fontSize: "13px", color: "#111827", fontFamily: "monospace" }}>
                       {log.flagKey}
                     </strong>
                   </div>
                   <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-                    {log.timestamp ? new Date(log.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Just now"}
+                    {log.timestamp ? new Date(log.timestamp).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "Just now"}
                   </span>
                 </div>
               ))}
@@ -359,6 +398,19 @@ export function Dashboard() {
         </div>
       </div>
     </div>
+  );
+}
+
+export function Dashboard() {
+  const { user, canManageMembers } = useAuth();
+  const sessionKey = `${user?.email || "anonymous"}-${user?.role || "none"}`;
+
+  return (
+    <DashboardSession
+      key={sessionKey}
+      user={user}
+      canManageMembers={canManageMembers}
+    />
   );
 }
 

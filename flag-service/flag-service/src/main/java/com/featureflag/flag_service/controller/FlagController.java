@@ -3,8 +3,8 @@ package com.featureflag.flag_service.controller;
 import com.featureflag.flag_service.dto.FlagEvaluationResponse;
 import com.featureflag.flag_service.dto.FlagRequest;
 import com.featureflag.flag_service.dto.FlagResponse;
+import com.featureflag.flag_service.dto.FlagToggleRequest;
 import com.featureflag.flag_service.dto.PageResponse;
-import com.featureflag.flag_service.service.FlagEvaluationTelemetryService;
 import com.featureflag.flag_service.service.FlagMutationAuditService;
 import com.featureflag.flag_service.service.FlagQueryService;
 import com.featureflag.flag_service.service.FlagService;
@@ -39,8 +39,6 @@ import org.springframework.web.bind.annotation.*;
 public class FlagController {
 
     private final FlagService flagService;
-    private final FlagEvaluationTelemetryService
-            flagEvaluationTelemetryService;
     private final FlagMutationAuditService
             flagMutationAuditService;
     private final FlagQueryService flagQueryService;
@@ -62,7 +60,7 @@ public class FlagController {
                 FlagResponse.from(
                         flagMutationAuditService.createFlag(
                                 request,
-                                authentication.getName()
+                                resolveUser(authentication)
                         )
                 )
         );
@@ -127,7 +125,6 @@ public class FlagController {
             @PathVariable
             @Pattern(regexp = FlagRequest.KEY_PATTERN, message = "Invalid flag key format or length")
             String key,
-
             @Parameter(
                     description = "Environment",
                     example = "DEV"
@@ -141,11 +138,11 @@ public class FlagController {
     }
 
     @Operation(
-            summary = "Evaluate a feature flag",
-            description = "Evaluates whether a feature flag should be enabled for a user given schedule, targeting whitelist, and rollout bucket"
+            summary = "Preview flag evaluation",
+            description = "Previews whether a feature flag should be enabled for a user given schedule, targeting whitelist, and rollout bucket. Does not publish application evaluation telemetry."
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Flag evaluated successfully"),
+            @ApiResponse(responseCode = "200", description = "Flag preview evaluated successfully"),
             @ApiResponse(responseCode = "404", description = "Flag not found")
     })
     @GetMapping("/{flagKey}/evaluate")
@@ -160,7 +157,7 @@ public class FlagController {
             @RequestParam String environment) {
 
         FlagEvaluationResponse response =
-                flagEvaluationTelemetryService.evaluateFlag(
+                flagService.evaluateFlag(
                         flagKey,
                         userId,
                         environment
@@ -185,7 +182,7 @@ public class FlagController {
                 flagMutationAuditService.updateFlag(
                         id,
                         request,
-                        authentication.getName()
+                        resolveUser(authentication)
                 )
         ));
     }
@@ -203,27 +200,35 @@ public class FlagController {
 
         String message = flagMutationAuditService.deleteFlag(
                 id,
-                authentication.getName()
+                resolveUser(authentication)
         );
         return ResponseEntity.ok(message);
     }
 
-    @Operation(summary = "Toggle feature flag", description = "Inverts the enabled state of a feature flag and publishes a FLAG_TOGGLED Kafka event")
+    @Operation(summary = "Toggle feature flag", description = "Updates the enabled state of a feature flag with explicit desired state and optimistic version checking")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Feature flag toggled successfully"),
-            @ApiResponse(responseCode = "404", description = "Flag not found")
+            @ApiResponse(responseCode = "200", description = "Feature flag enabled state updated successfully"),
+            @ApiResponse(responseCode = "400", description = "Missing or invalid request parameters"),
+            @ApiResponse(responseCode = "404", description = "Flag not found"),
+            @ApiResponse(responseCode = "409", description = "Version conflict")
     })
     @PatchMapping("/{id}/toggle")
     public ResponseEntity<FlagResponse> toggleFlag(
             @Parameter(description = "Feature flag ID", example = "1")
             @PathVariable Long id,
+            @Valid @RequestBody FlagToggleRequest request,
             Authentication authentication) {
 
         return ResponseEntity.ok(FlagResponse.from(
                 flagMutationAuditService.toggleFlag(
                         id,
-                        authentication.getName()
+                        request,
+                        resolveUser(authentication)
                 )
         ));
+    }
+
+    private String resolveUser(Authentication authentication) {
+        return authentication != null ? authentication.getName() : "system";
     }
 }
