@@ -107,15 +107,15 @@ The VM's usable user-space `MemTotal` is approximately 6,800 - 6,950 MiB. Contai
 | **kafka** | `800 MiB` | `KAFKA_HEAP_OPTS: "-Xms384m -Xmx384m"` | KRaft broker & metadata controller |
 | **eureka-server** | `384 MiB` | `-Xms192m -Xmx192m -XX:MaxMetaspaceSize=96m` | Discovery registry |
 | **auth-service** | `550 MiB` | `-Xms256m -Xmx256m -XX:MaxMetaspaceSize=128m` | User auth, RBAC, tokens |
-| **flag-service** | `650 MiB` | `-Xms320m -Xmx320m -XX:MaxMetaspaceSize=128m` | Flag evaluation & rules |
-| **audit-service** | `450 MiB` | `-Xms200m -Xmx200m -XX:MaxMetaspaceSize=112m` | Audit event consumer |
+| **flag-service** | `650 MiB` | `-Xms320m -Xmx320m -XX:MaxMetaspaceSize=192m` | Flag evaluation & rules |
+| **audit-service** | `600 MiB` | `-Xms200m -Xmx200m -XX:MaxMetaspaceSize=192m` | Audit event consumer |
 | **analytics-service** | `450 MiB` | `-Xms200m -Xmx200m -XX:MaxMetaspaceSize=112m` | Analytics event consumer |
-| **notification-service** | `450 MiB` | `-Xms200m -Xmx200m -XX:MaxMetaspaceSize=112m` | Notification consumer & SMTP |
+| **notification-service** | `600 MiB` | `-Xms200m -Xmx200m -XX:MaxMetaspaceSize=192m` | Notification consumer & SMTP |
 | **api-gateway** | `550 MiB` | `-Xms256m -Xmx256m -XX:MaxMetaspaceSize=128m` | Netty/WebFlux reverse proxy |
-| **Steady-State Container Cap** | **5,184 MiB** | **~2,008 MiB JVM Heaps** | **12 steady-state containers** |
+| **Steady-State Container Cap** | **5,484 MiB** | **~2,008 MiB JVM Heaps** | **12 steady-state containers** |
 | **kafka-init** (one-shot) | `256 MiB` | `KAFKA_HEAP_OPTS: "-Xms64m -Xmx64m"` | Topic provisioning (exits 0) |
-| **Peak Cap During Startup** | **5,440 MiB** | — | **Steady-state + kafka-init** |
-| **Provisional OS / Native Headroom** | **~1,450 - 1,600 MiB** | Linux kernel, systemd, SSH, JVM off-heap | **Safety margin** |
+| **Peak Cap During Startup** | **5,740 MiB** | — | **Steady-state + kafka-init** |
+| **Provisional OS / Native Headroom** | **~1,060 - 1,210 MiB** | Host OS and system services; JVM native memory is included in container caps | **Safety margin** |
 
 > **Important Operational Note**: These container limits are **provisional budgets**, not an absolute guarantee against OOM kills. In Java 21, JVM native memory (Metaspace, JIT compiler, thread stacks, Netty direct buffers) operates outside the heap. Under production load, monitor actual RSS memory with `sudo -n docker stats` and tune limits as necessary.
 
@@ -208,6 +208,7 @@ Store all secrets **outside the Git checkout** in `/home/ubuntu/secrets`:
    ```bash
    mkdir -p /home/ubuntu/secrets /home/ubuntu/feature-flag-platform/acme-challenge
    chmod 700 /home/ubuntu/secrets
+   chmod 755 /home/ubuntu/feature-flag-platform/acme-challenge
 
    # Generate dedicated 2048-bit RSA keypair
    openssl genpkey -algorithm RSA -out /home/ubuntu/secrets/jwt-private.pem -pkeyopt rsa_keygen_bits:2048
@@ -297,6 +298,7 @@ Before updating renewal configuration, verify externally that `edge-proxy` corre
 
 ```bash
 mkdir -p /home/ubuntu/feature-flag-platform/acme-challenge/.well-known/acme-challenge
+chmod 755 /home/ubuntu/feature-flag-platform/acme-challenge /home/ubuntu/feature-flag-platform/acme-challenge/.well-known /home/ubuntu/feature-flag-platform/acme-challenge/.well-known/acme-challenge
 echo "test-challenge-ok" > /home/ubuntu/feature-flag-platform/acme-challenge/.well-known/acme-challenge/test-token
 
 # Execute from an external machine or curl against public domain:
