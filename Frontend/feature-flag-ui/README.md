@@ -11,9 +11,9 @@ npm ci
 npm run dev
 ```
 
-Vite serves the UI on `http://localhost:5173` and proxies API requests to Gateway
+Vite serves the UI on `http://localhost:5174` and proxies API requests to Gateway
 on port 8080. Start the backend with its `local` profiles and configure invitation
-links for the same frontend origin. See the [root setup guide](../../README.md)
+links for the same frontend origin. See the [root setup guide](../../docs/GETTING_STARTED.md)
 and [local Kafka guide](../../docs/local-event-pipeline.md).
 
 ```sh
