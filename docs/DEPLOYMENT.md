@@ -109,13 +109,13 @@ The VM's usable user-space `MemTotal` is approximately 6,800 - 6,950 MiB. Contai
 | **auth-service** | `550 MiB` | `-Xms256m -Xmx256m -XX:MaxMetaspaceSize=128m` | User auth, RBAC, tokens |
 | **flag-service** | `650 MiB` | `-Xms320m -Xmx320m -XX:MaxMetaspaceSize=192m` | Flag evaluation & rules |
 | **audit-service** | `600 MiB` | `-Xms200m -Xmx200m -XX:MaxMetaspaceSize=192m` | Audit event consumer |
-| **analytics-service** | `450 MiB` | `-Xms200m -Xmx200m -XX:MaxMetaspaceSize=112m` | Analytics event consumer |
+| **analytics-service** | `600 MiB` | `-Xms200m -Xmx200m -XX:MaxMetaspaceSize=192m` | Analytics event consumer |
 | **notification-service** | `600 MiB` | `-Xms200m -Xmx200m -XX:MaxMetaspaceSize=192m` | Notification consumer & SMTP |
 | **api-gateway** | `550 MiB` | `-Xms256m -Xmx256m -XX:MaxMetaspaceSize=128m` | Netty/WebFlux reverse proxy |
-| **Steady-State Container Cap** | **5,484 MiB** | **~2,008 MiB JVM Heaps** | **12 steady-state containers** |
+| **Steady-State Container Cap** | **5,634 MiB** | **~2,008 MiB JVM Heaps** | **12 steady-state containers** |
 | **kafka-init** (one-shot) | `256 MiB` | `KAFKA_HEAP_OPTS: "-Xms64m -Xmx64m"` | Topic provisioning (exits 0) |
-| **Peak Cap During Startup** | **5,740 MiB** | — | **Steady-state + kafka-init** |
-| **Provisional OS / Native Headroom** | **~1,060 - 1,210 MiB** | Host OS and system services; JVM native memory is included in container caps | **Safety margin** |
+| **Peak Cap During Startup** | **5,890 MiB** | — | **Steady-state + kafka-init** |
+| **Provisional OS / Native Headroom** | **~910 - 1,060 MiB** | Host OS and system services; JVM native memory is included in container caps | **Safety margin** |
 
 > **Important Operational Note**: These container limits are **provisional budgets**, not an absolute guarantee against OOM kills. In Java 21, JVM native memory (Metaspace, JIT compiler, thread stacks, Netty direct buffers) operates outside the heap. Under production load, monitor actual RSS memory with `sudo -n docker stats` and tune limits as necessary.
 
