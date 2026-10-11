@@ -200,7 +200,7 @@ See the [security and credential details](docs/ENGINEERING.md#security-model).
 
 ## Application walkthrough
 
-Dashboard, flags, members, creation dialogs, invitation, and login screenshots were refreshed from the application on 11 October 2026. They show sample deployment state, not benchmark results. See the [screenshot gallery](docs/SCREENSHOTS.md) for captures and refresh status.
+All eleven application screenshots in the gallery were refreshed from the application on 11 October 2026. They show sample deployment state, not benchmark results. See the [screenshot gallery](docs/SCREENSHOTS.md) for captures and refresh status.
 
 | Screen | What to inspect |
 |---|---|
@@ -224,6 +224,26 @@ Dashboard, flags, members, creation dialogs, invitation, and login screenshots w
 ![Member invitation dialog](docs/images/invite-member.png)
 
 ![Environment-bound SDK key creation](docs/images/create-sdk-key.png)
+
+![SDK key metadata with active and revoked credentials](docs/images/sdk-keys.png)
+
+</details>
+
+<details>
+<summary>Analytics, audit history, and notification dispatch</summary>
+
+![Aggregated lifecycle and evaluation events](docs/images/analytics.png)
+
+![Feature flag lifecycle audit history](docs/images/audit-logs.png)
+
+![Notification dispatch history and provider acceptance semantics](docs/images/notifications.png)
+
+</details>
+
+<details>
+<summary>Sign-in screen</summary>
+
+![Management console sign-in](docs/images/login.png)
 
 </details>
 

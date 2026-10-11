@@ -46,8 +46,30 @@ The management console requires an existing account; no public self-registration
 
 ![Login screen with empty credentials](images/login.png)
 
-## Remaining refreshes
+## SDK-key administration
 
-The SDK-key metadata listing, Analytics, Audit, and Notifications pages still need current captures. Previous images for these views remain in the repository but are not presented here as refreshed screenshots.
+Environment-bound metadata lists active and revoked credentials, creation details, and revocation controls. Only display prefixes are shown; the raw credential is revealed once at creation and is absent from this capture.
 
-For new captures, wait for loading to finish, use consistent browser zoom, and cover personal email addresses. Do not capture raw SDK keys, tokens, passwords, invitation URLs, or browser developer tools containing credentials.
+![SDK metadata listing with PROD active and DEV revoked keys](images/sdk-keys.png)
+
+## Analytics
+
+Lifecycle mutations and runtime evaluation telemetry are aggregated by event type. These are event counts, not unique users or conversion statistics. Historical aggregates can include previews made before telemetry separation; current Preview does not emit runtime telemetry.
+
+![Analytics with event counts and telemetry semantics notice](images/analytics.png)
+
+## Audit history
+
+The current implementation records feature-flag lifecycle events such as creation, updates, and state changes. Despite the broader subtitle visible in this capture, it is not a complete organization-wide administrative or security audit log, nor a tamper-proof external ledger.
+
+![Chronological feature flag lifecycle events](images/audit-logs.png)
+
+## Notifications
+
+Dispatch history explains PENDING, FAILED, and SENT. SENT indicates SMTP provider acceptance and does not guarantee inbox receipt. Displayed recipient addresses are test data, as confirmed by the project author.
+
+![Notification dispatch history with provider acceptance notice](images/notifications.png)
+
+## Capture notes
+
+All eleven views in this gallery were refreshed with author-supplied captures on 11 October 2026. Some views are viewport captures and require scrolling in the application to see additional rows or controls. The supplied test account addresses are retained with the author's authorization. No raw SDK credentials, passwords, or invitation tokens are shown.
