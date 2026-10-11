@@ -22,6 +22,12 @@ Environment, initial state, rollout, description, schedules with timezone contex
 
 ![Flag creation dialog with schedule and targeting configuration](images/create-feature-flag.png)
 
+## Member administration
+
+The supplied names and email addresses are fictitious test data, as confirmed by the project author. The listing illustrates OWNER, ADMIN, and DEVELOPER roles, account state, administrative actions, and invitation semantics.
+
+![Member listing with fictitious test account names and email addresses](images/member-management.png)
+
 ## Invite a member
 
 Administrators invite a recipient with a role; the recipient chooses their own password through the invitation flow.
@@ -42,6 +48,6 @@ The management console requires an existing account; no public self-registration
 
 ## Remaining refreshes
 
-The Members listing, SDK-key metadata listing, Analytics, Audit, and Notifications pages still need current captures. The Members screenshot supplied for this update contains personal email addresses and is excluded from publication. Previous images for these views remain in the repository but are not presented here as refreshed screenshots.
+The SDK-key metadata listing, Analytics, Audit, and Notifications pages still need current captures. Previous images for these views remain in the repository but are not presented here as refreshed screenshots.
 
 For new captures, wait for loading to finish, use consistent browser zoom, and cover personal email addresses. Do not capture raw SDK keys, tokens, passwords, invitation URLs, or browser developer tools containing credentials.

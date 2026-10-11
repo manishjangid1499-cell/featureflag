@@ -200,7 +200,7 @@ See the [security and credential details](docs/ENGINEERING.md#security-model).
 
 ## Application walkthrough
 
-Dashboard, flags, creation dialogs, invitation, and login screenshots were refreshed from the application on 11 October 2026. They show sample deployment state, not benchmark results. See the [screenshot gallery](docs/SCREENSHOTS.md) for captures and refresh status.
+Dashboard, flags, members, creation dialogs, invitation, and login screenshots were refreshed from the application on 11 October 2026. They show sample deployment state, not benchmark results. See the [screenshot gallery](docs/SCREENSHOTS.md) for captures and refresh status.
 
 | Screen | What to inspect |
 |---|---|
@@ -218,6 +218,8 @@ Dashboard, flags, creation dialogs, invitation, and login screenshots were refre
 ![Dashboard](docs/images/dashboard.png)
 
 ![Flag configuration](docs/images/create-feature-flag.png)
+
+![Member administration with test accounts](docs/images/member-management.png)
 
 ![Member invitation dialog](docs/images/invite-member.png)
 
