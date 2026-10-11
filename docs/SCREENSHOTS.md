@@ -1,61 +1,47 @@
 # Application Screenshots
 
-[Project overview](../README.md)
+[Project overview](../README.md) · [Engineering reference](ENGINEERING.md)
 
-Screenshots illustrate the management workflows; the running deployment may contain newer UI changes.
+The following captures were supplied from the application on **11 October 2026**. They show the current UI and sample deployment state. Counts, rollout settings, and flag status are examples, not performance measurements. Screenshots are stored without altering application data or inventing screen content.
 
-### Feature Flag Management
+## Dashboard
 
-<p align="center">
-  <img src="images/feature-flags.png" alt="Feature flag management" width="100%" />
-</p>
+Account identity and role, environment summaries, recent lifecycle activity, and navigation.
 
-The control plane supports environment-specific flag lifecycle management, filtering, rollout percentages, targeting rules, and preview actions (without recording runtime evaluation telemetry).
+![Owner dashboard with environment counts and recent activity](images/dashboard.png)
 
-### Create and Configure a Flag
+## Feature flag management
 
-<p align="center">
-  <img src="images/create-feature-flag.png" alt="Create feature flag dialog" width="90%" />
-</p>
+Environment and state filtering, rollout percentages, and Preview / mutation actions. The displayed disabled PROD flag illustrates a configuration state; it does not indicate integration failure.
 
-Flag creation supports environment selection, initial state, rollout percentage, optional schedules, descriptions, and targeted subject IDs.
+![Feature flags table with DEV and PROD flags](images/feature-flags.png)
 
-### Member and Role Administration
+## Create a flag
 
-<p align="center">
-  <img src="images/member-management.png" alt="Member management" width="100%" />
-</p>
+Environment, initial state, rollout, description, schedules with timezone context, and target subject IDs. This viewport shows the form fields; its submit controls are below the visible area.
 
-The platform uses `OWNER`, `ADMIN`, `DEVELOPER`, and `VIEWER` roles with backend-enforced authorization boundaries.
+![Flag creation dialog with schedule and targeting configuration](images/create-feature-flag.png)
 
-### Invitation Workflow
+## Invite a member
 
-<p align="center">
-  <img src="images/invite-member.png" alt="Invite organization member" width="90%" />
-</p>
+Administrators invite a recipient with a role; the recipient chooses their own password through the invitation flow.
 
-Invitations allow administrators to onboard members without creating passwords on their behalf. Invitees choose their password after accepting the invitation.
+![Invitation dialog with name, email, and role inputs](images/invite-member.png)
 
-### Analytics
+## Create an SDK credential
 
-<p align="center">
-  <img src="images/analytics.png" alt="Feature flag analytics" width="100%" />
-</p>
+The dialog binds a server-side credential to one environment and explains recovery from creation failures. This capture is taken before generation and contains no raw SDK key.
 
-Analytics aggregates lifecycle mutations and runtime evaluation telemetry consumed from Kafka.
+![SDK key creation dialog scoped to DEV](images/create-sdk-key.png)
 
-### Audit Logs
+## Sign in
 
-<p align="center">
-  <img src="images/audit-logs.png" alt="Feature flag audit logs" width="100%" />
-</p>
+The management console requires an existing account; no public self-registration or shared administrative credentials are provided.
 
-Audit records provide a chronological history of feature-flag lifecycle activity.
+![Login screen with empty credentials](images/login.png)
 
-### Notifications
+## Remaining refreshes
 
-<p align="center">
-  <img src="images/notifications.png" alt="Notification history" width="100%" />
-</p>
+The Members listing, SDK-key metadata listing, Analytics, Audit, and Notifications pages still need current captures. The Members screenshot supplied for this update contains personal email addresses and is excluded from publication. Previous images for these views remain in the repository but are not presented here as refreshed screenshots.
 
-Notification history exposes provider acceptance and retry state; SENT does not prove inbox delivery for invitation and lifecycle email processing.
+For new captures, wait for loading to finish, use consistent browser zoom, and cover personal email addresses. Do not capture raw SDK keys, tokens, passwords, invitation URLs, or browser developer tools containing credentials.

@@ -200,7 +200,7 @@ See the [security and credential details](docs/ENGINEERING.md#security-model).
 
 ## Application walkthrough
 
-The images below are existing repository screenshots. They illustrate workflows and may differ from the current deployed UI; see the [screenshot gallery](docs/SCREENSHOTS.md) for the full set.
+Dashboard, flags, creation dialogs, invitation, and login screenshots were refreshed from the application on 11 October 2026. They show sample deployment state, not benchmark results. See the [screenshot gallery](docs/SCREENSHOTS.md) for captures and refresh status.
 
 | Screen | What to inspect |
 |---|---|
@@ -213,13 +213,15 @@ The images below are existing repository screenshots. They illustrate workflows 
 | Notifications | PENDING / FAILED / SENT; SENT means provider acceptance |
 
 <details>
-<summary>Dashboard and management screenshots</summary>
+<summary>Dashboard, flag configuration, invitations, and SDK credentials</summary>
 
 ![Dashboard](docs/images/dashboard.png)
 
 ![Flag configuration](docs/images/create-feature-flag.png)
 
-![Member administration](docs/images/member-management.png)
+![Member invitation dialog](docs/images/invite-member.png)
+
+![Environment-bound SDK key creation](docs/images/create-sdk-key.png)
 
 </details>
 
